@@ -1,0 +1,10 @@
+# Append this proxy block to the managed frpc configuration only after QA/Ops
+# has rotated the FRP token via a secure channel and validated the server route.
+# Do not store auth tokens in this file or in Git.
+
+[[proxies]]
+name = "ops-control-system"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 18080
+customDomains = ["ops.sanbunto.online"]
