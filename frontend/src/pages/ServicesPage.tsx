@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { api } from "../auth"
-import { GPUMetric, SupervisorProcess, SupervisorHostStatus, SupervisorAllStatus } from "../types"
+import { GPUMetric, SupervisorProcess, SupervisorHostStatus, SupervisorAllStatus, SupervisorLogSource } from "../types"
 
 type ServiceItem = {
   name: string; service_type: string; status: string;
@@ -127,7 +127,8 @@ function SupervisorProcessRow({
   actionLoading: string | null
 }) {
   const [showLogs, setShowLogs] = useState(false)
-  const [logs, setLogs] = useState<string[]>([])
+  const [logSources, setLogSources] = useState<SupervisorLogSource[]>([])
+  const [activeSourceIdx, setActiveSourceIdx] = useState(0)
   const [loadingLogs, setLoadingLogs] = useState(false)
 
   const statusColor = STATUS_COLORS[proc.status] ?? "#6b7280"
@@ -139,7 +140,9 @@ function SupervisorProcessRow({
     if (loadingLogs) return
     setLoadingLogs(true)
     try {
-      const result = await api<{ process: string; lines: string[]; truncated: boolean }>(
+      const result = await api<{
+        process: string; lines: string[]; truncated: boolean; sources: SupervisorLogSource[]
+      }>(
         "/api/v1/supervisor/tail",
         {
           method: "POST",
@@ -147,12 +150,15 @@ function SupervisorProcessRow({
           body: JSON.stringify({ asset_id: assetId, process: proc.display_name, lines: 50 }),
         },
       )
-      setLogs(result.lines)
+      setLogSources(result.sources)
+      setActiveSourceIdx(0)
       setShowLogs(true)
     } catch { /* silent */ } finally {
       setLoadingLogs(false)
     }
   }
+
+  const activeSource = logSources[activeSourceIdx]
 
   return (
     <div>
@@ -163,18 +169,13 @@ function SupervisorProcessRow({
         padding: "8px 12px",
         borderBottom: "1px solid #f1f5f9",
       }}>
-        {/* Status dot */}
         <span style={{
           width: 8, height: 8, borderRadius: "50%",
           background: statusColor,
           boxShadow: proc.status === "RUNNING" ? `0 0 6px ${statusColor}60` : "none",
           flexShrink: 0,
         }} />
-
-        {/* Name */}
         <span style={{ fontWeight: 600, fontSize: 13, minWidth: 120 }}>{proc.display_name}</span>
-
-        {/* Status badge */}
         <span style={{
           fontSize: 10,
           padding: "2px 8px",
@@ -185,21 +186,13 @@ function SupervisorProcessRow({
         }}>
           {statusLabel}
         </span>
-
-        {/* PID */}
         {proc.pid > 0 && (
           <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>PID: {proc.pid}</span>
         )}
-
-        {/* Uptime */}
         {proc.uptime && (
           <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{proc.uptime}</span>
         )}
-
-        {/* Spacer */}
         <span style={{ flex: 1 }} />
-
-        {/* Action buttons */}
         <div style={{ display: "flex", gap: 4 }}>
           {proc.status === "RUNNING" && (
             <>
@@ -246,26 +239,61 @@ function SupervisorProcessRow({
         </div>
       </div>
 
-      {/* Log output panel */}
+      {/* Log output panel with source tabs */}
       {showLogs && (
         <div style={{
           margin: "4px 12px 8px 32px",
           background: "#1e293b",
           color: "#e2e8f0",
           borderRadius: 6,
-          padding: "8px 12px",
-          fontSize: 11,
-          fontFamily: "monospace",
-          maxHeight: 200,
-          overflow: "auto",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
+          overflow: "hidden",
         }}>
-          {logs.length === 0 ? "(no log output)" : logs.join("\n")}
-          <div style={{ marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
+          {/* Source selector tabs */}
+          {logSources.length > 1 && (
+            <div style={{
+              display: "flex",
+              borderBottom: "1px solid #334155",
+              overflowX: "auto",
+            }}>
+              {logSources.map((src, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveSourceIdx(idx)}
+                  style={{
+                    padding: "4px 12px",
+                    background: idx === activeSourceIdx ? "#334155" : "transparent",
+                    border: "none",
+                    color: idx === activeSourceIdx ? "#e2e8f0" : "#94a3b8",
+                    cursor: "pointer",
+                    fontSize: 10,
+                    fontWeight: idx === activeSourceIdx ? 600 : 400,
+                    borderBottom: idx === activeSourceIdx ? "2px solid #6366f1" : "2px solid transparent",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {src.label} ({src.lines.length})
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Log content */}
+          <div style={{
+            padding: "8px 12px",
+            fontSize: 11,
+            fontFamily: "monospace",
+            maxHeight: 250,
+            overflow: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+          }}>
+            {activeSource
+              ? (activeSource.lines.length === 0 ? "(no log output)" : activeSource.lines.join("\n"))
+              : "(no log sources available)"}
+          </div>
+          <div style={{ padding: "4px 12px 8px", display: "flex", justifyContent: "flex-end" }}>
             <button
               style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 10 }}
-              onClick={() => { setShowLogs(false); setLogs([]) }}
+              onClick={() => { setShowLogs(false); setLogSources([]) }}
             >
               ✕ 關閉
             </button>

@@ -29,8 +29,8 @@ from .schemas import (
     RemoteAllServicesResponse, RemoteHostServicesResponse, RemotePingResponse,
     RemoteServiceResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
     SupervisorActionRequest, SupervisorActionResponse, SupervisorAllStatusResponse,
-    SupervisorHostStatusResponse, SupervisorProcessResponse, SupervisorTailRequest,
-    SupervisorTailResponse,
+    SupervisorHostStatusResponse, SupervisorLogSourceResponse, SupervisorProcessResponse,
+    SupervisorTailRequest, SupervisorTailResponse,
     TokenResponse, UserResponse,
 )
 from .monitor import collect_host_metrics
@@ -452,8 +452,8 @@ def supervisor_process_tail(
     if asset.ssh_host is None or asset.ssh_user is None:
         raise HTTPException(status_code=400, detail="Asset has no SSH configuration")
 
-    if req.log_type not in ("stdout", "stderr"):
-        raise HTTPException(status_code=400, detail="log_type must be 'stdout' or 'stderr'")
+    if req.log_type not in ("stdout", "stderr", "all"):
+        raise HTTPException(status_code=400, detail="log_type must be 'stdout', 'stderr', or 'all'")
 
     port = asset.ssh_port or 22
     result = supervisor_tail(
@@ -465,7 +465,15 @@ def supervisor_process_tail(
         lines=req.lines,
         timeout=30,
     )
-    return SupervisorTailResponse(**result.__dict__)
+    sources_resp = [
+        SupervisorLogSourceResponse(**s.__dict__) for s in result.sources
+    ]
+    return SupervisorTailResponse(
+        process=result.process,
+        lines=result.lines,
+        truncated=result.truncated,
+        sources=sources_resp,
+    )
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

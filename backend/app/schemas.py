@@ -305,3 +305,11 @@ class SupervisorTailResponse(BaseModel):
     process: str
     lines: list[str]
     truncated: bool = False
+    sources: list["SupervisorLogSourceResponse"] = []
+
+
+class SupervisorLogSourceResponse(BaseModel):
+    source: str  # "supervisor" or "app"
+    label: str
+    path: str
+    lines: list[str]

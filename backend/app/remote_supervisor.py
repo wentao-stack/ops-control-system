@@ -35,11 +35,22 @@ class SupervisorActionResult:
 
 
 @dataclass
+class SupervisorLogFile:
+    """A single log source for a process."""
+    source: str  # "supervisor" or app name like "nginx-access", "frps"
+    label: str   # human-readable label
+    path: str    # file path on remote host
+    lines: list[str] = field(default_factory=list)
+
+
+@dataclass
 class SupervisorLogLines:
     """Tail output from a supervisor process log."""
     process: str
     lines: list[str] = field(default_factory=list)
     truncated: bool = False
+    # Multiple log sources (when app has its own logs)
+    sources: list[SupervisorLogFile] = field(default_factory=list)
 
 
 # ── Status parsing ────────────────────────────────────────────────────────────
@@ -158,69 +169,139 @@ def supervisor_action(
     )
 
 
+# ── Known application log paths ──────────────────────────────────────────────
+# Maps process name → list of (label, path_pattern) for app-specific logs
+_APP_LOGS: dict[str, list[tuple[str, str]]] = {
+    "nginx": [
+        ("Nginx Access", "/var/log/nginx/access.log"),
+        ("Nginx Error", "/var/log/nginx/error.log"),
+    ],
+    "frps": [
+        ("FRP Server", "/var/log/frps.log"),
+    ],
+    "fail2ban": [
+        ("Fail2ban", "/var/log/fail2ban.log"),
+    ],
+}
+
+
 def supervisor_tail(
     host: str,
     port: int,
     user: str,
     process: str,
-    log_type: str = "stdout",  # stdout | stderr
+    log_type: str = "stdout",  # stdout | stderr | all
     lines: int = 100,
     timeout: int = 30,
 ) -> SupervisorLogLines:
     """Tail the log output of a supervisor-managed process.
 
-    Strategy:
-    1. SSH + Python to discover the actual log file path from supervisor config
-    2. Then tail that file directly
-    3. Falls back to common log paths if config parsing fails
+    Discovers log sources:
+    1. Supervisor stdout_logfile / stderr_logfile from config
+    2. Application-specific log files (nginx, frps, fail2ban, etc.)
+
+    log_type: 'stdout', 'stderr', or 'all' (default: 'all' to get everything)
     """
-    # Step 1: discover log file path
+    # Step 1: discover supervisor log file path from config
     discover_py = (
-        "import glob, re\n"
-        f"proc = '{process}'\n"
-        f"log_type = '{log_type}'\n"
-        "for f in sorted(glob.glob('/etc/supervisor/conf.d/*.conf')):\n"
-        "    c = open(f).read()\n"
-        "    if '[program:' + proc + ']' in c:\n"
-        "        lf = re.search(r'stdout_logfile=(\\S+)', c)\n"
-        "        ef = re.search(r'stderr_logfile=(\\S+)', c)\n"
-        "        rf = re.search(r'redirect_stderr=(\\S+)', c)\n"
-        "        redirect = rf and rf.group(1) == 'true'\n"
-        "        if log_type == 'stderr' and not redirect:\n"
-        "            print(ef.group(1) if ef else '', end='')\n"
-        "        else:\n"
-        "            print(lf.group(1) if lf else '', end='')\n"
-        "        break\n"
+        "import glob, re\\n"
+        f"proc = '{process}'\\n"
+        f"log_type = '{log_type}'\\n"
+        "for f in sorted(glob.glob('/etc/supervisor/conf.d/*.conf')):\\n"
+        "    c = open(f).read()\\n"
+        "    if '[program:' + proc + ']' in c:\\n"
+        "        lf = re.search(r'stdout_logfile=(\\\\S+)', c)\\n"
+        "        ef = re.search(r'stderr_logfile=(\\\\S+)', c)\\n"
+        "        rf = re.search(r'redirect_stderr=(\\\\S+)', c)\\n"
+        "        redirect = rf and rf.group(1) == 'true'\\n"
+        "        stdout = lf.group(1) if lf else ''\\n"
+        "        stderr = ef.group(1) if ef else ''\\n"
+        "        if log_type == 'stderr' and not redirect:\\n"
+        "            print(stderr, end='')\\n"
+        "        else:\\n"
+        "            print(stdout, end='')\\n"
+        "        break\\n"
     )
     r = ssh_exec(host, port, user, f"python3 -c '{discover_py}'", timeout=timeout)
-    log_file = r["stdout"].strip()
+    supervisor_log = r["stdout"].strip()
 
-    # Step 2: tail the discovered file, or try fallbacks
-    fallbacks = (
-        [f"/var/log/supervisor/{process}.stderr.log", f"/var/log/supervisor/{process}.log"]
-        if log_type == "stderr"
-        else [f"/var/log/supervisor/{process}.stdout.log", f"/var/log/supervisor/{process}.log"]
-    )
-    not_found_msg = "(stderr log not found)" if log_type == "stderr" else "(no log available)"
+    # Step 2: collect all log sources to read
+    sources_to_read: list[tuple[str, str, str]] = []  # (label, path, source_type)
 
-    if log_file:
-        tail_cmd = f"tail -n {lines} '{log_file}' 2>/dev/null"
-    else:
-        # Chain fallbacks with ||
-        tail_cmd = " || ".join(f"tail -n {lines} '{fb}' 2>/dev/null" for fb in fallbacks)
+    # Supervisor log
+    if supervisor_log:
+        sources_to_read.append(("Supervisor stdout", supervisor_log, "supervisor"))
 
-    r = ssh_exec(host, port, user, tail_cmd, timeout=timeout)
-    output = r["stdout"]
+    # Application-specific logs
+    app_logs = _APP_LOGS.get(process, [])
+    for label, path in app_logs:
+        sources_to_read.append((label, path, "app"))
 
-    if not output.strip() and r["exit_code"] != 0:
-        output = not_found_msg
+    # Fallback supervisor paths if no config found
+    if not supervisor_log:
+        fallbacks = (
+            [f"/var/log/supervisor/{process}.stderr.log", f"/var/log/supervisor/{process}.log"]
+            if log_type == "stderr"
+            else [f"/var/log/supervisor/{process}.stdout.log", f"/var/log/supervisor/{process}.log"]
+        )
+        for fb in fallbacks:
+            sources_to_read.append((f"Supervisor ({fb.split('/')[-1]})", fb, "supervisor"))
 
-    truncated = "..." in output and "tail" in output.lower()
+    # Step 3: read all sources in one SSH call
+    if not sources_to_read:
+        return SupervisorLogLines(process=process, lines=[], sources=[])
+
+    # Build a single command that reads all sources with headers
+    read_parts: list[str] = []
+    for label, path, _ in sources_to_read:
+        read_parts.append(
+            f"echo '=== {label} ({path}) ==='; "
+            f"tail -n {lines} '{path}' 2>/dev/null || echo '(file not found)'; "
+            f"echo '';"
+        )
+    read_cmd = " ".join(read_parts)
+
+    r = ssh_exec(host, port, user, read_cmd, timeout=timeout)
+    raw_output = r["stdout"]
+
+    # Step 4: parse output into sources
+    sources: list[SupervisorLogFile] = []
+    all_lines: list[str] = []
+
+    # Split by source headers
+    current_source: SupervisorLogFile | None = None
+    for line in raw_output.splitlines():
+        if line.startswith("=== ") and " ===" in line:
+            # Parse header: "=== Label (path) ==="
+            header = line[4:-4].strip()
+            paren_idx = header.rindex("(")
+            label = header[:paren_idx].strip()
+            path = header[paren_idx + 1:-1].strip()
+            source_type = "app" if current_source is None else (
+                "app" if "Supervisor" not in label else "supervisor"
+            )
+            if current_source is not None:
+                sources.append(current_source)
+            current_source = SupervisorLogFile(
+                source=source_type,
+                label=label,
+                path=path,
+                lines=[],
+            )
+        elif current_source is not None:
+            current_source.lines.append(line)
+            all_lines.append(line)
+
+    if current_source is not None:
+        sources.append(current_source)
+
+    # Filter out empty sources (file not found)
+    sources = [s for s in sources if s.lines and s.lines[0] != "(file not found)"]
 
     return SupervisorLogLines(
         process=process,
-        lines=output.strip().splitlines() if output.strip() else [],
-        truncated=truncated,
+        lines=all_lines,
+        sources=sources,
     )
 
 

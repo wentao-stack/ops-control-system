@@ -118,4 +118,12 @@ export type SupervisorTailResult = {
   process: string
   lines: string[]
   truncated: boolean
+  sources: SupervisorLogSource[]
+}
+
+export type SupervisorLogSource = {
+  source: string  // "supervisor" or "app"
+  label: string
+  path: string
+  lines: string[]
 }
