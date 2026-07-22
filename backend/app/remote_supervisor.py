@@ -169,29 +169,52 @@ def supervisor_tail(
 ) -> SupervisorLogLines:
     """Tail the log output of a supervisor-managed process.
 
-    log_type: 'stdout' or 'stderr'
-    lines: number of lines to retrieve
+    Strategy:
+    1. SSH + Python to discover the actual log file path from supervisor config
+    2. Then tail that file directly
+    3. Falls back to common log paths if config parsing fails
     """
-    # supervisorctl tail doesn't take a count argument well; use log file directly
-    # Try common log file naming patterns from supervisor config
-    log_dir = "/var/log/supervisor"
-    if log_type == "stderr":
-        cmd = (
-            f"tail -n {lines} {log_dir}/{process}.stderr.log 2>/dev/null || "
-            f"tail -n {lines} {log_dir}/{process}.log 2>/dev/null || "
-            f"echo '(log file not found)'"
-        )
+    # Step 1: discover log file path
+    discover_py = (
+        "import glob, re\n"
+        f"proc = '{process}'\n"
+        f"log_type = '{log_type}'\n"
+        "for f in sorted(glob.glob('/etc/supervisor/conf.d/*.conf')):\n"
+        "    c = open(f).read()\n"
+        "    if '[program:' + proc + ']' in c:\n"
+        "        lf = re.search(r'stdout_logfile=(\\S+)', c)\n"
+        "        ef = re.search(r'stderr_logfile=(\\S+)', c)\n"
+        "        rf = re.search(r'redirect_stderr=(\\S+)', c)\n"
+        "        redirect = rf and rf.group(1) == 'true'\n"
+        "        if log_type == 'stderr' and not redirect:\n"
+        "            print(ef.group(1) if ef else '', end='')\n"
+        "        else:\n"
+        "            print(lf.group(1) if lf else '', end='')\n"
+        "        break\n"
+    )
+    r = ssh_exec(host, port, user, f"python3 -c '{discover_py}'", timeout=timeout)
+    log_file = r["stdout"].strip()
+
+    # Step 2: tail the discovered file, or try fallbacks
+    fallbacks = (
+        [f"/var/log/supervisor/{process}.stderr.log", f"/var/log/supervisor/{process}.log"]
+        if log_type == "stderr"
+        else [f"/var/log/supervisor/{process}.stdout.log", f"/var/log/supervisor/{process}.log"]
+    )
+    not_found_msg = "(stderr log not found)" if log_type == "stderr" else "(no log available)"
+
+    if log_file:
+        tail_cmd = f"tail -n {lines} '{log_file}' 2>/dev/null"
     else:
-        cmd = (
-            f"tail -n {lines} {log_dir}/{process}.stdout.log 2>/dev/null || "
-            f"tail -n {lines} {log_dir}/{process}.log 2>/dev/null || "
-            f"echo '(no log available)'"
-        )
+        # Chain fallbacks with ||
+        tail_cmd = " || ".join(f"tail -n {lines} '{fb}' 2>/dev/null" for fb in fallbacks)
 
-    r = ssh_exec(host, port, user, cmd, timeout=timeout)
-    output = r["stdout"] + r.get("stderr", "")
+    r = ssh_exec(host, port, user, tail_cmd, timeout=timeout)
+    output = r["stdout"]
 
-    # Check if output was truncated (supervisorctl tail has a default limit)
+    if not output.strip() and r["exit_code"] != 0:
+        output = not_found_msg
+
     truncated = "..." in output and "tail" in output.lower()
 
     return SupervisorLogLines(
