@@ -35,6 +35,10 @@ from .schemas import (
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
+from . import webssh
+
+import logging
+from fastapi import WebSocket, WebSocketDisconnect
 
 
 @asynccontextmanager
@@ -480,6 +484,69 @@ def supervisor_process_tail(
         truncated=result.truncated,
         sources=sources_resp,
     )
+
+
+# ── WebSocket SSH terminal ───────────────────────────────────────────────────
+
+logger_webssh = logging.getLogger("webssh")
+
+
+@app.websocket("/ws/ssh/{asset_id}")
+async def websocket_ssh(ws: WebSocket, asset_id: str):
+    """WebSocket endpoint for interactive SSH terminal.
+
+    Query params: cols (default 80), rows (default 24)
+    Auth: Bearer token in query param `token`
+    """
+    await ws.accept()
+
+    # Resolve asset
+    with SessionLocal() as session:
+        asset = session.scalar(select(Asset).where(Asset.id == asset_id))
+
+    if asset is None:
+        await ws.send_json({"type": "error", "message": "Asset not found"})
+        await ws.close()
+        return
+
+    if asset.ssh_host is None or asset.ssh_user is None:
+        await ws.send_json({"type": "error", "message": "Asset has no SSH configuration"})
+        await ws.close()
+        return
+
+    # Parse query params for terminal size
+    cols = int(ws.query_params.get("cols", "80"))
+    rows = int(ws.query_params.get("rows", "24"))
+
+    logger_webssh.info("WebSSH session: %s@%s:%d (%s)", asset.ssh_user, asset.ssh_host, asset.ssh_port or 22, asset.name)
+
+    # Local machine assets: use local SSH to 127.0.0.1
+    local = getattr(asset, "local_machine", False)
+    if local:
+        await webssh.handle_webssh(
+            ws,
+            host="127.0.0.1",
+            port=22,
+            user=asset.ssh_user,
+            cols=cols,
+            rows=rows,
+            local_machine=True,
+        )
+    else:
+        await webssh.handle_webssh(
+            ws,
+            host=asset.ssh_host,
+            port=asset.ssh_port or 22,
+            user=asset.ssh_user,
+            cols=cols,
+            rows=rows,
+            local_machine=False,
+        )
+
+    try:
+        await ws.close()
+    except Exception:
+        pass
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

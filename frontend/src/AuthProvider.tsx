@@ -10,11 +10,12 @@ interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null
+  token: string | null
   loading: boolean
   logout: () => void
 }
 
-const AuthContext = createContext<AuthState>({ user: null, loading: true, logout: () => {} })
+const AuthContext = createContext<AuthState>({ user: null, token: null, loading: true, logout: () => {} })
 
 export function useAuth(): AuthState {
   return useContext(AuthContext)
@@ -23,10 +24,12 @@ export function useAuth(): AuthState {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState<string | null>(null)
 
   const initAuth = useCallback(async () => {
-    const token = getToken()
-    if (!token) {
+    const t = getToken()
+    setToken(t)
+    if (!t) {
       setLoading(false)
       return
     }
@@ -42,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(getUser())
     } catch {
       clearToken()
+      setToken(null)
       setUser(null)
     } finally {
       setLoading(false)
@@ -54,10 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearToken()
+    setToken(null)
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, loading, logout }), [user, loading, logout])
+  const value = useMemo(() => ({ user, token, loading, logout }), [user, token, loading, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
