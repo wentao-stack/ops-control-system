@@ -15,7 +15,15 @@ from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Runbook, User
 from .remote import ssh_exec, ssh_ping
-from .schemas import AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse, ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse, InventorySummaryResponse, LoginRequest, RemoteExecRequest, RemoteExecResponse, RemotePingResponse, RunbookListResponse, RunbookResponse, ServiceResponse, TokenResponse, UserResponse
+from .remote_monitor import collect_remote_metrics
+from .schemas import (
+    AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse,
+    ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse,
+    InventorySummaryResponse, LoginRequest, RemoteExecRequest, RemoteExecResponse,
+    RemoteGPUMetricsResponse, RemoteHostMetricsResponse, RemoteHostsMetricsResponse,
+    RemotePingResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
+    TokenResponse, UserResponse,
+)
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
 
@@ -255,6 +263,48 @@ def host_metrics() -> HostMetricsResponse:
         disk_percent=raw.disk_percent,
         gpus=[GPUMetricsResponse(**g.__dict__) for g in raw.gpus],
     )
+
+
+@app.get("/api/v1/hosts/metrics", response_model=RemoteHostsMetricsResponse)
+def hosts_metrics(session: Session = Depends(get_session)) -> RemoteHostsMetricsResponse:
+    """Collect metrics from all SSH-configured hosts via SSH."""
+    assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+    hosts: list[RemoteHostMetricsResponse] = []
+    for asset in assets:
+        port = asset.ssh_port or 22
+        raw = collect_remote_metrics(
+            host=asset.ssh_host,  # type: ignore[arg-type]
+            port=port,
+            user=asset.ssh_user,  # type: ignore[arg-type]
+            asset_id=asset.id,
+            name=asset.name,
+            timeout=60,
+        )
+        hosts.append(RemoteHostMetricsResponse(
+            asset_id=raw.asset_id,
+            name=raw.name,
+            hostname=raw.hostname,
+            reachable=raw.reachable,
+            error=raw.error,
+            cpu_percent=raw.cpu_percent,
+            cpu_count=raw.cpu_count,
+            load_avg_1=raw.load_avg_1,
+            load_avg_5=raw.load_avg_5,
+            load_avg_15=raw.load_avg_15,
+            mem_total_mb=raw.mem_total_mb,
+            mem_used_mb=raw.mem_used_mb,
+            mem_available_mb=raw.mem_available_mb,
+            mem_percent=raw.mem_percent,
+            swap_total_mb=raw.swap_total_mb,
+            swap_used_mb=raw.swap_used_mb,
+            swap_percent=raw.swap_percent,
+            disk_total_mb=raw.disk_total_mb,
+            disk_used_mb=raw.disk_used_mb,
+            disk_free_mb=raw.disk_free_mb,
+            disk_percent=raw.disk_percent,
+            gpus=[RemoteGPUMetricsResponse(**g.__dict__) for g in raw.gpus],
+        ))
+    return RemoteHostsMetricsResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

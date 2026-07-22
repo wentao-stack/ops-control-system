@@ -37,6 +37,22 @@ export type HostMetrics = {
   gpus: GPUMetric[];
 }
 
+export type RemoteHostMetric = {
+  asset_id: string; name: string; hostname: string;
+  reachable: boolean; error: string;
+  cpu_percent: number; cpu_count: number;
+  load_avg_1: number; load_avg_5: number; load_avg_15: number;
+  mem_total_mb: number; mem_used_mb: number; mem_available_mb: number; mem_percent: number;
+  swap_total_mb: number; swap_used_mb: number; swap_percent: number;
+  disk_total_mb: number; disk_used_mb: number; disk_free_mb: number; disk_percent: number;
+  gpus: GPUMetric[];
+}
+
+export type RemoteHostsMetrics = {
+  hosts: RemoteHostMetric[];
+  collected_at: string;
+}
+
 export type RemoteAsset = {
   id: string; name: string;
   ssh_host: string | null; ssh_port: number | null; ssh_user: string | null;

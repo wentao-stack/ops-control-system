@@ -185,3 +185,45 @@ class RemotePingResponse(BaseModel):
     asset_id: str
     name: str
     reachable: bool
+
+
+# ── Remote host monitoring schemas ───────────────────────────────────────────
+
+class RemoteGPUMetricsResponse(BaseModel):
+    name: str
+    temperature_c: int
+    utilization_gpu: int
+    memory_used_mb: int
+    memory_total_mb: int
+    power_draw_w: float
+    fan_speed: int
+
+
+class RemoteHostMetricsResponse(BaseModel):
+    asset_id: str
+    name: str
+    hostname: str
+    reachable: bool
+    error: str
+    cpu_percent: float
+    cpu_count: int
+    load_avg_1: float
+    load_avg_5: float
+    load_avg_15: float
+    mem_total_mb: int
+    mem_used_mb: int
+    mem_available_mb: int
+    mem_percent: float
+    swap_total_mb: int
+    swap_used_mb: int
+    swap_percent: float
+    disk_total_mb: int
+    disk_used_mb: int
+    disk_free_mb: int
+    disk_percent: float
+    gpus: list[RemoteGPUMetricsResponse]
+
+
+class RemoteHostsMetricsResponse(BaseModel):
+    hosts: list[RemoteHostMetricsResponse]
+    collected_at: str
