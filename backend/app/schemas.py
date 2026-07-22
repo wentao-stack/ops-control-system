@@ -164,3 +164,24 @@ class RunbookListResponse(BaseModel):
     items: list[RunbookResponse]
     total: int
     generated_at: datetime
+
+
+# ── Remote execution schemas ─────────────────────────────────────────────────
+
+class RemoteExecRequest(BaseModel):
+    asset_id: str
+    command: str
+    timeout: int = 30
+
+
+class RemoteExecResponse(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration: float
+
+
+class RemotePingResponse(BaseModel):
+    asset_id: str
+    name: str
+    reachable: bool

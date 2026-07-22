@@ -32,6 +32,10 @@ class Asset(Base):
     health_status: Mapped[str] = mapped_column(String(24), index=True)
     health_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SSH remote access
+    ssh_host: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    ssh_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ssh_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     services: Mapped[list["AssetService"]] = relationship(

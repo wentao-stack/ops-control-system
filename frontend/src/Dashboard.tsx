@@ -3,7 +3,7 @@ import { useAuth } from "./AuthProvider"
 import { api } from "./auth"
 
 type Health = "healthy" | "warning" | "critical" | "unknown"
-type Asset = { id: string; name: string; asset_type: string; environment: string; owner: string; criticality: string; health_status: Health; health_summary: string | null; last_seen_at: string | null }
+type Asset = { id: string; name: string; asset_type: string; environment: string; owner: string; criticality: string; health_status: Health; health_summary: string | null; last_seen_at: string | null; ssh_host?: string | null; ssh_port?: number | null; ssh_user?: string | null }
 type Service = { id: string; name: string; service_type: string; status: Health; status_summary: string | null; observed_at: string | null }
 type AssetDetail = Asset & { services: Service[] }
 type Summary = { total: number; by_health: Record<Health, number>; by_environment: Record<string, number>; generated_at: string }
@@ -12,6 +12,9 @@ type HostMetrics = { timestamp: string; hostname: string; uptime_seconds: number
 type AlertItem = { id: number; title: string; severity: string; source: string; message: string; acknowledged: boolean; acknowledged_by: string | null; created_at: string; acknowledged_at: string | null }
 type ChangeItem = { id: number; title: string; change_type: string; status: string; author: string; description: string; affected_assets: string | null; created_at: string; completed_at: string | null }
 type RunbookItem = { id: number; title: string; category: string; description: string; steps: string; author: string; created_at: string; updated_at: string }
+type RemoteAsset = { id: string; name: string; ssh_host: string | null; ssh_port: number | null; ssh_user: string | null }
+type RemoteExecResult = { stdout: string; stderr: string; exit_code: number; duration: number }
+type RemotePingResult = { asset_id: string; name: string; reachable: boolean }
 
 const healthLabels: Record<Health, string> = { healthy: "Healthy", warning: "Warning", critical: "Critical", unknown: "Unknown" }
 const changeTypeLabels: Record<string, string> = { deploy: "Deploy", config: "Config", incident: "Incident", maintenance: "Maintenance", infra: "Infra" }
@@ -129,6 +132,8 @@ export function Dashboard() {
     void loadAlerts()
     void loadChanges()
     void loadRunbooks()
+    void loadRemoteAssets()
+    void pingAll()
   }, [query, environment, health])
 
   useEffect(() => { void loadAlerts() }, [alertSeverity])
@@ -145,6 +150,48 @@ export function Dashboard() {
     try {
       setSelected(await api<AssetDetail>(`/api/v1/assets/${asset.id}`))
     } catch { setError(true) }
+  }
+
+  // ── Remote Terminal state ──────────────────────────────────────────────────
+  const [remoteAssets, setRemoteAssets] = useState<RemoteAsset[]>([])
+  const [remotePing, setRemotePing] = useState<RemotePingResult[]>([])
+  const [selectedRemote, setSelectedRemote] = useState<string>("")
+  const [remoteCmd, setRemoteCmd] = useState("")
+  const [remoteResult, setRemoteResult] = useState<RemoteExecResult | null>(null)
+  const [remoteLoading, setRemoteLoading] = useState(false)
+  const [remoteHistory, setRemoteHistory] = useState<{ cmd: string; result: RemoteExecResult }[]>([])
+
+  const loadRemoteAssets = async () => {
+    try {
+      const result = await api<{ items: Asset[] }>(`/api/v1/assets?asset_type=host`)
+      const withSsh = result.items.filter(a => a.ssh_host) as RemoteAsset[]
+      setRemoteAssets(withSsh)
+    } catch { /* silent */ }
+  }
+
+  const pingAll = async () => {
+    try {
+      const results = await api<RemotePingResult[]>("/api/v1/remote/ping", { method: "POST" })
+      setRemotePing(results)
+    } catch { /* silent */ }
+  }
+
+  const executeRemote = async () => {
+    if (!selectedRemote || !remoteCmd.trim()) return
+    setRemoteLoading(true)
+    try {
+      const result = await api<RemoteExecResult>("/api/v1/remote/exec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ asset_id: selectedRemote, command: remoteCmd }),
+      })
+      setRemoteResult(result)
+      setRemoteHistory(prev => [...prev, { cmd: remoteCmd, result }])
+    } catch (e: any) {
+      setRemoteResult({ stdout: "", stderr: String(e), exit_code: -1, duration: 0 })
+    } finally {
+      setRemoteLoading(false)
+    }
   }
 
   const navigateTo = (section: string) => {
@@ -166,6 +213,7 @@ export function Dashboard() {
           <a className={activeSection === "alerts" ? "active" : ""} href="#alerts" onClick={(e) => { e.preventDefault(); navigateTo("alerts"); }}>Alerts {unackedCount > 0 && <b className="alert-count">{unackedCount}</b>}</a>
           <a className={activeSection === "changes" ? "active" : ""} href="#changes" onClick={(e) => { e.preventDefault(); navigateTo("changes"); }}>Changes {activeChanges > 0 && <b className="alert-count">{activeChanges}</b>}</a>
           <a className={activeSection === "runbooks" ? "active" : ""} href="#runbooks" onClick={(e) => { e.preventDefault(); navigateTo("runbooks"); }}>Runbooks</a>
+          <a className={activeSection === "remote" ? "active" : ""} href="#remote" onClick={(e) => { e.preventDefault(); navigateTo("remote"); }}>Remote</a>
         </nav>
         <div className="sidebar-user">
           <div className="user-avatar">{user?.display_name?.[0]?.toUpperCase() ?? "?"}</div>
@@ -183,7 +231,7 @@ export function Dashboard() {
             <h1>Infrastructure at a glance.</h1>
             <p className="subhead">A read-only view of your development inventory. No live hosts are contacted.</p>
           </div>
-          <button className="refresh" onClick={() => { void load(); void loadHost(); void loadAlerts(); void loadChanges(); void loadRunbooks(); }} aria-label="Refresh all">↻ <span>Refresh</span></button>
+          <button className="refresh" onClick={() => { void load(); void loadHost(); void loadAlerts(); void loadChanges(); void loadRunbooks(); void loadRemoteAssets(); void pingAll(); }} aria-label="Refresh all">↻ <span>Refresh</span></button>
         </header>
         {error && <div className="notice error">Could not load inventory data. Confirm the local API is running, then refresh.</div>}
 
@@ -433,6 +481,74 @@ export function Dashboard() {
               ))
             )}
           </div>
+        </section>
+
+        {/* ── Remote Terminal ──────────────────────────────────────────────── */}
+        <section className="panel remote-panel" id="remote">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">REMOTE CONTROL</p>
+              <h2>SSH Terminal <span>{remoteAssets.length} hosts</span></h2>
+            </div>
+            <button className="refresh" onClick={() => { void pingAll(); void loadRemoteAssets(); }}>↻ <span>Ping All</span></button>
+          </div>
+
+          {/* Host status row */}
+          <div className="remote-hosts-row">
+            {remotePing.map(p => (
+              <div className={`remote-host-chip ${p.reachable ? "online" : "offline"}`} key={p.asset_id}>
+                <span className={`host-dot ${p.reachable ? "online" : "offline"}`} />
+                {p.name}
+              </div>
+            ))}
+          </div>
+
+          {/* Terminal controls */}
+          <div className="remote-controls">
+            <select value={selectedRemote} onChange={e => setSelectedRemote(e.target.value)}>
+              <option value="">Select host...</option>
+              {remoteAssets.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <input
+              className="remote-cmd-input"
+              value={remoteCmd}
+              onChange={e => setRemoteCmd(e.target.value)}
+              placeholder="Enter command (e.g. uptime, df -h, ls -la)"
+              onKeyDown={e => { if (e.key === "Enter") void executeRemote() }}
+            />
+            <button className="remote-exec-btn" onClick={() => void executeRemote()} disabled={!selectedRemote || !remoteCmd.trim() || remoteLoading}>
+              {remoteLoading ? "⠋ Running..." : "▶ Execute"}
+            </button>
+          </div>
+
+          {/* Current result */}
+          {remoteResult && (
+            <div className="remote-output">
+              <div className="remote-output-header">
+                <span className={`exit-code ${remoteResult.exit_code === 0 ? "success" : "fail"}`}>
+                  Exit: {remoteResult.exit_code}
+                </span>
+                <span className="remote-duration">{remoteResult.duration}s</span>
+              </div>
+              <pre className="remote-stdout">{remoteResult.stdout || "(no output)"}</pre>
+              {remoteResult.stderr && <pre className="remote-stderr">{remoteResult.stderr}</pre>}
+            </div>
+          )}
+
+          {/* History */}
+          {remoteHistory.length > 0 && (
+            <div className="remote-history">
+              <h3>Command History</h3>
+              {remoteHistory.map((h, i) => (
+                <div className="history-item" key={i}>
+                  <span className="history-cmd">$ {h.cmd}</span>
+                  <pre className="history-output">{h.result.stdout || h.result.stderr || "(no output)"}</pre>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* ── Assets ───────────────────────────────────────────────────────── */}

@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session, selectinload
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user, get_session, verify_password
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Runbook, User
-from .schemas import AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse, ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse, InventorySummaryResponse, LoginRequest, RunbookListResponse, RunbookResponse, ServiceResponse, TokenResponse, UserResponse
+from .remote import ssh_exec, ssh_ping
+from .schemas import AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse, ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse, InventorySummaryResponse, LoginRequest, RemoteExecRequest, RemoteExecResponse, RemotePingResponse, RunbookListResponse, RunbookResponse, ServiceResponse, TokenResponse, UserResponse
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
 
@@ -194,6 +195,35 @@ def list_runbooks(
         total=total,
         generated_at=datetime.now(UTC),
     )
+
+
+# ── Remote SSH execution ─────────────────────────────────────────────────────
+
+@app.post("/api/v1/remote/exec", response_model=RemoteExecResponse)
+def remote_exec(
+    req: RemoteExecRequest,
+    session: Session = Depends(get_session),
+) -> RemoteExecResponse:
+    asset = session.scalar(select(Asset).where(Asset.id == req.asset_id))
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.ssh_host is None or asset.ssh_user is None:
+        raise HTTPException(status_code=400, detail="Asset has no SSH configuration")
+    port = asset.ssh_port or 22
+    result = ssh_exec(asset.ssh_host, port, asset.ssh_user, req.command, timeout=req.timeout)
+    return RemoteExecResponse(**result)
+
+
+@app.post("/api/v1/remote/ping", response_model=list[RemotePingResponse])
+def remote_ping(session: Session = Depends(get_session)) -> list[RemotePingResponse]:
+    """Ping all SSH-configured assets."""
+    assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+    results = []
+    for asset in assets:
+        port = asset.ssh_port or 22
+        reachable = ssh_ping(asset.ssh_host, port, asset.ssh_user)  # type: ignore[arg-type]
+        results.append(RemotePingResponse(asset_id=asset.id, name=asset.name, reachable=reachable))
+    return results
 
 
 # ── Host monitoring endpoints ────────────────────────────────────────────────

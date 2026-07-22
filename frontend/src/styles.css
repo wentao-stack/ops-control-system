@@ -139,3 +139,39 @@
 .runbook-steps { margin-top: 14px; border-top: 1px solid #27314a; padding-top: 12px; }
 .runbook-steps h4 { color: #d6e0f3; font-size: 12px; margin: 0 0 8px; }
 .runbook-steps pre { color: #b6c2da; font-size: 12px; margin: 0; white-space: pre-wrap; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, monospace; background: #0d1220; padding: 12px; border-radius: 6px; border: 1px solid #25304a; }
+
+/* ── Remote Terminal panel ─────────────────────────────────────────────────── */
+.remote-panel { padding: 0; overflow: hidden; }
+.remote-panel .panel-heading { padding: 22px 22px 13px; align-items: end; }
+.remote-panel .panel-heading h2 span { color: #8290aa; font-size: 12px; font-weight: 500; margin-left: 6px; }
+
+.remote-hosts-row { display: flex; gap: 10px; padding: 0 22px 16px; flex-wrap: wrap; }
+.remote-host-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 6px; background: #10182a; border: 1px solid #25304a; color: #b6c2da; }
+.remote-host-chip.online { border-color: #1e5c4a; }
+.remote-host-chip.offline { border-color: #5c2028; opacity: .6; }
+.host-dot { width: 7px; height: 7px; border-radius: 50%; }
+.host-dot.online { background: #54d9a3; box-shadow: 0 0 4px rgba(84,217,163,.5); }
+.host-dot.offline { background: #ed6d76; }
+
+.remote-controls { display: flex; gap: 10px; padding: 0 22px 16px; align-items: center; }
+.remote-controls select { background: #10182a; border: 1px solid #2a3854; border-radius: 6px; color: #c4d0e5; padding: 9px 12px; font-size: 12px; outline: none; min-width: 200px; }
+.remote-cmd-input { flex: 1; background: #0d1220; border: 1px solid #2a3854; border-radius: 6px; color: #c4d0e5; padding: 9px 12px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, monospace; outline: none; }
+.remote-cmd-input:focus { border-color: #4a6a9e; }
+.remote-exec-btn { background: #2552d4; color: #fff; border: none; border-radius: 6px; padding: 9px 16px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.remote-exec-btn:hover { background: #3363d8; }
+.remote-exec-btn:disabled { opacity: .5; cursor: default; }
+
+.remote-output { margin: 0 22px 16px; background: #0d1220; border: 1px solid #25304a; border-radius: 8px; overflow: hidden; }
+.remote-output-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #10182a; border-bottom: 1px solid #25304a; }
+.exit-code { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+.exit-code.success { background: #173c35; color: #54d9a3; }
+.exit-code.fail { background: #4a1e24; color: #fa8990; }
+.remote-duration { color: #65728c; font-size: 11px; }
+.remote-stdout { color: #b6c2da; font-size: 12px; margin: 0; padding: 12px 14px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, monospace; line-height: 1.5; }
+.remote-stderr { color: #fa8990; font-size: 12px; margin: 0; padding: 0 14px 12px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, monospace; line-height: 1.5; }
+
+.remote-history { padding: 0 22px 22px; }
+.remote-history h3 { color: #d6e0f3; font-size: 13px; margin: 0 0 10px; }
+.history-item { border: 1px solid #25304a; border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+.history-cmd { display: block; padding: 8px 14px; background: #10182a; color: #77a7ff; font-size: 12px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
+.history-output { color: #8d99ad; font-size: 11px; margin: 0; padding: 8px 14px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, monospace; line-height: 1.45; }
