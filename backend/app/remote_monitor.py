@@ -48,52 +48,59 @@ class RemoteHostMetrics:
 
 
 # Shell script to collect all metrics in one SSH call
+# Uses /proc filesystem for reliability — no external commands needed
 METRICS_SCRIPT = r"""
 (
-  # hostname
+  # hostname — try multiple methods
   echo "===HOSTNAME==="
-  hostname
+  { cat /etc/hostname 2>/dev/null || uname -n 2>/dev/null || echo "unknown"; } | head -1
 
   # uptime (seconds)
   echo "===UPTIME==="
-  awk '{print int($1)}' /proc/uptime
+  awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 0
 
   # CPU count
   echo "===CPU_COUNT==="
-  nproc
+  grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1
 
   # load average
   echo "===LOAD_AVG==="
-  awk '{print $1, $2, $3}' /proc/loadavg
+  awk '{print $1, $2, $3}' /proc/loadavg 2>/dev/null || echo "0 0 0"
 
   # CPU usage (1-second sample from /proc/stat)
   echo "===CPU_PERCENT==="
-  read cpu user1 nice1 system1 idle1 rest1 < /proc/stat
+  awk '/^cpu / {
+    user1=$2; nice1=$3; system1=$4; idle1=$5; iowait1=$6; irq1=$7; softirq1=$8;
+    total1=user1+nice1+system1+idle1+iowait1+irq1+softirq1;
+  }' /proc/stat > /tmp/.ops_pre
   sleep 1
-  read cpu user2 nice2 system2 idle2 rest2 < /proc/stat
-  idle_diff=$((idle2 - idle1))
-  total1=$((user1 + nice1 + system1 + idle1))
-  total2=$((user2 + nice2 + system2 + idle2))
-  total_diff=$((total2 - total1))
-  if [ "$total_diff" -gt 0 ]; then
-    echo $(( (total_diff - idle_diff) * 100 / total_diff ))
-  else
-    echo 0
-  fi
-
-  # Memory (MB)
-  echo "===MEMORY==="
-  awk '/^MemTotal:/ {print int($2/1024)} /^MemAvailable:/ {print int($2/1024)} /^MemUsed:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || {
-    awk '/^MemTotal:/ {total=$2} /^MemAvailable:/ {avail=$2} END {print total/1024; used=(total-avail)/1024; print avail/1024}' /proc/meminfo
+  awk '/^cpu / {
+    user2=$2; nice2=$3; system2=$4; idle2=$5; iowait2=$6; irq2=$7; softirq2=$8;
+    total2=user2+nice2+system2+idle2+iowait2+irq2+softirq2;
   }
+  END {
+    cmd="cat /tmp/.ops_pre"
+    cmd | getline line
+    split(line, a, " ")
+    idle1=a[5]; total1=a[2]+a[3]+a[4]+a[5]+a[6]+a[7]+a[8]
+    idle2=idle2; total2=total2
+    diff_idle=idle2-idle1; diff_total=total2-total1
+    if (diff_total > 0) printf "%d\n", (diff_total-diff_idle)*100/diff_total
+    else print 0
+  }' /proc/stat
+  rm -f /tmp/.ops_pre
+
+  # Memory (MB) — MemTotal, MemAvailable, MemUsed
+  echo "===MEMORY==="
+  awk '/^MemTotal:/ {total=$2} /^MemAvailable:/ {avail=$2} END {print int(total/1024); print int((total-avail)/1024); print int(avail/1024)}' /proc/meminfo
 
   # Swap (MB)
   echo "===SWAP==="
-  awk '/^SwapTotal:/ {print int($2/1024)} /^SwapFree:/ {print int($2/1024)}' /proc/meminfo
+  awk '/^SwapTotal:/ {total=$2} /^SwapFree:/ {free=$2} END {print int(total/1024); print int(free/1024)}' /proc/meminfo
 
   # Disk usage of /
   echo "===DISK==="
-  df -B1 / | awk 'NR==2 {print int($2/1048576), int($3/1048576), int($4/1048576), $5}'
+  df -B1 / 2>/dev/null | awk 'NR==2 {printf "%d %d %d %s\n", int($2/1048576), int($3/1048576), int($4/1048576), $5}'
 
   # GPU (nvidia-smi)
   echo "===GPU==="
