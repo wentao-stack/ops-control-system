@@ -114,14 +114,26 @@ def _parse_status_output(stdout: str) -> list[SupervisorProcess]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+# Per-user supervisorctl path and config overrides.
+# Root users on Arch/Alpine use system paths; regular users use ~/.local/.
+_USER_SUP: dict[str, tuple[str, str]] = {
+    "root": ("supervisorctl", ""),
+    "wentao": ("/home/wentao/.local/bin/supervisorctl", "-c /home/wentao/.supervisor/supervisord.conf"),
+}
+
+
+def _supervisorctl_cmd(user: str) -> tuple[str, str]:
+    """Return (supervisorctl_path, config_flag) for a given SSH user."""
+    return _USER_SUP.get(user, ("supervisorctl", ""))
+
 
 def supervisor_status(
     host: str, port: int, user: str, timeout: int = 30,
 ) -> list[SupervisorProcess]:
     """Get status of all supervisor-managed processes on a remote host."""
-    r = ssh_exec(host, port, user, "supervisorctl status", timeout=timeout)
-    # supervisorctl status returns exit_code=3 when any process is STOPPED,
-    # so we parse stdout regardless of exit code (only skip on empty output)
+    ctl, conf = _supervisorctl_cmd(user)
+    cmd = f"{ctl} status"
+    r = ssh_exec(host, port, user, cmd, timeout=timeout)
     if not r["stdout"].strip():
         return []
     return _parse_status_output(r["stdout"])
@@ -142,15 +154,17 @@ def supervisor_action(
     Process: process name (e.g. "nginx"), group:process, or "all"
     Signal: signal name for action=signal (e.g. "HUP", "USR1")
     """
+    ctl, _ = _supervisorctl_cmd(user)
+
     if action == "signal":
         if not signal:
             return SupervisorActionResult(
                 success=False, process=process,
                 message="Signal name is required for 'signal' action",
             )
-        cmd = f"supervisorctl signal {signal} {process}"
+        cmd = f"{ctl} signal {signal} {process}"
     else:
-        cmd = f"supervisorctl {action} {process}"
+        cmd = f"{ctl} {action} {process}"
 
     r = ssh_exec(host, port, user, cmd, timeout=timeout)
     success = r["exit_code"] == 0
@@ -203,24 +217,29 @@ def supervisor_tail(
     log_type: 'stdout', 'stderr', or 'all' (default: 'all' to get everything)
     """
     # Step 1: discover supervisor log file path from config
+    ctl, conf = _supervisorctl_cmd(user)
+    # Determine config dir based on user
+    conf_dir = "/home/wentao/.supervisor/conf.d" if user == "wentao" else "/etc/supervisor/conf.d"
+
     discover_py = (
-        "import glob, re\\n"
-        f"proc = '{process}'\\n"
-        f"log_type = '{log_type}'\\n"
-        "for f in sorted(glob.glob('/etc/supervisor/conf.d/*.conf')):\\n"
-        "    c = open(f).read()\\n"
-        "    if '[program:' + proc + ']' in c:\\n"
-        "        lf = re.search(r'stdout_logfile=(\\\\S+)', c)\\n"
-        "        ef = re.search(r'stderr_logfile=(\\\\S+)', c)\\n"
-        "        rf = re.search(r'redirect_stderr=(\\\\S+)', c)\\n"
-        "        redirect = rf and rf.group(1) == 'true'\\n"
-        "        stdout = lf.group(1) if lf else ''\\n"
-        "        stderr = ef.group(1) if ef else ''\\n"
-        "        if log_type == 'stderr' and not redirect:\\n"
-        "            print(stderr, end='')\\n"
-        "        else:\\n"
-        "            print(stdout, end='')\\n"
-        "        break\\n"
+        "import glob, re\\\\n"
+        f"proc = '{process}'\\\\n"
+        f"log_type = '{log_type}'\\\\n"
+        f"conf_dir = '{conf_dir}'\\\\n"
+        "for f in sorted(glob.glob(conf_dir + '/*.conf')):\\\\n"
+        "    c = open(f).read()\\\\n"
+        "    if '[program:' + proc + ']' in c:\\\\n"
+        "        lf = re.search(r'stdout_logfile=(\\\\\\\\S+)', c)\\\\n"
+        "        ef = re.search(r'stderr_logfile=(\\\\\\\\S+)', c)\\\\n"
+        "        rf = re.search(r'redirect_stderr=(\\\\\\\\S+)', c)\\\\n"
+        "        redirect = rf and rf.group(1) == 'true'\\\\n"
+        "        stdout = lf.group(1) if lf else ''\\\\n"
+        "        stderr = ef.group(1) if ef else ''\\\\n"
+        "        if log_type == 'stderr' and not redirect:\\\\n"
+        "            print(stderr, end='')\\\\n"
+        "        else:\\\\n"
+        "            print(stdout, end='')\\\\n"
+        "        break\\\\n"
     )
     r = ssh_exec(host, port, user, f"python3 -c '{discover_py}'", timeout=timeout)
     supervisor_log = r["stdout"].strip()
@@ -313,7 +332,8 @@ def supervisor_reread(
     timeout: int = 30,
 ) -> SupervisorActionResult:
     """Reload supervisor configuration (reread + update)."""
-    r = ssh_exec(host, port, user, "supervisorctl reread && supervisorctl update", timeout=timeout)
+    ctl, _ = _supervisorctl_cmd(user)
+    r = ssh_exec(host, port, user, f"{ctl} reread && {ctl} update", timeout=timeout)
     success = r["exit_code"] == 0
     return SupervisorActionResult(
         success=success,
