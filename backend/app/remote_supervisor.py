@@ -55,6 +55,7 @@ class SupervisorLogLines:
 
 # ── Status parsing ────────────────────────────────────────────────────────────
 
+# RUNNING/STARTING/STOPPING: "name  STATUS  pid N,  uptime ..."
 _STATUS_RE = re.compile(
     r"^(?P<name>\S+)\s+"
     r"(?P<status>\S+)\s+"
@@ -62,10 +63,14 @@ _STATUS_RE = re.compile(
     r"\s+uptime\s+(?P<uptime>.+)$"
 )
 
-# Fallback for error states (no PID/uptime)
-_STATUS_ERROR_RE = re.compile(
+# STOPPED/FATAL/BACKOFF: "name  STATUS  <date/time or extra info>"
+# Examples:
+#   nginx           STOPPED   Jul 22 04:14 PM
+#   myapp           FATAL     Jun 01 10:30 AM
+#   worker          BACKOFF   06:23AM
+_STATUS_NO_PID_RE = re.compile(
     r"^(?P<name>\S+)\s+"
-    r"(?P<status>\S+)$"
+    r"(?P<status>\S+)"
 )
 
 
@@ -80,11 +85,7 @@ def _parse_status_output(stdout: str) -> list[SupervisorProcess]:
         m = _STATUS_RE.match(line)
         if m:
             name = m.group("name")
-            # name can be "group:process" or just "process"
-            if ":" in name:
-                group, proc = name.split(":", 1)
-            else:
-                group, proc = "", name
+            group, proc = (name.split(":", 1) if ":" in name else ("", name))
             processes.append(SupervisorProcess(
                 name=proc,
                 group=group,
@@ -95,13 +96,10 @@ def _parse_status_output(stdout: str) -> list[SupervisorProcess]:
             ))
             continue
 
-        m2 = _STATUS_ERROR_RE.match(line)
+        m2 = _STATUS_NO_PID_RE.match(line)
         if m2:
             name = m2.group("name")
-            if ":" in name:
-                group, proc = name.split(":", 1)
-            else:
-                group, proc = "", name
+            group, proc = (name.split(":", 1) if ":" in name else ("", name))
             processes.append(SupervisorProcess(
                 name=proc,
                 group=group,
@@ -122,7 +120,9 @@ def supervisor_status(
 ) -> list[SupervisorProcess]:
     """Get status of all supervisor-managed processes on a remote host."""
     r = ssh_exec(host, port, user, "supervisorctl status", timeout=timeout)
-    if r["exit_code"] != 0:
+    # supervisorctl status returns exit_code=3 when any process is STOPPED,
+    # so we parse stdout regardless of exit code (only skip on empty output)
+    if not r["stdout"].strip():
         return []
     return _parse_status_output(r["stdout"])
 
