@@ -36,6 +36,8 @@ class Asset(Base):
     ssh_host: Mapped[str | None] = mapped_column(String(256), nullable=True)
     ssh_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ssh_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # True when this asset IS the backend host itself — use local subprocess instead of SSH
+    local_machine: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     services: Mapped[list["AssetService"]] = relationship(

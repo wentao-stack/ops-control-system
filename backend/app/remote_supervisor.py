@@ -1,13 +1,17 @@
-"""Remote Supervisor process management via SSH.
+"""Remote Supervisor process management via SSH or local subprocess.
 
-Uses SSH to execute `supervisorctl` commands on remote hosts.
+Uses SSH to execute `supervisorctl` commands on remote hosts, or local
+subprocess when the asset is the backend host itself.
 Supports: status, start, stop, restart, signal, tail (logs).
 """
 
 from __future__ import annotations
 
+import glob
 import json
+import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 
 from .remote import ssh_exec
@@ -127,13 +131,60 @@ def _supervisorctl_cmd(user: str) -> tuple[str, str]:
     return _USER_SUP.get(user, ("supervisorctl", ""))
 
 
+def _local_exec(cmd: str, timeout: int = 30) -> dict:
+    """Execute a command locally via subprocess (for local_machine assets)."""
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, timeout=timeout,
+        )
+        return {
+            "exit_code": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    except subprocess.TimeoutExpired:
+        return {"exit_code": -1, "stdout": "", "stderr": "Command timed out"}
+    except Exception as e:
+        return {"exit_code": -1, "stdout": "", "stderr": str(e)}
+
+
+def _discover_log_local(process: str, log_type: str, conf_dir: str) -> str:
+    """Discover supervisor log file path by parsing config (local version)."""
+    for f in sorted(glob.glob(os.path.join(conf_dir, "*.conf"))):
+        c = open(f).read()
+        if f"[program:{process}]" in c:
+            lf = re.search(r"stdout_logfile=(\S+)", c)
+            ef = re.search(r"stderr_logfile=(\S+)", c)
+            rf = re.search(r"redirect_stderr=(\S+)", c)
+            redirect = rf and rf.group(1) == "true"
+            if log_type == "stderr" and not redirect:
+                return ef.group(1) if ef else ""
+            return lf.group(1) if lf else ""
+    return ""
+
+
+def _read_file_tail(path: str, lines: int) -> list[str]:
+    """Tail a local file, return lines."""
+    try:
+        with open(path) as f:
+            all_lines = f.read().splitlines()
+        return all_lines[-lines:] if len(all_lines) > lines else all_lines
+    except (FileNotFoundError, PermissionError):
+        return []
+
+
 def supervisor_status(
-    host: str, port: int, user: str, timeout: int = 30,
+    host: str, port: int, user: str, local_machine: bool = False, timeout: int = 30,
 ) -> list[SupervisorProcess]:
-    """Get status of all supervisor-managed processes on a remote host."""
-    ctl, conf = _supervisorctl_cmd(user)
-    cmd = f"{ctl} {conf} status".strip()
-    r = ssh_exec(host, port, user, cmd, timeout=timeout)
+    """Get status of all supervisor-managed processes."""
+    if local_machine:
+        ctl, conf = _supervisorctl_cmd(user)
+        cmd = f"{ctl} {conf} status".strip()
+        r = _local_exec(cmd, timeout=timeout)
+    else:
+        ctl, conf = _supervisorctl_cmd(user)
+        cmd = f"{ctl} {conf} status".strip()
+        r = ssh_exec(host, port, user, cmd, timeout=timeout)
     if not r["stdout"].strip():
         return []
     return _parse_status_output(r["stdout"])
@@ -146,14 +197,10 @@ def supervisor_action(
     action: str,       # start | stop | restart | signal
     process: str,      # process name or "all"
     signal: str = "",  # only for action=signal, e.g. "HUP"
+    local_machine: bool = False,
     timeout: int = 30,
 ) -> SupervisorActionResult:
-    """Execute a supervisor action on a remote host.
-
-    Actions: start, stop, restart, signal
-    Process: process name (e.g. "nginx"), group:process, or "all"
-    Signal: signal name for action=signal (e.g. "HUP", "USR1")
-    """
+    """Execute a supervisor action (start/stop/restart/signal)."""
     ctl, conf = _supervisorctl_cmd(user)
     ctl_cmd = f"{ctl} {conf}".strip()
 
@@ -167,7 +214,10 @@ def supervisor_action(
     else:
         cmd = f"{ctl_cmd} {action} {process}"
 
-    r = ssh_exec(host, port, user, cmd, timeout=timeout)
+    if local_machine:
+        r = _local_exec(cmd, timeout=timeout)
+    else:
+        r = ssh_exec(host, port, user, cmd, timeout=timeout)
     success = r["exit_code"] == 0
     msg = ""
     if not success and r["stderr"]:
@@ -205,62 +255,54 @@ def supervisor_tail(
     port: int,
     user: str,
     process: str,
-    log_type: str = "stdout",  # stdout | stderr | all
+    log_type: str = "stdout",
     lines: int = 100,
+    local_machine: bool = False,
     timeout: int = 30,
 ) -> SupervisorLogLines:
-    """Tail the log output of a supervisor-managed process.
-
-    Discovers log sources:
-    1. Supervisor stdout_logfile / stderr_logfile from config
-    2. Application-specific log files (nginx, frps, fail2ban, etc.)
-    """
-    ctl, conf = _supervisorctl_cmd(user)
+    """Tail the log output of a supervisor-managed process."""
     conf_dir = "/home/wentao/.supervisor/conf.d" if user == "wentao" else "/etc/supervisor/conf.d"
+    log_base = "/home/wentao/.supervisor/log" if user == "wentao" else "/var/log/supervisor"
 
-    # Write a temp Python script on the remote to avoid shell escaping issues
-    discover_script = (
-        "import glob, re, sys\n"
-        f"proc = sys.argv[1]\n"
-        f"log_type = sys.argv[2]\n"
-        f"conf_dir = sys.argv[3]\n"
-        "for f in sorted(glob.glob(conf_dir + '/*.conf')):\n"
-        "    c = open(f).read()\n"
-        "    if '[program:' + proc + ']' in c:\n"
-        "        lf = re.search(r'stdout_logfile=(\\S+)', c)\n"
-        "        ef = re.search(r'stderr_logfile=(\\S+)', c)\n"
-        "        rf = re.search(r'redirect_stderr=(\\S+)', c)\n"
-        "        redirect = rf and rf.group(1) == 'true'\n"
-        "        if log_type == 'stderr' and not redirect:\n"
-        "            print(ef.group(1) if ef else '', end='')\n"
-        "        else:\n"
-        "            print(lf.group(1) if lf else '', end='')\n"
-        "        break\n"
-    )
+    # Discover supervisor log file path
+    if local_machine:
+        supervisor_log = _discover_log_local(process, log_type, conf_dir)
+    else:
+        discover_script = (
+            "import glob, re, sys\n"
+            "proc = sys.argv[1]\n"
+            "log_type = sys.argv[2]\n"
+            "conf_dir = sys.argv[3]\n"
+            "for f in sorted(glob.glob(conf_dir + '/*.conf')):\n"
+            "    c = open(f).read()\n"
+            "    if '[program:' + proc + ']' in c:\n"
+            "        lf = re.search(r'stdout_logfile=(\\S+)', c)\n"
+            "        ef = re.search(r'stderr_logfile=(\\S+)', c)\n"
+            "        rf = re.search(r'redirect_stderr=(\\S+)', c)\n"
+            "        redirect = rf and rf.group(1) == 'true'\n"
+            "        if log_type == 'stderr' and not redirect:\n"
+            "            print(ef.group(1) if ef else '', end='')\n"
+            "        else:\n"
+            "            print(lf.group(1) if lf else '', end='')\n"
+            "        break\n"
+        )
+        tmp = "/tmp/_sup_discover.py"
+        write_cmd = f"cat > {tmp} << 'PYEOF'\n{discover_script}PYEOF"
+        run_cmd = f"python3 {tmp} {process} {log_type} {conf_dir} && rm -f {tmp}"
+        r = ssh_exec(host, port, user, write_cmd + " && " + run_cmd, timeout=timeout)
+        supervisor_log = r["stdout"].strip()
 
-    # Write script to temp file, run it, clean up
-    tmp = "/tmp/_sup_discover.py"
-    write_cmd = f"cat > {tmp} << 'PYEOF'\n{discover_script}PYEOF"
-    run_cmd = f"python3 {tmp} {process} {log_type} {conf_dir} && rm -f {tmp}"
+    # Collect all log sources
+    sources_to_read: list[tuple[str, str, str]] = []
 
-    r = ssh_exec(host, port, user, write_cmd + " && " + run_cmd, timeout=timeout)
-    supervisor_log = r["stdout"].strip()
-
-    # Step 2: collect all log sources to read
-    sources_to_read: list[tuple[str, str, str]] = []  # (label, path, source_type)
-
-    # Supervisor log
     if supervisor_log:
         sources_to_read.append(("Supervisor stdout", supervisor_log, "supervisor"))
 
-    # Application-specific logs
     app_logs = _APP_LOGS.get(process, [])
     for label, path in app_logs:
         sources_to_read.append((label, path, "app"))
 
-    # Fallback supervisor paths if no config found
     if not supervisor_log:
-        log_base = "/home/wentao/.supervisor/log" if user == "wentao" else "/var/log/supervisor"
         fallbacks = (
             [f"{log_base}/{process}-error.log", f"{log_base}/{process}.log"]
             if log_type == "stderr"
@@ -269,54 +311,56 @@ def supervisor_tail(
         for fb in fallbacks:
             sources_to_read.append((f"Supervisor ({fb.split('/')[-1]})", fb, "supervisor"))
 
-    # Step 3: read all sources in one SSH call
     if not sources_to_read:
         return SupervisorLogLines(process=process, lines=[], sources=[])
 
-    # Build a single command that reads all sources with headers
-    read_parts: list[str] = []
-    for label, path, _ in sources_to_read:
-        read_parts.append(
-            f"echo '=== {label} ({path}) ==='; "
-            f"tail -n {lines} '{path}' 2>/dev/null || echo '(file not found)'; "
-            f"echo '';"
-        )
-    read_cmd = " ".join(read_parts)
-
-    r = ssh_exec(host, port, user, read_cmd, timeout=timeout)
-    raw_output = r["stdout"]
-
-    # Step 4: parse output into sources
+    # Read sources — local or remote
     sources: list[SupervisorLogFile] = []
     all_lines: list[str] = []
 
-    current_source: SupervisorLogFile | None = None
-    for line in raw_output.splitlines():
-        if line.startswith("=== ") and " ===" in line:
-            header = line[4:-4].strip()
-            paren_idx = header.rindex("(")
-            label = header[:paren_idx].strip()
-            path = header[paren_idx + 1:-1].strip()
-            source_type = "app" if current_source is None else (
-                "app" if "Supervisor" not in label else "supervisor"
+    if local_machine:
+        for label, path, source_type in sources_to_read:
+            file_lines = _read_file_tail(path, lines)
+            if file_lines:
+                sources.append(SupervisorLogFile(
+                    source=source_type, label=label, path=path, lines=file_lines,
+                ))
+                all_lines.extend(file_lines)
+    else:
+        read_parts: list[str] = []
+        for label, path, _ in sources_to_read:
+            read_parts.append(
+                f"echo '=== {label} ({path}) ==='; "
+                f"tail -n {lines} '{path}' 2>/dev/null || echo '(file not found)'; "
+                f"echo '';"
             )
-            if current_source is not None:
-                sources.append(current_source)
-            current_source = SupervisorLogFile(
-                source=source_type,
-                label=label,
-                path=path,
-                lines=[],
-            )
-        elif current_source is not None:
-            current_source.lines.append(line)
-            all_lines.append(line)
+        read_cmd = " ".join(read_parts)
+        r = ssh_exec(host, port, user, read_cmd, timeout=timeout)
+        raw_output = r["stdout"]
 
-    if current_source is not None:
-        sources.append(current_source)
+        current_source: SupervisorLogFile | None = None
+        for line in raw_output.splitlines():
+            if line.startswith("=== ") and " ===" in line:
+                header = line[4:-4].strip()
+                paren_idx = header.rindex("(")
+                label = header[:paren_idx].strip()
+                path = header[paren_idx + 1:-1].strip()
+                source_type = "app" if current_source is None else (
+                    "app" if "Supervisor" not in label else "supervisor"
+                )
+                if current_source is not None:
+                    sources.append(current_source)
+                current_source = SupervisorLogFile(
+                    source=source_type, label=label, path=path, lines=[],
+                )
+            elif current_source is not None:
+                current_source.lines.append(line)
+                all_lines.append(line)
 
-    # Filter out empty sources (file not found)
-    sources = [s for s in sources if s.lines and s.lines[0] != "(file not found)"]
+        if current_source is not None:
+            sources.append(current_source)
+
+        sources = [s for s in sources if s.lines and s.lines[0] != "(file not found)"]
 
     return SupervisorLogLines(
         process=process,
@@ -330,12 +374,16 @@ def supervisor_reread(
     host: str = "",
     port: int = 0,
     user: str = "",
+    local_machine: bool = False,
     timeout: int = 30,
 ) -> SupervisorActionResult:
     """Reload supervisor configuration (reread + update)."""
     ctl, conf = _supervisorctl_cmd(user)
     ctl_cmd = f"{ctl} {conf}".strip()
-    r = ssh_exec(host, port, user, f"{ctl_cmd} reread && {ctl_cmd} update", timeout=timeout)
+    if local_machine:
+        r = _local_exec(f"{ctl_cmd} reread && {ctl_cmd} update", timeout=timeout)
+    else:
+        r = ssh_exec(host, port, user, f"{ctl_cmd} reread && {ctl_cmd} update", timeout=timeout)
     success = r["exit_code"] == 0
     return SupervisorActionResult(
         success=success,

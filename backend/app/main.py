@@ -365,11 +365,13 @@ def supervisor_all_status(
     hosts: list[SupervisorHostStatusResponse] = []
     for asset in assets:
         port = asset.ssh_port or 22
+        local = getattr(asset, "local_machine", False)
         try:
             procs = supervisor_status(
                 host=asset.ssh_host,  # type: ignore[arg-type]
                 port=port,
                 user=asset.ssh_user,  # type: ignore[arg-type]
+                local_machine=local,
                 timeout=30,
             )
             # Get hostname
@@ -428,6 +430,7 @@ def supervisor_process_action(
         )
 
     port = asset.ssh_port or 22
+    local = getattr(asset, "local_machine", False)
     result = supervisor_action(
         host=asset.ssh_host,
         port=port,
@@ -435,6 +438,7 @@ def supervisor_process_action(
         action=req.action,
         process=req.process,
         signal=req.signal,
+        local_machine=local,
         timeout=30,
     )
     return SupervisorActionResponse(**result.__dict__)
@@ -456,6 +460,7 @@ def supervisor_process_tail(
         raise HTTPException(status_code=400, detail="log_type must be 'stdout', 'stderr', or 'all'")
 
     port = asset.ssh_port or 22
+    local = getattr(asset, "local_machine", False)
     result = supervisor_tail(
         host=asset.ssh_host,
         port=port,
@@ -463,6 +468,7 @@ def supervisor_process_tail(
         process=req.process,
         log_type=req.log_type,
         lines=req.lines,
+        local_machine=local,
         timeout=30,
     )
     sources_resp = [
