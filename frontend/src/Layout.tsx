@@ -4,6 +4,7 @@ import { Link, useLocation, Outlet } from "react-router-dom"
 const NAV = [
   { to: "/", label: "總覽", icon: "📊" },
   { to: "/assets", label: "資產", icon: "🖥" },
+  { to: "/services", label: "服務", icon: "🔧" },
   { to: "/monitoring", label: "監控", icon: "📡" },
   { to: "/remote", label: "遠程終端", icon: "⌨" },
   { to: "/settings", label: "設定", icon: "⚙" },
@@ -12,6 +13,7 @@ const NAV = [
 const PAGE_TITLES: Record<string, string> = {
   "/": "儀表板總覽",
   "/assets": "資產管理",
+  "/services": "服務總覽",
   "/monitoring": "主機監控",
   "/remote": "遠程終端",
   "/settings": "系統設定",

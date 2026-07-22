@@ -43,6 +43,7 @@ export function OverviewPage() {
         <div className="card-header"><h2>快速連結</h2></div>
         <div className="card-body" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link to="/assets" className="btn">🖥 資產清單</Link>
+          <Link to="/services" className="btn">🔧 服務總覽</Link>
           <Link to="/monitoring" className="btn">📡 主機監控</Link>
           <Link to="/remote" className="btn">⌨ 遠程終端</Link>
         </div>

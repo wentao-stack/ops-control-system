@@ -9,6 +9,7 @@ import { AssetDetailPage } from "./pages/AssetDetailPage"
 import { MonitoringPage } from "./pages/MonitoringPage"
 import { RemotePage } from "./pages/RemotePage"
 import { SettingsPage } from "./pages/SettingsPage"
+import { ServicesPage } from "./pages/ServicesPage"
 import "./styles.css"
 
 function AppRoutes() {
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="/assets/:assetId" element={<AssetDetailPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/remote" element={<RemotePage />} />
+        <Route path="/services" element={<ServicesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

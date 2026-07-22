@@ -16,12 +16,14 @@ from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Runbook, User
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
+from .remote_service import detect_remote_services
 from .schemas import (
     AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse,
     ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse,
     InventorySummaryResponse, LoginRequest, RemoteExecRequest, RemoteExecResponse,
     RemoteGPUMetricsResponse, RemoteHostMetricsResponse, RemoteHostsMetricsResponse,
-    RemotePingResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
+    RemoteAllServicesResponse, RemoteHostServicesResponse, RemotePingResponse,
+    RemoteServiceResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
     TokenResponse, UserResponse,
 )
 from .monitor import collect_host_metrics
@@ -305,6 +307,44 @@ def hosts_metrics(session: Session = Depends(get_session)) -> RemoteHostsMetrics
             gpus=[RemoteGPUMetricsResponse(**g.__dict__) for g in raw.gpus],
         ))
     return RemoteHostsMetricsResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
+
+
+@app.get("/api/v1/hosts/services", response_model=RemoteAllServicesResponse)
+def hosts_services(session: Session = Depends(get_session)) -> RemoteAllServicesResponse:
+    """Detect running services on all SSH-configured hosts."""
+    assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+    hosts: list[RemoteHostServicesResponse] = []
+    for asset in assets:
+        port = asset.ssh_port or 22
+        svcs = detect_remote_services(
+            host=asset.ssh_host,  # type: ignore[arg-type]
+            port=port,
+            user=asset.ssh_user,  # type: ignore[arg-type]
+            asset_id=asset.id,
+            name=asset.name,
+            timeout=60,
+        )
+        # Get hostname for display
+        hostname = ""
+        try:
+            from .remote_monitor import collect_remote_metrics
+            hm = collect_remote_metrics(
+                asset.ssh_host,  # type: ignore[arg-type]
+                port, asset.ssh_user,  # type: ignore[arg-type]
+                asset.id, asset.name, timeout=15
+            )
+            hostname = hm.hostname
+        except Exception:
+            hostname = asset.ssh_host or ""
+
+        hosts.append(RemoteHostServicesResponse(
+            asset_id=asset.id,
+            name=asset.name,
+            hostname=hostname,
+            reachable=len(svcs) > 0,
+            services=[RemoteServiceResponse(**s.__dict__) for s in svcs],
+        ))
+    return RemoteAllServicesResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

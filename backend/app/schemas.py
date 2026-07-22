@@ -227,3 +227,28 @@ class RemoteHostMetricsResponse(BaseModel):
 class RemoteHostsMetricsResponse(BaseModel):
     hosts: list[RemoteHostMetricsResponse]
     collected_at: str
+
+
+# ── Remote service detection schemas ─────────────────────────────────────────
+
+class RemoteServiceResponse(BaseModel):
+    name: str
+    service_type: str
+    status: str
+    pid: str = ""
+    ports: str = ""
+    description: str = ""
+    uptime: str = ""
+
+
+class RemoteHostServicesResponse(BaseModel):
+    asset_id: str
+    name: str
+    hostname: str
+    reachable: bool
+    services: list[RemoteServiceResponse]
+
+
+class RemoteAllServicesResponse(BaseModel):
+    hosts: list[RemoteHostServicesResponse]
+    collected_at: str
