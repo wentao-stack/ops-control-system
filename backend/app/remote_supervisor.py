@@ -132,7 +132,7 @@ def supervisor_status(
 ) -> list[SupervisorProcess]:
     """Get status of all supervisor-managed processes on a remote host."""
     ctl, conf = _supervisorctl_cmd(user)
-    cmd = f"{ctl} status"
+    cmd = f"{ctl} {conf} status".strip()
     r = ssh_exec(host, port, user, cmd, timeout=timeout)
     if not r["stdout"].strip():
         return []
@@ -154,7 +154,8 @@ def supervisor_action(
     Process: process name (e.g. "nginx"), group:process, or "all"
     Signal: signal name for action=signal (e.g. "HUP", "USR1")
     """
-    ctl, _ = _supervisorctl_cmd(user)
+    ctl, conf = _supervisorctl_cmd(user)
+    ctl_cmd = f"{ctl} {conf}".strip()
 
     if action == "signal":
         if not signal:
@@ -162,9 +163,9 @@ def supervisor_action(
                 success=False, process=process,
                 message="Signal name is required for 'signal' action",
             )
-        cmd = f"{ctl} signal {signal} {process}"
+        cmd = f"{ctl_cmd} signal {signal} {process}"
     else:
-        cmd = f"{ctl} {action} {process}"
+        cmd = f"{ctl_cmd} {action} {process}"
 
     r = ssh_exec(host, port, user, cmd, timeout=timeout)
     success = r["exit_code"] == 0
@@ -213,35 +214,36 @@ def supervisor_tail(
     Discovers log sources:
     1. Supervisor stdout_logfile / stderr_logfile from config
     2. Application-specific log files (nginx, frps, fail2ban, etc.)
-
-    log_type: 'stdout', 'stderr', or 'all' (default: 'all' to get everything)
     """
-    # Step 1: discover supervisor log file path from config
     ctl, conf = _supervisorctl_cmd(user)
-    # Determine config dir based on user
     conf_dir = "/home/wentao/.supervisor/conf.d" if user == "wentao" else "/etc/supervisor/conf.d"
 
-    discover_py = (
-        "import glob, re\\\\n"
-        f"proc = '{process}'\\\\n"
-        f"log_type = '{log_type}'\\\\n"
-        f"conf_dir = '{conf_dir}'\\\\n"
-        "for f in sorted(glob.glob(conf_dir + '/*.conf')):\\\\n"
-        "    c = open(f).read()\\\\n"
-        "    if '[program:' + proc + ']' in c:\\\\n"
-        "        lf = re.search(r'stdout_logfile=(\\\\\\\\S+)', c)\\\\n"
-        "        ef = re.search(r'stderr_logfile=(\\\\\\\\S+)', c)\\\\n"
-        "        rf = re.search(r'redirect_stderr=(\\\\\\\\S+)', c)\\\\n"
-        "        redirect = rf and rf.group(1) == 'true'\\\\n"
-        "        stdout = lf.group(1) if lf else ''\\\\n"
-        "        stderr = ef.group(1) if ef else ''\\\\n"
-        "        if log_type == 'stderr' and not redirect:\\\\n"
-        "            print(stderr, end='')\\\\n"
-        "        else:\\\\n"
-        "            print(stdout, end='')\\\\n"
-        "        break\\\\n"
+    # Write a temp Python script on the remote to avoid shell escaping issues
+    discover_script = (
+        "import glob, re, sys\n"
+        f"proc = sys.argv[1]\n"
+        f"log_type = sys.argv[2]\n"
+        f"conf_dir = sys.argv[3]\n"
+        "for f in sorted(glob.glob(conf_dir + '/*.conf')):\n"
+        "    c = open(f).read()\n"
+        "    if '[program:' + proc + ']' in c:\n"
+        "        lf = re.search(r'stdout_logfile=(\\S+)', c)\n"
+        "        ef = re.search(r'stderr_logfile=(\\S+)', c)\n"
+        "        rf = re.search(r'redirect_stderr=(\\S+)', c)\n"
+        "        redirect = rf and rf.group(1) == 'true'\n"
+        "        if log_type == 'stderr' and not redirect:\n"
+        "            print(ef.group(1) if ef else '', end='')\n"
+        "        else:\n"
+        "            print(lf.group(1) if lf else '', end='')\n"
+        "        break\n"
     )
-    r = ssh_exec(host, port, user, f"python3 -c '{discover_py}'", timeout=timeout)
+
+    # Write script to temp file, run it, clean up
+    tmp = "/tmp/_sup_discover.py"
+    write_cmd = f"cat > {tmp} << 'PYEOF'\n{discover_script}PYEOF"
+    run_cmd = f"python3 {tmp} {process} {log_type} {conf_dir} && rm -f {tmp}"
+
+    r = ssh_exec(host, port, user, write_cmd + " && " + run_cmd, timeout=timeout)
     supervisor_log = r["stdout"].strip()
 
     # Step 2: collect all log sources to read
@@ -258,10 +260,11 @@ def supervisor_tail(
 
     # Fallback supervisor paths if no config found
     if not supervisor_log:
+        log_base = "/home/wentao/.supervisor/log" if user == "wentao" else "/var/log/supervisor"
         fallbacks = (
-            [f"/var/log/supervisor/{process}.stderr.log", f"/var/log/supervisor/{process}.log"]
+            [f"{log_base}/{process}-error.log", f"{log_base}/{process}.log"]
             if log_type == "stderr"
-            else [f"/var/log/supervisor/{process}.stdout.log", f"/var/log/supervisor/{process}.log"]
+            else [f"{log_base}/{process}.log"]
         )
         for fb in fallbacks:
             sources_to_read.append((f"Supervisor ({fb.split('/')[-1]})", fb, "supervisor"))
@@ -287,11 +290,9 @@ def supervisor_tail(
     sources: list[SupervisorLogFile] = []
     all_lines: list[str] = []
 
-    # Split by source headers
     current_source: SupervisorLogFile | None = None
     for line in raw_output.splitlines():
         if line.startswith("=== ") and " ===" in line:
-            # Parse header: "=== Label (path) ==="
             header = line[4:-4].strip()
             paren_idx = header.rindex("(")
             label = header[:paren_idx].strip()
@@ -332,8 +333,9 @@ def supervisor_reread(
     timeout: int = 30,
 ) -> SupervisorActionResult:
     """Reload supervisor configuration (reread + update)."""
-    ctl, _ = _supervisorctl_cmd(user)
-    r = ssh_exec(host, port, user, f"{ctl} reread && {ctl} update", timeout=timeout)
+    ctl, conf = _supervisorctl_cmd(user)
+    ctl_cmd = f"{ctl} {conf}".strip()
+    r = ssh_exec(host, port, user, f"{ctl_cmd} reread && {ctl_cmd} update", timeout=timeout)
     success = r["exit_code"] == 0
     return SupervisorActionResult(
         success=success,
