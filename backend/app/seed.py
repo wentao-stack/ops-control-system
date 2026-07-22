@@ -23,6 +23,31 @@ def seed_development_data(session: Session) -> None:
         )
         session.commit()
 
+    # ── Always-seed real production servers (idempotent) ────────────────────
+    _now = datetime.now(UTC).replace(microsecond=0)
+    real_servers = [
+        ("vps-sanbunto", "163.44.124.142", "Arch Linux VPS (OpenStack) — FRP+Nginx gateway"),
+        ("vps-218", "149.28.44.218", "Production server"),
+    ]
+    for name, ip, summary in real_servers:
+        asset_id = f"asset-prod-{name}"
+        existing = session.query(Asset).filter(Asset.id == asset_id).first()
+        if existing is None:
+            session.add(Asset(
+                id=asset_id,
+                name=f"{name} ({ip})",
+                asset_type="host",
+                environment="production",
+                owner="Platform",
+                criticality="high",
+                health_status="healthy",
+                health_summary=summary,
+                last_seen_at=_now,
+                created_at=_now,
+                updated_at=_now,
+            ))
+            session.commit()
+
     if session.query(Asset).first() is not None:
         # Check if new tables need seeding
         if not session.query(Alert).first():
