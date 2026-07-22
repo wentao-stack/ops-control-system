@@ -7,6 +7,6 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     allowedHosts: ["ops.sanbunto.online"],
-    proxy: { "/api": "http://127.0.0.1:8000" },
+    proxy: { "/api": "http://127.0.0.1:18080" },
   },
 });
