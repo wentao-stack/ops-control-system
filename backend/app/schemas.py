@@ -252,3 +252,56 @@ class RemoteHostServicesResponse(BaseModel):
 class RemoteAllServicesResponse(BaseModel):
     hosts: list[RemoteHostServicesResponse]
     collected_at: str
+
+
+# ── Supervisor process management schemas ────────────────────────────────────
+
+class SupervisorProcessResponse(BaseModel):
+    name: str
+    group: str
+    display_name: str
+    status: str
+    pid: int
+    uptime: str = ""
+
+
+class SupervisorHostStatusResponse(BaseModel):
+    asset_id: str
+    name: str
+    hostname: str
+    reachable: bool
+    error: str = ""
+    processes: list[SupervisorProcessResponse]
+
+
+class SupervisorAllStatusResponse(BaseModel):
+    hosts: list[SupervisorHostStatusResponse]
+    collected_at: str
+
+
+class SupervisorActionRequest(BaseModel):
+    asset_id: str
+    action: str  # start | stop | restart | signal
+    process: str  # process name or "all"
+    signal: str = ""  # for action=signal only
+
+
+class SupervisorActionResponse(BaseModel):
+    success: bool
+    process: str
+    message: str
+    stdout: str = ""
+    stderr: str = ""
+
+
+class SupervisorTailRequest(BaseModel):
+    asset_id: str
+    process: str
+    log_type: str = "stdout"  # stdout | stderr
+    lines: int = 100
+
+
+class SupervisorTailResponse(BaseModel):
+    process: str
+    lines: list[str]
+    truncated: bool = False

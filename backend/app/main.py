@@ -17,6 +17,10 @@ from .models import Alert, Asset, AssetService, Change, Runbook, User
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
+from .remote_supervisor import (
+    SupervisorLogLines, SupervisorProcess,
+    supervisor_action, supervisor_status, supervisor_tail,
+)
 from .schemas import (
     AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse,
     ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse,
@@ -24,6 +28,9 @@ from .schemas import (
     RemoteGPUMetricsResponse, RemoteHostMetricsResponse, RemoteHostsMetricsResponse,
     RemoteAllServicesResponse, RemoteHostServicesResponse, RemotePingResponse,
     RemoteServiceResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
+    SupervisorActionRequest, SupervisorActionResponse, SupervisorAllStatusResponse,
+    SupervisorHostStatusResponse, SupervisorProcessResponse, SupervisorTailRequest,
+    SupervisorTailResponse,
     TokenResponse, UserResponse,
 )
 from .monitor import collect_host_metrics
@@ -345,6 +352,120 @@ def hosts_services(session: Session = Depends(get_session)) -> RemoteAllServices
             services=[RemoteServiceResponse(**s.__dict__) for s in svcs],
         ))
     return RemoteAllServicesResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
+
+
+# ── Supervisor process management endpoints ──────────────────────────────────
+
+@app.get("/api/v1/supervisor/status", response_model=SupervisorAllStatusResponse)
+def supervisor_all_status(
+    session: Session = Depends(get_session),
+) -> SupervisorAllStatusResponse:
+    """Get supervisor process status for all SSH-configured hosts."""
+    assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+    hosts: list[SupervisorHostStatusResponse] = []
+    for asset in assets:
+        port = asset.ssh_port or 22
+        try:
+            procs = supervisor_status(
+                host=asset.ssh_host,  # type: ignore[arg-type]
+                port=port,
+                user=asset.ssh_user,  # type: ignore[arg-type]
+                timeout=30,
+            )
+            # Get hostname
+            hostname = ""
+            try:
+                hm = collect_remote_metrics(
+                    asset.ssh_host,  # type: ignore[arg-type]
+                    port, asset.ssh_user,  # type: ignore[arg-type]
+                    asset.id, asset.name, timeout=10,
+                )
+                hostname = hm.hostname
+            except Exception:
+                hostname = asset.ssh_host or ""
+
+            hosts.append(SupervisorHostStatusResponse(
+                asset_id=asset.id,
+                name=asset.name,
+                hostname=hostname,
+                reachable=len(procs) > 0,
+                processes=[
+                    SupervisorProcessResponse(**p.__dict__) for p in procs
+                ],
+            ))
+        except Exception as e:
+            hosts.append(SupervisorHostStatusResponse(
+                asset_id=asset.id,
+                name=asset.name,
+                hostname=asset.ssh_host or "",
+                reachable=False,
+                error=str(e),
+                processes=[],
+            ))
+    return SupervisorAllStatusResponse(
+        hosts=hosts,
+        collected_at=datetime.now(UTC).isoformat(),
+    )
+
+
+@app.post("/api/v1/supervisor/action", response_model=SupervisorActionResponse)
+def supervisor_process_action(
+    req: SupervisorActionRequest,
+    session: Session = Depends(get_session),
+) -> SupervisorActionResponse:
+    """Execute a supervisor action (start/stop/restart/signal) on a remote host."""
+    asset = session.scalar(select(Asset).where(Asset.id == req.asset_id))
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.ssh_host is None or asset.ssh_user is None:
+        raise HTTPException(status_code=400, detail="Asset has no SSH configuration")
+
+    valid_actions = {"start", "stop", "restart", "signal"}
+    if req.action not in valid_actions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action. Must be one of: {', '.join(sorted(valid_actions))}",
+        )
+
+    port = asset.ssh_port or 22
+    result = supervisor_action(
+        host=asset.ssh_host,
+        port=port,
+        user=asset.ssh_user,
+        action=req.action,
+        process=req.process,
+        signal=req.signal,
+        timeout=30,
+    )
+    return SupervisorActionResponse(**result.__dict__)
+
+
+@app.post("/api/v1/supervisor/tail", response_model=SupervisorTailResponse)
+def supervisor_process_tail(
+    req: SupervisorTailRequest,
+    session: Session = Depends(get_session),
+) -> SupervisorTailResponse:
+    """Tail the log output of a supervisor-managed process on a remote host."""
+    asset = session.scalar(select(Asset).where(Asset.id == req.asset_id))
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.ssh_host is None or asset.ssh_user is None:
+        raise HTTPException(status_code=400, detail="Asset has no SSH configuration")
+
+    if req.log_type not in ("stdout", "stderr"):
+        raise HTTPException(status_code=400, detail="log_type must be 'stdout' or 'stderr'")
+
+    port = asset.ssh_port or 22
+    result = supervisor_tail(
+        host=asset.ssh_host,
+        port=port,
+        user=asset.ssh_user,
+        process=req.process,
+        log_type=req.log_type,
+        lines=req.lines,
+        timeout=30,
+    )
+    return SupervisorTailResponse(**result.__dict__)
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

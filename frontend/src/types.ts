@@ -80,3 +80,42 @@ export const fmtRel = (v: string) => {
   if (d < 1440) return `${Math.floor(d / 60)} 小時前`
   return `${Math.floor(d / 1440)} 天前`
 }
+
+// ── Supervisor process management types ────────────────────────────────────
+
+export type SupervisorProcess = {
+  name: string
+  group: string
+  display_name: string
+  status: string  // RUNNING, STOPPED, STARTING, STOPPING, FATAL, BACKOFF
+  pid: number
+  uptime: string
+}
+
+export type SupervisorHostStatus = {
+  asset_id: string
+  name: string
+  hostname: string
+  reachable: boolean
+  error: string
+  processes: SupervisorProcess[]
+}
+
+export type SupervisorAllStatus = {
+  hosts: SupervisorHostStatus[]
+  collected_at: string
+}
+
+export type SupervisorActionResult = {
+  success: boolean
+  process: string
+  message: string
+  stdout: string
+  stderr: string
+}
+
+export type SupervisorTailResult = {
+  process: string
+  lines: string[]
+  truncated: boolean
+}
