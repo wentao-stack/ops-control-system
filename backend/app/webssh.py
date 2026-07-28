@@ -2,7 +2,7 @@
 
 Browser <-> WebSocket <-> asyncssh PTY <-> remote host
 
-For local_machine assets, uses subprocess + pty directly (no SSH).
+For local_machine assets, uses asyncio subprocess + PTY directly (no SSH).
 For remote assets, uses asyncssh for SSH PTY sessions.
 
 Protocol (JSON over WebSocket text frames):
@@ -19,15 +19,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import fcntl
 import json
 import logging
 import os
 import pty
-import select
 import signal
+import struct
 import subprocess
 import termios
-import tty
 
 logger = logging.getLogger(__name__)
 
@@ -49,65 +49,62 @@ async def handle_webssh(
         await _handle_remote(ws, host, port, user, cols, rows, timeout)
 
 
+# ── Local PTY session ────────────────────────────────────────────────────────
+
 async def _handle_local(ws, user: str, cols: int, rows: int):
-    """Local PTY session — no SSH, direct subprocess."""
-    master_fd = None
-    proc = None
+    """Local PTY session — no SSH, direct asyncio subprocess."""
+    master_fd: int | None = None
+    proc: asyncio.subprocess.Process | None = None
     try:
-        # Open a PTY pair
         master_fd, slave_fd = pty.openpty()
-        
+
         # Set PTY size
-        import fcntl
-        import struct
-        # TIOCSWINSZ ioctl
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
-        
-        # Get user's default shell
+
         shell = os.environ.get("SHELL", "/bin/bash")
-        
+
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
         env["LANG"] = "zh_TW.UTF-8"
         env["LC_ALL"] = "zh_TW.UTF-8"
-        
-        # Start shell process with PTY
-        proc = subprocess.Popen(
-            [shell],
+
+        # Use asyncio subprocess — non-blocking by design
+        proc = await asyncio.create_subprocess_exec(
+            shell,
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
             env=env,
-            preexec_fn=os.setsid,
+            start_new_session=True,
         )
-        os.close(slave_fd)  # Close slave in parent
-        
+        os.close(slave_fd)
+
         logger.info("Local PTY created: pid=%d, shell=%s", proc.pid, shell)
-        
+
         await ws.send_text(json.dumps({"type": "ready", "pid": str(proc.pid)}))
-        
+
         # Bidirectional forwarding
         ws_to_pty_task = asyncio.create_task(_ws_to_pty(ws, master_fd))
         pty_to_ws_task = asyncio.create_task(_pty_to_ws(ws, master_fd))
-        
+
         done, pending = await asyncio.wait(
             {ws_to_pty_task, pty_to_ws_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
-        
+
         for task in pending:
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-        
-        # Wait for process
-        exit_code = proc.wait()
+
+        # Non-blocking wait for process
+        exit_code = await proc.wait()
         logger.info("Local session ended: exit_code=%d", exit_code)
         await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
-        
+
     except Exception as e:
         logger.exception("Local WebSSH error")
         try:
@@ -116,18 +113,24 @@ async def _handle_local(ws, user: str, cols: int, rows: int):
             pass
     finally:
         if master_fd is not None:
-            os.close(master_fd)
-        if proc and proc.poll() is None:
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                os.close(master_fd)
+            except OSError:
+                pass
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
             except Exception:
                 pass
 
 
+# ── Remote SSH session ───────────────────────────────────────────────────────
+
 async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: int, timeout: int):
     """Remote SSH PTY session via asyncssh."""
     import asyncssh
-    
+
     ssh_conn = None
     try:
         ssh_conn = await asyncio.wait_for(
@@ -170,7 +173,7 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
             except asyncio.CancelledError:
                 pass
 
-        exit_code = getattr(process, "exit_status", 0) or 0
+        exit_code = getattr(process, "exit_status", None) or 0
         logger.info("SSH session ended: exit_code=%s", exit_code)
         await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
 
@@ -187,7 +190,7 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
         except Exception:
             pass
     finally:
-        if ssh_conn:
+        if ssh_conn is not None:
             try:
                 ssh_conn.close()
                 await ssh_conn.wait_closed()
@@ -195,16 +198,16 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
                 pass
 
 
-# ── Local PTY helpers ───────────────────────────────────────────────────────
+# ── Local PTY helpers ────────────────────────────────────────────────────────
 
-async def _ws_to_pty(ws, master_fd):
+async def _ws_to_pty(ws, master_fd: int):
     """Forward WebSocket messages -> local PTY master."""
     try:
         while True:
             raw = await ws.receive_text()
             if raw is None:
                 break
-            
+
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
@@ -213,9 +216,10 @@ async def _ws_to_pty(ws, master_fd):
             msg_type = data.get("type")
 
             if msg_type == "data":
-                input_data = data.get("data", "")
+                # Encode string input to bytes before writing to PTY
+                input_bytes = data.get("data", "").encode("utf-8", errors="replace")
                 try:
-                    os.write(master_fd, input_data.encode("utf-8", errors="replace"))
+                    os.write(master_fd, input_bytes)
                 except OSError as e:
                     logger.warning("PTY write error: %s", e)
                     break
@@ -224,8 +228,6 @@ async def _ws_to_pty(ws, master_fd):
                 rows = data.get("rows", 24)
                 cols = data.get("cols", 80)
                 try:
-                    import fcntl
-                    import struct
                     winsize = struct.pack("HHHH", rows, cols, 0, 0)
                     fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
                 except Exception as e:
@@ -238,30 +240,54 @@ async def _ws_to_pty(ws, master_fd):
         logger.warning("ws_to_pty error: %s", e)
 
 
-async def _pty_to_ws(ws, master_fd):
-    """Forward local PTY master -> WebSocket."""
+async def _pty_to_ws(ws, master_fd: int):
+    """Forward local PTY master -> WebSocket using loop.add_reader (zero-copy async)."""
     loop = asyncio.get_event_loop()
+    read_event = asyncio.Event()
+    has_data = False
+
+    def _on_readable():
+        nonlocal has_data
+        has_data = True
+        # Schedule the event on the event loop thread
+        try:
+            loop.call_soon_threadsafe(read_event.set)
+        except Exception:
+            pass
+
     try:
+        loop.add_reader(master_fd, _on_readable)
+
         while True:
-            # Use select to wait for data
-            r, _, _ = await loop.run_in_executor(
-                None, select.select, [master_fd], [], [], 1.0
-            )
-            if not r:
-                continue
-            try:
-                data = os.read(master_fd, 4096)
-            except OSError:
-                break
-            if not data:
-                break
-            encoded = base64.b64encode(data).decode("ascii")
-            await ws.send_text(json.dumps({"type": "data", "data": encoded}))
+            await read_event.wait()
+            has_data = False
+            read_event.clear()
+
+            # Read all available data (non-blocking since select already told us data is ready)
+            chunk_size = 8192
+            while True:
+                try:
+                    data = os.read(master_fd, chunk_size)
+                except BlockingIOError:
+                    break
+                except OSError:
+                    return
+
+                if not data:
+                    return  # PTY closed
+
+                encoded = base64.b64encode(data).decode("ascii")
+                await ws.send_text(json.dumps({"type": "data", "data": encoded}))
     except Exception as e:
         logger.warning("pty_to_ws error: %s", e)
+    finally:
+        try:
+            loop.remove_reader(master_fd)
+        except Exception:
+            pass
 
 
-# ── Remote SSH helpers ──────────────────────────────────────────────────────
+# ── Remote SSH helpers ───────────────────────────────────────────────────────
 
 async def _ws_to_ssh(ws, process):
     """Forward WebSocket messages -> SSH stdin."""
@@ -270,7 +296,7 @@ async def _ws_to_ssh(ws, process):
             raw = await ws.receive_text()
             if raw is None:
                 break
-            
+
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
@@ -279,9 +305,11 @@ async def _ws_to_ssh(ws, process):
             msg_type = data.get("type")
 
             if msg_type == "data":
-                input_data = data.get("data", "")
+                # Encode string to bytes before sending to SSH PTY
+                input_bytes = data.get("data", "").encode("utf-8", errors="replace")
                 try:
-                    process.stdin.write(input_data)
+                    process.stdin.write(input_bytes)
+                    await process.stdin.drain()
                 except Exception as e:
                     logger.warning("SSH stdin write error: %s", e)
                     break
@@ -307,13 +335,16 @@ async def _ws_to_ssh(ws, process):
 
 
 async def _ssh_to_ws(ws, process):
-    """Forward SSH stdout -> WebSocket."""
+    """Forward SSH stdout -> WebSocket using read() with chunk size."""
     try:
         while True:
-            data = await process.stdout.read(4096)
+            # read(n) on asyncssh reader reads up to n bytes and returns
+            data = await process.stdout.read(8192)
             if not data:
                 break
             encoded = base64.b64encode(data).decode("ascii")
             await ws.send_text(json.dumps({"type": "data", "data": encoded}))
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.warning("ssh_to_ws error: %s", e)

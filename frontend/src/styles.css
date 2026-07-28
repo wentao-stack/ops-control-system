@@ -642,7 +642,8 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
-  min-height: 500px;
+  min-height: 400px;
+  max-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
 }
@@ -713,7 +714,9 @@ tbody tr:last-child td { border-bottom: none; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 450px;
+  min-height: 400px;
+  max-height: calc(100vh - 220px);
+  overflow: hidden;
 }
 
 .terminal-header {
@@ -724,6 +727,7 @@ tbody tr:last-child td { border-bottom: none; }
   background: rgba(255,255,255,.03);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .terminal-host {
@@ -777,14 +781,20 @@ tbody tr:last-child td { border-bottom: none; }
   background: #1a1b26;
   padding: 8px;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Override xterm styles for our theme */
 .terminal-container .terminal {
   padding: 0 !important;
   height: 100% !important;
+  overflow: hidden !important;
 }
 
 .terminal-container .xterm-screen {
   min-height: 100%;
+}
+
+.terminal-container .xterm-viewport {
+  overflow-y: auto !important;
 }

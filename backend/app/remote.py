@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import time
 
@@ -27,36 +29,62 @@ def ssh_exec(host: str, port: int, user: str, command: str, timeout: int = SSH_T
     ]
     start = time.monotonic()
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             ssh_cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            start_new_session=True,
         )
-        return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exit_code": result.returncode,
-            "duration": round(time.monotonic() - start, 2),
-        }
-    except subprocess.TimeoutExpired:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+            return {
+                "stdout": stdout.decode("utf-8", errors="replace"),
+                "stderr": stderr.decode("utf-8", errors="replace"),
+                "exit_code": proc.returncode,
+                "duration": round(time.monotonic() - start, 2),
+            }
+        except subprocess.TimeoutExpired:
+            # Kill the entire process group to clean up orphaned SSH processes
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                proc.kill()
+            stdout, stderr = proc.communicate()
+            return {
+                "stdout": (stdout or b"").decode("utf-8", errors="replace"),
+                "stderr": f"Command timed out after {timeout}s",
+                "exit_code": -1,
+                "duration": timeout,
+            }
+    except Exception as e:
         return {
             "stdout": "",
-            "stderr": f"Command timed out after {timeout}s",
+            "stderr": str(e),
             "exit_code": -1,
-            "duration": timeout,
+            "duration": round(time.monotonic() - start, 2),
         }
 
 
 def ssh_ping(host: str, port: int, user: str) -> bool:
     """Quick SSH connectivity check."""
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
              "-o", "BatchMode=yes", "-o", "PasswordAuthentication=no",
              "-p", str(port), f"{user}@{host}", "echo ok"],
-            capture_output=True, text=True, timeout=10,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
+            start_new_session=True,
         )
-        return result.returncode == 0
+        try:
+            proc.communicate(timeout=10)
+            return proc.returncode == 0
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                proc.kill()
+            proc.communicate()
+            return False
     except Exception:
         return False

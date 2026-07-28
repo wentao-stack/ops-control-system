@@ -250,6 +250,20 @@ _APP_LOGS: dict[str, list[tuple[str, str]]] = {
 }
 
 
+def _get_supervisor_paths(user: str) -> tuple[str, str]:
+    """Return (conf_dir, log_base) for supervisor based on user."""
+    if user == "root":
+        return "/etc/supervisor/conf.d", "/var/log/supervisor"
+    # For non-root users, try the standard XDG/home directory locations
+    home = f"/home/{user}"
+    user_conf = f"{home}/.supervisor/conf.d"
+    user_log = f"{home}/.supervisor/log"
+    # Fall back to system paths if user-specific paths don't apply
+    if user in _USER_SUP:
+        return user_conf, user_log
+    return "/etc/supervisor/conf.d", "/var/log/supervisor"
+
+
 def supervisor_tail(
     host: str,
     port: int,
@@ -261,8 +275,7 @@ def supervisor_tail(
     timeout: int = 30,
 ) -> SupervisorLogLines:
     """Tail the log output of a supervisor-managed process."""
-    conf_dir = "/home/wentao/.supervisor/conf.d" if user == "wentao" else "/etc/supervisor/conf.d"
-    log_base = "/home/wentao/.supervisor/log" if user == "wentao" else "/var/log/supervisor"
+    conf_dir, log_base = _get_supervisor_paths(user)
 
     # Discover supervisor log file path
     if local_machine:

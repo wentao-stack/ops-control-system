@@ -15,77 +15,93 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const statusRef = useRef<"connecting" | "ready" | "error" | "closed">("connecting")
   const [status, setStatus] = useState<"connecting" | "ready" | "error" | "closed">("connecting")
   const [errorMsg, setErrorMsg] = useState("")
 
+  // Keep ref in sync with state
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
+
   const connect = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close()
-    }
+  if (wsRef.current) {
+    wsRef.current.close()
+  }
 
-    setStatus("connecting")
-    setErrorMsg("")
+  setStatus("connecting")
+  setErrorMsg("")
 
-    // Determine WS protocol
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
-    const host = window.location.host
-    const cols = 80
-    const rows = 24
-    const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
+  // Determine WS protocol
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+  const host = window.location.host
+  // Pass cols/rows from the current terminal if already initialized
+  const cols = termRef.current ? termRef.current.cols : 80
+  const rows = termRef.current ? termRef.current.rows : 24
+  const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
 
-    const ws = new WebSocket(url)
-    wsRef.current = ws
+  const ws = new WebSocket(url)
+  wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log("WebSSH connected")
-    }
+  ws.onopen = () => {
+    console.log("WebSSH connected")
+  }
 
-    ws.onmessage = (event) => {
-      if (termRef.current) {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg.type === "data") {
-            // Decode base64 terminal output
-            const binary = atob(msg.data)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i)
-            }
-            termRef.current.write(bytes)
-          } else if (msg.type === "ready") {
-            setStatus("ready")
-          } else if (msg.type === "exit") {
-            setStatus("closed")
+  ws.onmessage = (event) => {
+    if (termRef.current && statusRef.current !== "closed") {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.type === "data") {
+          // Decode base64 terminal output
+          const binary = atob(msg.data)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i)
+          }
+          termRef.current.write(bytes)
+        } else if (msg.type === "ready") {
+          setStatus("ready")
+        } else if (msg.type === "exit") {
+          setStatus("closed")
+          if (termRef.current) {
             termRef.current.writeln(`\r\n[Session ended (exit code: ${msg.code})]`)
-            onDisconnect?.()
-          } else if (msg.type === "error") {
-            setStatus("error")
-            setErrorMsg(msg.message)
+          }
+          onDisconnect?.()
+        } else if (msg.type === "error") {
+          setStatus("error")
+          setErrorMsg(msg.message)
+          if (termRef.current) {
             termRef.current.writeln(`\r\n[Error: ${msg.message}]`)
           }
-        } catch {
-          // Raw data, write directly
+        }
+      } catch {
+        // Raw data, write directly
+        if (termRef.current) {
           termRef.current.write(event.data)
         }
       }
     }
+  }
 
-    ws.onerror = () => {
+  ws.onerror = () => {
+    if (statusRef.current !== "closed") {
       setStatus("error")
       setErrorMsg("WebSocket connection error")
     }
+  }
 
-    ws.onclose = () => {
-      if (status !== "closed") {
-        setStatus("closed")
-      }
+  ws.onclose = () => {
+    if (statusRef.current !== "closed") {
+      setStatus("closed")
     }
+  }
   }, [assetId, token])
 
   useEffect(() => {
     // Initialize xterm
     const term = new Terminal({
       cursorBlink: true,
+      scrollback: 500,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace",
       fontSize: 14,
       theme: {

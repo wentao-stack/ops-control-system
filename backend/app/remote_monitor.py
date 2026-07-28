@@ -69,26 +69,20 @@ METRICS_SCRIPT = r"""
 
   # CPU usage (1-second sample from /proc/stat)
   echo "===CPU_PERCENT==="
-  awk '/^cpu / {
-    user1=$2; nice1=$3; system1=$4; idle1=$5; iowait1=$6; irq1=$7; softirq1=$8;
-    total1=user1+nice1+system1+idle1+iowait1+irq1+softirq1;
-  }' /proc/stat > /tmp/.ops_pre
-  sleep 1
-  awk '/^cpu / {
-    user2=$2; nice2=$3; system2=$4; idle2=$5; iowait2=$6; irq2=$7; softirq2=$8;
-    total2=user2+nice2+system2+idle2+iowait2+irq2+softirq2;
-  }
-  END {
-    cmd="cat /tmp/.ops_pre"
-    cmd | getline line
-    split(line, a, " ")
-    idle1=a[5]; total1=a[2]+a[3]+a[4]+a[5]+a[6]+a[7]+a[8]
-    idle2=idle2; total2=total2
-    diff_idle=idle2-idle1; diff_total=total2-total1
-    if (diff_total > 0) printf "%d\n", (diff_total-diff_idle)*100/diff_total
-    else print 0
-  }' /proc/stat
-  rm -f /tmp/.ops_pre
+  (
+    read -r cpu_line1 < /proc/stat
+    sleep 1
+    read -r cpu_line2 < /proc/stat
+    echo "$cpu_line1" "$cpu_line2" | awk '{
+      user1=$2; nice1=$3; system1=$4; idle1=$5; iowait1=$6; irq1=$7; softirq1=$8;
+      user2=$10; nice2=$11; system2=$12; idle2=$13; iowait2=$14; irq2=$15; softirq2=$16;
+      total1=user1+nice1+system1+idle1+iowait1+irq1+softirq1;
+      total2=user2+nice2+system2+idle2+iowait2+irq2+softirq2;
+      diff_idle=idle2-idle1; diff_total=total2-total1;
+      if (diff_total > 0) printf "%d\n", (diff_total-diff_idle)*100/diff_total
+      else print 0
+    }'
+  )
 
   # Memory (MB) — MemTotal, MemAvailable, MemUsed
   echo "===MEMORY==="
