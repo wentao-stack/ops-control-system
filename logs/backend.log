@@ -11,3 +11,86 @@ INFO:     connection open
 2026-07-28 18:02:58,035 INFO WebSSH session: root@149.28.44.218:22 (vultr (149.28.44.218))
 2026-07-28 18:02:59,670 INFO SSH connected: root@149.28.44.218:22
 2026-07-28 18:03:00,506 INFO Remote PTY created
+2026-07-28 18:03:32,666 WARNING ws_to_ssh error: (1001, '')
+2026-07-28 18:03:32,667 WARNING ws_to_ssh error: (1001, '')
+2026-07-28 18:03:32,667 INFO SSH session ended: exit_code=0
+2026-07-28 18:03:32,667 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 179, in _handle_remote
+    await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
+2026-07-28 18:03:32,669 INFO SSH session ended: exit_code=0
+2026-07-28 18:03:32,669 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 179, in _handle_remote
+    await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
+INFO:     118.3.227.75:0 - "GET / HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-RKTwQvW4.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-BifEOb2D.css HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/inventory/summary HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/assets?asset_type=host HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=80&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTMwODg5NX0.6CmUoSFQVgq76TAtNCesBWKqIibMPiMURl3j2gHGiTg" [accepted]
+INFO:     connection open
+2026-07-28 18:03:45,959 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-07-28 18:03:46,574 INFO SSH connected: root@163.44.124.142:22
+2026-07-28 18:03:46,877 INFO Remote PTY created
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-218?cols=80&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTMwODg5NX0.6CmUoSFQVgq76TAtNCesBWKqIibMPiMURl3j2gHGiTg" [accepted]
+INFO:     connection open
+2026-07-28 18:03:50,919 INFO WebSSH session: root@149.28.44.218:22 (vultr (149.28.44.218))
+INFO:     118.3.227.75:0 - "POST /api/v1/remote/ping HTTP/1.1" 200 OK
+2026-07-28 18:03:52,790 INFO SSH connected: root@149.28.44.218:22
+2026-07-28 18:03:53,638 INFO Remote PTY created
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-host-b?cols=80&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTMwODg5NX0.6CmUoSFQVgq76TAtNCesBWKqIibMPiMURl3j2gHGiTg" [accepted]
+INFO:     connection open
+2026-07-28 18:03:59,806 INFO WebSSH session: wentao@163.44.124.142:2222 (wentao-MS-7C91 (dev))
+2026-07-28 18:03:59,812 INFO Local PTY created: pid=97383, shell=/bin/bash

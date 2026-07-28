@@ -642,10 +642,10 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
-  min-height: 400px;
-  max-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 180px);
+  min-height: 400px;
 }
 
 .terminal-tab-bar {
@@ -714,8 +714,7 @@ tbody tr:last-child td { border-bottom: none; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
-  max-height: calc(100vh - 220px);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -780,15 +779,17 @@ tbody tr:last-child td { border-bottom: none; }
   flex: 1;
   background: #1a1b26;
   padding: 8px;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Override xterm styles for our theme */
 .terminal-container .terminal {
   padding: 0 !important;
   height: 100% !important;
-  overflow: hidden !important;
+  overflow: auto !important;
 }
 
 .terminal-container .xterm-screen {
@@ -796,5 +797,5 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .terminal-container .xterm-viewport {
-  overflow-y: auto !important;
+  overflow: auto !important;
 }

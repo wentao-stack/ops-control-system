@@ -81,7 +81,7 @@ export function RemotePage() {
     <>
       <div className="page-header">
         <div>
-          <h1>遠程終端</h1>
+          <h1>終端</h1>
           <p>SSH 遠程管理 · {remoteAssets.length} 台主機</p>
         </div>
         <button className="btn btn-sm" onClick={() => { void pingAll(); void loadAssets() }}>↻ Ping 全部</button>

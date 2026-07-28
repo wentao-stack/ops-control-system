@@ -126,7 +126,7 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     // Initialize xterm
     const term = new Terminal({
       cursorBlink: true,
-      scrollback: 200,
+      scrollback: 1000,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace",
       fontSize: 14,
       theme: {

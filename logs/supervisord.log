@@ -73,3 +73,7 @@
 2026-07-28 18:02:33,317 WARN stopped: ops-control-backend (terminated by SIGKILL)
 2026-07-28 18:02:33,319 INFO spawned: 'ops-control-backend' with pid 97086
 2026-07-28 18:02:36,772 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 18:10:42,866 INFO waiting for ops-control-frontend to stop
+2026-07-28 18:10:42,870 WARN stopped: ops-control-frontend (terminated by SIGTERM)
+2026-07-28 18:10:42,871 INFO spawned: 'ops-control-frontend' with pid 98161
+2026-07-28 18:10:46,068 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
