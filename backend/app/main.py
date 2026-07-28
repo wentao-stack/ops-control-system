@@ -563,4 +563,13 @@ async def websocket_ssh(ws: WebSocket, asset_id: str):
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if frontend_dist.is_dir():
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    # Serve static assets directly
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="frontend-assets")
+
+    # SPA fallback: serve index.html for any unmatched route
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", response_class=FileResponse)
+    async def spa_fallback(full_path: str):
+        """Serve index.html for any unmatched route (SPA fallback)."""
+        return FileResponse(frontend_dist / "index.html")

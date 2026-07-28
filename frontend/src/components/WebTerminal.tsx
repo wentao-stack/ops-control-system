@@ -16,8 +16,10 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const statusRef = useRef<"connecting" | "ready" | "error" | "closed">("connecting")
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [status, setStatus] = useState<"connecting" | "ready" | "error" | "closed">("connecting")
   const [errorMsg, setErrorMsg] = useState("")
+  const [reconnectCount, setReconnectCount] = useState(0)
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -25,83 +27,94 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
   }, [status])
 
   const connect = useCallback(() => {
-  if (wsRef.current) {
-    wsRef.current.close()
-  }
+    // Clear any pending reconnect
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
 
-  setStatus("connecting")
-  setErrorMsg("")
+    if (wsRef.current) {
+      wsRef.current.close()
+    }
 
-  // Determine WS protocol
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
-  const host = window.location.host
-  // Pass cols/rows from the current terminal if already initialized
-  const cols = termRef.current ? termRef.current.cols : 80
-  const rows = termRef.current ? termRef.current.rows : 24
-  const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
+    setStatus("connecting")
+    setErrorMsg("")
 
-  const ws = new WebSocket(url)
-  wsRef.current = ws
+    // Determine WS protocol
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+    const host = window.location.host
+    // Pass cols/rows from the current terminal if already initialized
+    const cols = termRef.current ? termRef.current.cols : 80
+    const rows = termRef.current ? termRef.current.rows : 24
+    const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
 
-  ws.onopen = () => {
-    console.log("WebSSH connected")
-  }
+    const ws = new WebSocket(url)
+    wsRef.current = ws
 
-  ws.onmessage = (event) => {
-    if (termRef.current && statusRef.current !== "closed") {
-      try {
-        const msg = JSON.parse(event.data)
-        if (msg.type === "data") {
-          // Decode base64 terminal output
-          const binary = atob(msg.data)
-          const bytes = new Uint8Array(binary.length)
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i)
+    ws.onopen = () => {
+      console.log("WebSSH connected")
+    }
+
+    ws.onmessage = (event) => {
+      if (termRef.current && statusRef.current !== "closed") {
+        try {
+          const msg = JSON.parse(event.data)
+          if (msg.type === "data") {
+            // Decode base64 terminal output
+            const binary = atob(msg.data)
+            const bytes = new Uint8Array(binary.length)
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i)
+            }
+            termRef.current.write(bytes)
+          } else if (msg.type === "ready") {
+            setStatus("ready")
+          } else if (msg.type === "exit") {
+            setStatus("closed")
+            if (termRef.current) {
+              termRef.current.writeln(`\r\n[Session ended (exit code: ${msg.code})]`)
+            }
+            onDisconnect?.()
+          } else if (msg.type === "error") {
+            setStatus("error")
+            setErrorMsg(msg.message)
+            if (termRef.current) {
+              termRef.current.writeln(`\r\n[Error: ${msg.message}]`)
+            }
           }
-          termRef.current.write(bytes)
-        } else if (msg.type === "ready") {
-          setStatus("ready")
-        } else if (msg.type === "exit") {
-          setStatus("closed")
+        } catch {
+          // Raw data, write directly
           if (termRef.current) {
-            termRef.current.writeln(`\r\n[Session ended (exit code: ${msg.code})]`)
+            termRef.current.write(event.data)
           }
-          onDisconnect?.()
-        } else if (msg.type === "error") {
-          setStatus("error")
-          setErrorMsg(msg.message)
-          if (termRef.current) {
-            termRef.current.writeln(`\r\n[Error: ${msg.message}]`)
-          }
-        }
-      } catch {
-        // Raw data, write directly
-        if (termRef.current) {
-          termRef.current.write(event.data)
         }
       }
     }
-  }
 
-  ws.onerror = () => {
-    if (statusRef.current !== "closed") {
-      setStatus("error")
-      setErrorMsg("WebSocket connection error")
+    ws.onerror = () => {
+      if (statusRef.current !== "closed") {
+        setStatus("error")
+        setErrorMsg("WebSocket connection error")
+      }
     }
-  }
 
-  ws.onclose = () => {
-    if (statusRef.current !== "closed") {
-      setStatus("closed")
+    ws.onclose = () => {
+      if (statusRef.current !== "closed") {
+        setStatus("closed")
+      }
     }
-  }
   }, [assetId, token])
+
+  const reconnect = useCallback(() => {
+    setReconnectCount(prev => prev + 1)
+    connect()
+  }, [connect])
 
   useEffect(() => {
     // Initialize xterm
     const term = new Terminal({
       cursorBlink: true,
-      scrollback: 500,
+      scrollback: 200,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace",
       fontSize: 14,
       theme: {
@@ -168,6 +181,9 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
     connect()
 
     return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+      }
       if (wsRef.current) {
         wsRef.current.close()
       }
@@ -192,13 +208,24 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
           {status === "closed" && "已断开"}
         </span>
         <div className="terminal-actions">
-          <button
-            className="btn btn-sm terminal-btn"
-            onClick={connect}
-            title="重新连接"
-          >
-            ↻
-          </button>
+          {status !== "ready" && status !== "connecting" && (
+            <button
+              className="btn btn-sm terminal-btn"
+              onClick={reconnect}
+              title="重新连接"
+            >
+              ↻
+            </button>
+          )}
+          {status === "ready" && (
+            <button
+              className="btn btn-sm terminal-btn"
+              onClick={reconnect}
+              title="重新连接"
+            >
+              ↻
+            </button>
+          )}
         </div>
       </div>
       <div ref={containerRef} className="terminal-container" />

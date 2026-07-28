@@ -6,3 +6,35 @@
   VITE v8.1.5  ready in 111 ms
 
   ➜  Local:   http://127.0.0.1:5173/
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+
+  VITE v8.1.5  ready in 114 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+5:25:09 PM [vite] http proxy error: /api/v1/auth/login
+Error: connect ECONNREFUSED 127.0.0.1:18080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1638:16)
+5:27:39 PM [vite] vite.config.ts changed, restarting server...
+5:27:39 PM [vite] server restarted.
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+Port 5173 is in use, trying another one...
+
+  VITE v8.1.5  ready in 111 ms
+
+  ➜  Local:   http://127.0.0.1:5174/
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+
+  VITE v8.1.5  ready in 113 ms
+
+  ➜  Local:   http://127.0.0.1:5175/

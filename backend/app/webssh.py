@@ -145,7 +145,7 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
         logger.info("SSH connected: %s@%s:%d", user, host, port)
 
         process = await ssh_conn.create_process(
-            "",
+            b"",
             request_pty=True,
             term_type="xterm-256color",
             term_size=(rows, cols),
@@ -305,20 +305,26 @@ async def _ws_to_ssh(ws, process):
             msg_type = data.get("type")
 
             if msg_type == "data":
-                # Encode string to bytes before sending to SSH PTY
-                input_bytes = data.get("data", "").encode("utf-8", errors="replace")
+                # Handle both bytes and str mode for stdin
+                input_data = data.get("data", "")
+                # If process expects str (text mode), decode; otherwise keep as bytes
                 try:
-                    process.stdin.write(input_bytes)
+                    process.stdin.write(input_data)
                     await process.stdin.drain()
-                except Exception as e:
-                    logger.warning("SSH stdin write error: %s", e)
-                    break
+                except (TypeError, AttributeError):
+                    # Fallback: try as bytes
+                    try:
+                        process.stdin.write(input_data.encode("utf-8", errors="replace"))
+                        await process.stdin.drain()
+                    except Exception as e:
+                        logger.warning("SSH stdin write error: %s", e)
+                        break
 
             elif msg_type == "resize":
                 new_rows = data.get("rows", 24)
                 new_cols = data.get("cols", 80)
                 try:
-                    process.change_terminal_size(new_rows, new_cols)
+                    process.change_terminal_size(new_cols, new_rows)
                 except Exception as e:
                     logger.warning("SSH resize error: %s", e)
 
@@ -342,6 +348,9 @@ async def _ssh_to_ws(ws, process):
             data = await process.stdout.read(8192)
             if not data:
                 break
+            # Handle both bytes and str (asyncssh may return either depending on mode)
+            if isinstance(data, str):
+                data = data.encode("utf-8", errors="replace")
             encoded = base64.b64encode(data).decode("ascii")
             await ws.send_text(json.dumps({"type": "data", "data": encoded}))
     except asyncio.CancelledError:

@@ -1,0 +1,45 @@
+2026-07-28 16:39:41,023 INFO RPC interface 'supervisor' initialized
+2026-07-28 16:39:41,023 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-07-28 16:39:41,024 INFO daemonizing the supervisord process
+2026-07-28 16:39:41,025 INFO supervisord started with pid 79796
+2026-07-28 16:39:42,027 INFO spawned: 'ops-control-backend' with pid 79799
+2026-07-28 16:39:45,941 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 16:39:52,674 INFO waiting for ops-control-backend to stop
+2026-07-28 16:39:52,797 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-28 16:39:52,799 INFO spawned: 'ops-control-backend' with pid 79835
+2026-07-28 16:39:56,243 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:21:03,107 WARN exited: ops-control-backend (terminated by SIGTERM; not expected)
+2026-07-28 17:21:04,109 INFO spawned: 'ops-control-backend' with pid 85365
+2026-07-28 17:21:07,562 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:21:25,598 WARN exited: ops-control-backend (terminated by SIGTERM; not expected)
+2026-07-28 17:21:26,601 INFO spawned: 'ops-control-backend' with pid 85460
+2026-07-28 17:21:30,068 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:21:39,891 WARN exited: ops-control-backend (terminated by SIGTERM; not expected)
+2026-07-28 17:21:40,893 INFO spawned: 'ops-control-backend' with pid 85540
+2026-07-28 17:21:44,342 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:21:53,972 INFO waiting for ops-control-backend to die
+2026-07-28 17:21:54,170 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-28 17:21:57,846 INFO RPC interface 'supervisor' initialized
+2026-07-28 17:21:57,846 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-07-28 17:21:57,847 INFO daemonizing the supervisord process
+2026-07-28 17:21:57,847 INFO supervisord started with pid 85613
+2026-07-28 17:21:58,850 INFO spawned: 'ops-control-backend' with pid 85616
+2026-07-28 17:21:58,851 INFO spawned: 'ops-control-frontend' with pid 85617
+2026-07-28 17:22:02,100 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:22:02,100 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:27:43,290 INFO waiting for ops-control-frontend to stop
+2026-07-28 17:27:43,294 WARN stopped: ops-control-frontend (terminated by SIGTERM)
+2026-07-28 17:27:43,295 INFO spawned: 'ops-control-frontend' with pid 87382
+2026-07-28 17:27:46,500 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:36:02,489 INFO waiting for ops-control-backend to stop
+2026-07-28 17:36:02,685 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-28 17:36:02,686 INFO spawned: 'ops-control-backend' with pid 89294
+2026-07-28 17:36:06,172 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:38:02,308 INFO waiting for ops-control-frontend to stop
+2026-07-28 17:38:02,312 WARN stopped: ops-control-frontend (terminated by SIGTERM)
+2026-07-28 17:38:02,314 INFO spawned: 'ops-control-frontend' with pid 89537
+2026-07-28 17:38:05,516 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 17:40:52,924 INFO waiting for ops-control-backend to stop
+2026-07-28 17:40:53,041 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-28 17:40:53,043 INFO spawned: 'ops-control-backend' with pid 90590
+2026-07-28 17:40:56,493 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
