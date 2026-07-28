@@ -69,3 +69,13 @@ def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+def decode_ws_token(token: str) -> str | None:
+    """Decode a JWT token from a WebSocket query param. Returns username or None."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str | None = payload.get("sub")
+        return username
+    except JWTError:
+        return None

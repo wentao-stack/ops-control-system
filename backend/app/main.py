@@ -11,7 +11,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user, get_session, verify_password
+from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, verify_password
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Runbook, User
 from .remote import ssh_exec, ssh_ping
@@ -70,6 +70,10 @@ def serialize_asset(asset: Asset) -> AssetResponse:
         environment=asset.environment, owner=asset.owner, criticality=asset.criticality,
         health_status=asset.health_status, health_summary=asset.health_summary,
         last_seen_at=asset.last_seen_at,
+        ssh_host=asset.ssh_host,
+        ssh_port=asset.ssh_port,
+        ssh_user=asset.ssh_user,
+        local_machine=asset.local_machine,
     )
 
 
@@ -495,9 +499,17 @@ logger_webssh = logging.getLogger("webssh")
 async def websocket_ssh(ws: WebSocket, asset_id: str):
     """WebSocket endpoint for interactive SSH terminal.
 
-    Query params: cols (default 80), rows (default 24)
-    Auth: Bearer token in query param `token`
+    Query params: cols (default 80), rows (default 24), token (JWT bearer)
     """
+    # Validate JWT token before accepting
+    token = ws.query_params.get("token", "")
+    username = decode_ws_token(token)
+    if username is None:
+        await ws.accept()
+        await ws.send_json({"type": "error", "message": "Unauthorized: invalid or missing token"})
+        await ws.close()
+        return
+
     await ws.accept()
 
     # Resolve asset

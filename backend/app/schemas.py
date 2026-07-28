@@ -48,12 +48,19 @@ class AssetResponse(BaseModel):
     owner: str
     criticality: str
     health_status: str
-    health_summary: str | None
-    last_seen_at: datetime | None
+    health_summary: str | None = None
+    last_seen_at: datetime | None = None
+    ssh_host: str | None = None
+    ssh_port: int | None = None
+    ssh_user: str | None = None
+    local_machine: bool = False
+
+    class Config:
+        from_attributes = True
 
 
 class AssetDetailResponse(AssetResponse):
-    services: list[ServiceResponse]
+    services: list[ServiceResponse] = []
 
 
 class AssetListResponse(BaseModel):
