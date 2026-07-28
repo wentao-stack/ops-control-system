@@ -159,6 +159,7 @@ export function MonitoringPage() {
         const data = await api<RemoteHostsMetrics>("/api/v1/hosts/metrics?cache=true")
         setRemoteData(data.hosts)
         setCollectedAt(new Intl.DateTimeFormat("zh-Hant", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(data.collected_at)))
+        setLoading(false)
       } catch { /* silent */ }
       return
     }
@@ -169,6 +170,7 @@ export function MonitoringPage() {
       setCollectedAt(new Intl.DateTimeFormat("zh-Hant", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(data.collected_at)))
     } catch { /* silent */ } finally {
       setCollecting(false)
+      setLoading(false)
     }
   }, [])
 
