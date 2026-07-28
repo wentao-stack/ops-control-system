@@ -778,8 +778,7 @@ tbody tr:last-child td { border-bottom: none; }
 .terminal-container {
   flex: 1;
   background: #1a1b26;
-  padding: 8px;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -788,8 +787,9 @@ tbody tr:last-child td { border-bottom: none; }
 /* Override xterm styles for our theme */
 .terminal-container .terminal {
   padding: 0 !important;
+  flex: 1 !important;
   height: 100% !important;
-  overflow: auto !important;
+  overflow: hidden !important;
 }
 
 .terminal-container .xterm-screen {

@@ -100,3 +100,16 @@ Port 5175 is in use, trying another one...
   VITE v8.1.5  ready in 107 ms
 
   ➜  Local:   http://127.0.0.1:5173/
+6:17:34 PM [vite] (client) hmr update /src/styles.css
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+Port 5175 is in use, trying another one...
+Port 5176 is in use, trying another one...
+
+  VITE v8.1.5  ready in 110 ms
+
+  ➜  Local:   http://127.0.0.1:5177/
