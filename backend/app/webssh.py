@@ -29,7 +29,7 @@ import struct
 import subprocess
 import termios
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("webssh")
 
 
 async def handle_webssh(

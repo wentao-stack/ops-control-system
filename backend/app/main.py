@@ -43,6 +43,14 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Configure webssh logger to output to stdout
+    webssh_logger = logging.getLogger("webssh")
+    webssh_logger.setLevel(logging.INFO)
+    if not webssh_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        webssh_logger.addHandler(handler)
+
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as session:
         seed_development_data(session)
