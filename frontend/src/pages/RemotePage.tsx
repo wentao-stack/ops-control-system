@@ -148,21 +148,30 @@ export function RemotePage() {
             </select>
           </div>
 
-          {/* Active terminal */}
-          {activeTerminal && token ? (
-            <WebTerminal
-              assetId={activeTerminal}
-              assetName={getAssetName(activeTerminal)}
-              token={token}
-              onDisconnect={() => {
-                // Terminal auto-closed, keep tab open for reconnect
-              }}
-            />
-          ) : (
-            <div className="empty" style={{ minHeight: 400 }}>
-              {remoteAssets.length === 0 ? "沒有可連接的主機" : "選擇或打開一個終端"}
+          {/* Active terminal — render ALL open terminals, show only active one */}
+          {token ? (
+            <div className="terminal-page">
+              {Array.from(openTerminals).map(id => (
+                <div
+                  key={id}
+                  style={{ display: activeTerminal === id ? "block" : "none" }}
+                >
+                  <WebTerminal
+                    assetId={id}
+                    assetName={getAssetName(id)}
+                    token={token}
+                    active={activeTerminal === id}
+                    onDisconnect={() => {}}
+                  />
+                </div>
+              ))}
+              {openTerminals.size === 0 && (
+                <div className="empty" style={{ minHeight: 400 }}>
+                  {remoteAssets.length === 0 ? "沒有可連接的主機" : "選擇或打開一個終端"}
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

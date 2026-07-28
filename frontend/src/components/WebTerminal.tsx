@@ -7,10 +7,11 @@ interface WebTerminalProps {
   assetId: string
   assetName: string
   token: string
+  active?: boolean
   onDisconnect?: () => void
 }
 
-export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerminalProps) {
+export function WebTerminal({ assetId, assetName, token, active = true, onDisconnect }: WebTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -20,11 +21,22 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
   const [status, setStatus] = useState<"connecting" | "ready" | "error" | "closed">("connecting")
   const [errorMsg, setErrorMsg] = useState("")
   const [reconnectCount, setReconnectCount] = useState(0)
+  const activeRef = useRef(active)
+  activeRef.current = active
 
   // Keep ref in sync with state
   useEffect(() => {
     statusRef.current = status
   }, [status])
+
+  // Fit terminal when it becomes active
+  useEffect(() => {
+    if (active && fitRef.current) {
+      requestAnimationFrame(() => {
+        fitRef.current?.fit()
+      })
+    }
+  }, [active])
 
   const connect = useCallback(() => {
     // Clear any pending reconnect
@@ -149,9 +161,11 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
 
     if (containerRef.current) {
       term.open(containerRef.current)
-      // Small delay to ensure container is rendered
+      // Small delay to ensure container is rendered, only fit if active
       requestAnimationFrame(() => {
-        fit.fit()
+        if (activeRef.current) {
+          fit.fit()
+        }
       })
     }
 
@@ -165,15 +179,23 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
     // Handle resize — xterm 5.x passes a single {cols, rows} object
     term.onResize((event) => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const c = typeof event === "object" && "cols" in event ? event.cols : event
-        const r = typeof event === "object" && "rows" in event ? event.rows : arguments[1]
+        let c: number, r: number
+        if (typeof event === "object" && "cols" in event) {
+          c = event.cols
+          r = event.rows
+        } else {
+          c = 80
+          r = 24
+        }
         wsRef.current.send(JSON.stringify({ type: "resize", cols: c, rows: r }))
       }
     })
 
-    // Fit on window resize
+    // Fit on window resize — only when active
     const resizeObserver = new ResizeObserver(() => {
-      setTimeout(() => fit.fit(), 100)
+      if (activeRef.current) {
+        setTimeout(() => fit.fit(), 100)
+      }
     })
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current)
