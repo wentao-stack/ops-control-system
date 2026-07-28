@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { Link } from "react-router-dom"
 import { api } from "../auth"
 import { GPUMetric, SupervisorProcess, SupervisorHostStatus, SupervisorAllStatus, SupervisorLogSource } from "../types"
@@ -324,37 +324,61 @@ export function ServicesPage() {
   const [actionFeedback, setActionFeedback] = useState<{ msg: string; ok: boolean } | null>(null)
 
   // ── Load service detection ──
-  const loadDetect = async () => {
-    setDetectCollecting(true)
+  const loadDetect = useCallback(async (useCache = false) => {
+    const url = useCache ? "/api/v1/hosts/services?cache=true" : "/api/v1/hosts/services"
+    if (!useCache) setDetectCollecting(true)
     try {
-      const all = await api<AllServices>("/api/v1/hosts/services")
+      const all = await api<AllServices>(url)
       setDetectData(all.hosts)
       setDetectCollectedAt(new Intl.DateTimeFormat("zh-Hant", {
         month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
       }).format(new Date(all.collected_at)))
     } catch { /* silent */ } finally {
-      setDetectCollecting(false)
+      if (!useCache) setDetectCollecting(false)
       setDetectLoading(false)
     }
-  }
+  }, [])
 
   // ── Load supervisor status ──
-  const loadSupervisor = async () => {
-    setSupCollecting(true)
+  const loadSupervisor = useCallback(async (useCache = false) => {
+    const url = useCache ? "/api/v1/supervisor/status?cache=true" : "/api/v1/supervisor/status"
+    if (!useCache) setSupCollecting(true)
     try {
-      const all = await api<SupervisorAllStatus>("/api/v1/supervisor/status")
+      const all = await api<SupervisorAllStatus>(url)
       setSupData(all.hosts)
       setSupCollectedAt(new Intl.DateTimeFormat("zh-Hant", {
         month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
       }).format(new Date(all.collected_at)))
     } catch { /* silent */ } finally {
-      setSupCollecting(false)
+      if (!useCache) setSupCollecting(false)
       setSupLoading(false)
     }
-  }
+  }, [])
+
+  // Preload both tabs with cached data on mount
+  useEffect(() => {
+    void loadDetect(true)
+    void loadSupervisor(true)
+    // Then load fresh data for active tab
+    if (tab === "supervisor") {
+      void loadSupervisor(false)
+    } else {
+      void loadDetect(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reload active tab when switching
+  useEffect(() => {
+    if (tab === "supervisor" && supData.length === 0) {
+      void loadSupervisor(false)
+    } else if (tab === "detect" && detectData.length === 0) {
+      void loadDetect(false)
+    }
+  }, [tab, loadDetect, loadSupervisor, supData.length, detectData.length])
 
   // ── Supervisor action handler ──
-  const handleSupervisorAction = async (assetId: string, action: string, process: string) => {
+  const handleSupervisorAction = useCallback(async (assetId: string, action: string, process: string) => {
     setActionLoading(process)
     setActionFeedback(null)
     try {
@@ -373,21 +397,13 @@ export function ServicesPage() {
         ok: result.success,
       })
       // Reload after action
-      setTimeout(() => { void loadSupervisor() }, 1500)
+      setTimeout(() => { void loadSupervisor(false) }, 1500)
     } catch (e: any) {
       setActionFeedback({ msg: `${process} → ${action} 失敗: ${e.message}`, ok: false })
     } finally {
       setActionLoading(null)
     }
-  }
-
-  useEffect(() => {
-    if (tab === "supervisor") {
-      void loadSupervisor()
-    } else {
-      void loadDetect()
-    }
-  }, [tab])
+  }, [loadSupervisor])
 
   // ── Tab content ──
   const totalDetectServices = detectData.reduce((sum, h) => sum + h.services.length, 0)
@@ -462,7 +478,7 @@ export function ServicesPage() {
       {tab === "supervisor" && (
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => { void loadSupervisor() }} disabled={supCollecting}>
+            <button className="btn btn-primary btn-sm" onClick={() => { void loadSupervisor(false) }} disabled={supCollecting}>
               {supCollecting ? "⠋ 載入中..." : "↻ 重新載入"}
             </button>
           </div>
@@ -545,7 +561,7 @@ export function ServicesPage() {
       {tab === "detect" && (
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => { void loadDetect() }} disabled={detectCollecting}>
+            <button className="btn btn-primary btn-sm" onClick={() => { void loadDetect(false) }} disabled={detectCollecting}>
               {detectCollecting ? "⠋ 偵測中..." : "↻ 重新偵測"}
             </button>
           </div>

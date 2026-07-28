@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import time as _time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,6 +42,23 @@ from . import webssh
 
 import logging
 from fastapi import WebSocket, WebSocketDisconnect
+
+# ── Simple response cache ────────────────────────────────────────────────────
+_cache: dict[str, tuple[Any, float]] = {}
+CACHE_TTL = 30  # seconds
+
+
+def _cache_get(key: str) -> Any | None:
+    if key in _cache:
+        val, ts = _cache[key]
+        if _time.monotonic() - ts < CACHE_TTL:
+            return val
+        del _cache[key]
+    return None
+
+
+def _cache_set(key: str, value: Any) -> None:
+    _cache[key] = (value, _time.monotonic())
 
 
 @asynccontextmanager
@@ -291,13 +311,23 @@ def host_metrics() -> HostMetricsResponse:
 
 
 @app.get("/api/v1/hosts/metrics", response_model=RemoteHostsMetricsResponse)
-def hosts_metrics(session: Session = Depends(get_session)) -> RemoteHostsMetricsResponse:
-    """Collect metrics from all SSH-configured hosts via SSH."""
+async def hosts_metrics(
+    session: Session = Depends(get_session),
+    cache: bool = Query(False, description="Use cached results if available"),
+) -> RemoteHostsMetricsResponse:
+    """Collect metrics from all SSH-configured hosts via SSH (parallel)."""
+    cache_key = "hosts_metrics"
+    if cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
-    hosts: list[RemoteHostMetricsResponse] = []
-    for asset in assets:
+
+    async def _collect(asset: Asset) -> RemoteHostMetricsResponse:
         port = asset.ssh_port or 22
-        raw = collect_remote_metrics(
+        raw = await asyncio.to_thread(
+            collect_remote_metrics,
             host=asset.ssh_host,  # type: ignore[arg-type]
             port=port,
             user=asset.ssh_user,  # type: ignore[arg-type]
@@ -305,7 +335,7 @@ def hosts_metrics(session: Session = Depends(get_session)) -> RemoteHostsMetrics
             name=asset.name,
             timeout=60,
         )
-        hosts.append(RemoteHostMetricsResponse(
+        return RemoteHostMetricsResponse(
             asset_id=raw.asset_id,
             name=raw.name,
             hostname=raw.hostname,
@@ -328,18 +358,32 @@ def hosts_metrics(session: Session = Depends(get_session)) -> RemoteHostsMetrics
             disk_free_mb=raw.disk_free_mb,
             disk_percent=raw.disk_percent,
             gpus=[RemoteGPUMetricsResponse(**g.__dict__) for g in raw.gpus],
-        ))
-    return RemoteHostsMetricsResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
+        )
+
+    hosts = await asyncio.gather(*[_collect(a) for a in assets])
+    result = RemoteHostsMetricsResponse(hosts=list(hosts), collected_at=datetime.now(UTC).isoformat())
+    _cache_set(cache_key, result)
+    return result
 
 
 @app.get("/api/v1/hosts/services", response_model=RemoteAllServicesResponse)
-def hosts_services(session: Session = Depends(get_session)) -> RemoteAllServicesResponse:
-    """Detect running services on all SSH-configured hosts."""
+async def hosts_services(
+    session: Session = Depends(get_session),
+    cache: bool = Query(False, description="Use cached results if available"),
+) -> RemoteAllServicesResponse:
+    """Detect running services on all SSH-configured hosts (parallel)."""
+    cache_key = "hosts_services"
+    if cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
-    hosts: list[RemoteHostServicesResponse] = []
-    for asset in assets:
+
+    async def _detect(asset: Asset) -> RemoteHostServicesResponse:
         port = asset.ssh_port or 22
-        svcs = detect_remote_services(
+        svcs = await asyncio.to_thread(
+            detect_remote_services,
             host=asset.ssh_host,  # type: ignore[arg-type]
             port=port,
             user=asset.ssh_user,  # type: ignore[arg-type]
@@ -347,83 +391,74 @@ def hosts_services(session: Session = Depends(get_session)) -> RemoteAllServices
             name=asset.name,
             timeout=60,
         )
-        # Get hostname for display
-        hostname = ""
-        try:
-            from .remote_monitor import collect_remote_metrics
-            hm = collect_remote_metrics(
-                asset.ssh_host,  # type: ignore[arg-type]
-                port, asset.ssh_user,  # type: ignore[arg-type]
-                asset.id, asset.name, timeout=15
-            )
-            hostname = hm.hostname
-        except Exception:
-            hostname = asset.ssh_host or ""
-
-        hosts.append(RemoteHostServicesResponse(
+        return RemoteHostServicesResponse(
             asset_id=asset.id,
             name=asset.name,
-            hostname=hostname,
+            hostname=asset.ssh_host or "",
             reachable=len(svcs) > 0,
             services=[RemoteServiceResponse(**s.__dict__) for s in svcs],
-        ))
-    return RemoteAllServicesResponse(hosts=hosts, collected_at=datetime.now(UTC).isoformat())
+        )
+
+    hosts = await asyncio.gather(*[_detect(a) for a in assets])
+    result = RemoteAllServicesResponse(hosts=list(hosts), collected_at=datetime.now(UTC).isoformat())
+    _cache_set(cache_key, result)
+    return result
 
 
 # ── Supervisor process management endpoints ──────────────────────────────────
 
 @app.get("/api/v1/supervisor/status", response_model=SupervisorAllStatusResponse)
-def supervisor_all_status(
+async def supervisor_all_status(
     session: Session = Depends(get_session),
+    cache: bool = Query(False, description="Use cached results if available"),
 ) -> SupervisorAllStatusResponse:
-    """Get supervisor process status for all SSH-configured hosts."""
+    """Get supervisor process status for all SSH-configured hosts (parallel)."""
+    cache_key = "supervisor_status"
+    if cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
-    hosts: list[SupervisorHostStatusResponse] = []
-    for asset in assets:
+
+    async def _get_status(asset: Asset) -> SupervisorHostStatusResponse:
         port = asset.ssh_port or 22
         local = getattr(asset, "local_machine", False)
         try:
-            procs = supervisor_status(
+            procs = await asyncio.to_thread(
+                supervisor_status,
                 host=asset.ssh_host,  # type: ignore[arg-type]
                 port=port,
                 user=asset.ssh_user,  # type: ignore[arg-type]
                 local_machine=local,
                 timeout=30,
             )
-            # Get hostname
-            hostname = ""
-            try:
-                hm = collect_remote_metrics(
-                    asset.ssh_host,  # type: ignore[arg-type]
-                    port, asset.ssh_user,  # type: ignore[arg-type]
-                    asset.id, asset.name, timeout=10,
-                )
-                hostname = hm.hostname
-            except Exception:
-                hostname = asset.ssh_host or ""
-
-            hosts.append(SupervisorHostStatusResponse(
+            return SupervisorHostStatusResponse(
                 asset_id=asset.id,
                 name=asset.name,
-                hostname=hostname,
+                hostname=asset.ssh_host or "",
                 reachable=len(procs) > 0,
                 processes=[
                     SupervisorProcessResponse(**p.__dict__) for p in procs
                 ],
-            ))
+            )
         except Exception as e:
-            hosts.append(SupervisorHostStatusResponse(
+            return SupervisorHostStatusResponse(
                 asset_id=asset.id,
                 name=asset.name,
                 hostname=asset.ssh_host or "",
                 reachable=False,
                 error=str(e),
                 processes=[],
-            ))
-    return SupervisorAllStatusResponse(
-        hosts=hosts,
+            )
+
+    hosts = await asyncio.gather(*[_get_status(a) for a in assets])
+    result = SupervisorAllStatusResponse(
+        hosts=list(hosts),
         collected_at=datetime.now(UTC).isoformat(),
     )
+    _cache_set(cache_key, result)
+    return result
 
 
 @app.post("/api/v1/supervisor/action", response_model=SupervisorActionResponse)

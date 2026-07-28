@@ -113,3 +113,11 @@ Port 5176 is in use, trying another one...
   VITE v8.1.5  ready in 110 ms
 
   ➜  Local:   http://127.0.0.1:5177/
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+
+  VITE v8.1.5  ready in 107 ms
+
+  ➜  Local:   http://127.0.0.1:5173/

@@ -81,3 +81,21 @@
 2026-07-28 18:17:40,005 WARN stopped: ops-control-frontend (terminated by SIGTERM)
 2026-07-28 18:17:40,007 INFO spawned: 'ops-control-frontend' with pid 99205
 2026-07-28 18:17:43,209 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 18:46:22,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:24,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:26,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:28,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:30,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:32,051 WARN killing 'ops-control-backend' (97086) with SIGKILL
+2026-07-28 18:46:32,051 INFO waiting for ops-control-backend to stop
+2026-07-28 18:46:32,058 WARN stopped: ops-control-backend (terminated by SIGKILL)
+2026-07-28 18:46:32,063 INFO spawned: 'ops-control-backend' with pid 101183
+2026-07-28 18:46:35,520 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 18:50:47,773 INFO waiting for ops-control-backend to stop
+2026-07-28 18:50:47,953 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-28 18:50:47,953 INFO waiting for ops-control-frontend to stop
+2026-07-28 18:50:47,957 WARN stopped: ops-control-frontend (terminated by SIGTERM)
+2026-07-28 18:50:47,961 INFO spawned: 'ops-control-backend' with pid 101841
+2026-07-28 18:50:51,413 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-28 18:50:51,418 INFO spawned: 'ops-control-frontend' with pid 101867
+2026-07-28 18:50:54,616 INFO success: ops-control-frontend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)

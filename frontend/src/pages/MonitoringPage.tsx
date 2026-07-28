@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { Link } from "react-router-dom"
 import { api } from "../auth"
 import { HostMetrics, RemoteHostMetric, RemoteHostsMetrics } from "../types"
+
+const REFRESH_INTERVAL = 30_000 // 30s auto-refresh
 
 function barColor(pct: number) {
   if (pct > 80) return "var(--danger)"
@@ -36,7 +38,7 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: host.reachable ? "var(--success)" : "var(--danger)", boxShadow: host.reachable ? "0 0 6px rgba(34,197,94,.4)" : "none", flexShrink: 0 }} />
           <div>
             <h2 style={{ margin: 0 }}>{host.name}</h2>
-            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{host.hostname} · {host.reachable ? "連線正常" : host.error || "無法連線"}</span>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{host.hostname || host.asset_id} · {host.reachable ? "連線正常" : host.error || "無法連線"}</span>
           </div>
         </div>
         <span style={{ color: "var(--text-secondary)", fontSize: 12, transition: "transform .2s", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
@@ -104,10 +106,35 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
 
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
             <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">📋 資產詳情</Link>
-            <Link to="/remote" className="btn btn-sm">⌨ 遠程終端</Link>
+            <Link to="/remote" className="btn btn-sm">⌨ 終端</Link>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Skeleton loader ── */
+function SkeletonCard() {
+  return (
+    <div className="card" style={{ pointerEvents: "none" }}>
+      <div className="card-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#e2e8f0" }} />
+          <div>
+            <div style={{ height: 16, width: 120, background: "#e2e8f0", borderRadius: 4, marginBottom: 4 }} />
+            <div style={{ height: 10, width: 160, background: "#f1f5f9", borderRadius: 4 }} />
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: "12px 20px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, borderBottom: "1px solid var(--border)" }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ textAlign: "center" }}>
+            <div style={{ height: 10, width: 30, background: "#f1f5f9", borderRadius: 4, margin: "0 auto 4px" }} />
+            <div style={{ height: 20, width: 40, background: "#e2e8f0", borderRadius: 4, margin: "0 auto" }} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -119,13 +146,22 @@ export function MonitoringPage() {
   const [collecting, setCollecting] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [collectedAt, setCollectedAt] = useState("")
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const loadLocal = async () => {
+  const loadLocal = useCallback(async () => {
     try { setLocalMetrics(await api<HostMetrics>("/api/v1/host/metrics")) }
     catch { /* silent */ }
-  }
+  }, [])
 
-  const loadRemote = async () => {
+  const loadRemote = useCallback(async (useCache = false) => {
+    if (useCache) {
+      try {
+        const data = await api<RemoteHostsMetrics>("/api/v1/hosts/metrics?cache=true")
+        setRemoteData(data.hosts)
+        setCollectedAt(new Intl.DateTimeFormat("zh-Hant", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(data.collected_at)))
+      } catch { /* silent */ }
+      return
+    }
     setCollecting(true)
     try {
       const data = await api<RemoteHostsMetrics>("/api/v1/hosts/metrics")
@@ -133,11 +169,26 @@ export function MonitoringPage() {
       setCollectedAt(new Intl.DateTimeFormat("zh-Hant", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(data.collected_at)))
     } catch { /* silent */ } finally {
       setCollecting(false)
-      setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { void loadLocal(); void loadRemote() }, [])
+  // Auto-refresh every 30s using cache
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      void loadRemote(true)
+    }, REFRESH_INTERVAL)
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [loadRemote])
+
+  // Initial load: cached first for speed, then fresh
+  useEffect(() => {
+    void loadLocal()
+    void loadRemote(true) // fast cached load
+    void loadRemote(false) // then fresh data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>
@@ -151,7 +202,7 @@ export function MonitoringPage() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-sm" onClick={() => { void loadLocal() }} disabled={collecting}>↻ 本機</button>
-          <button className="btn btn-primary btn-sm" onClick={() => { void loadRemote() }} disabled={collecting}>
+          <button className="btn btn-primary btn-sm" onClick={() => { void loadRemote(false) }} disabled={collecting}>
             {collecting ? "⠋ 收集中..." : "↻ 收集全部"}
           </button>
         </div>
@@ -220,6 +271,13 @@ export function MonitoringPage() {
       <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5 }}>
         遠程主機
       </h2>
+
+      {loading && (
+        <div style={{ display: "grid", gap: 12 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
 
       {remoteData.length === 0 && !loading && (
         <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>沒有可監控的遠程主機</p></div></div>
