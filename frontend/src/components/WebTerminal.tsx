@@ -162,10 +162,12 @@ export function WebTerminal({ assetId, assetName, token, onDisconnect }: WebTerm
       }
     })
 
-    // Handle resize
-    term.onResize((cols, rows) => {
+    // Handle resize — xterm 5.x passes a single {cols, rows} object
+    term.onResize((event) => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "resize", cols, rows }))
+        const c = typeof event === "object" && "cols" in event ? event.cols : event
+        const r = typeof event === "object" && "rows" in event ? event.rows : arguments[1]
+        wsRef.current.send(JSON.stringify({ type: "resize", cols: c, rows: r }))
       }
     })
 

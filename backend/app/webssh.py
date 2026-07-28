@@ -145,10 +145,11 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
         logger.info("SSH connected: %s@%s:%d", user, host, port)
 
         process = await ssh_conn.create_process(
-            b"",
+            "",
             request_pty=True,
             term_type="xterm-256color",
             term_size=(rows, cols),
+            encoding=None,  # Force binary mode so stdout.read() returns bytes
             env={
                 "LANG": "zh_TW.UTF-8",
                 "LC_ALL": "zh_TW.UTF-8",
@@ -305,24 +306,26 @@ async def _ws_to_ssh(ws, process):
             msg_type = data.get("type")
 
             if msg_type == "data":
-                # Handle both bytes and str mode for stdin
-                input_data = data.get("data", "")
-                # If process expects str (text mode), decode; otherwise keep as bytes
+                # encoding=None makes stdin expect bytes
+                input_bytes = data.get("data", "").encode("utf-8", errors="replace")
                 try:
-                    process.stdin.write(input_data)
+                    process.stdin.write(input_bytes)
                     await process.stdin.drain()
-                except (TypeError, AttributeError):
-                    # Fallback: try as bytes
-                    try:
-                        process.stdin.write(input_data.encode("utf-8", errors="replace"))
-                        await process.stdin.drain()
-                    except Exception as e:
-                        logger.warning("SSH stdin write error: %s", e)
-                        break
+                except Exception as e:
+                    logger.warning("SSH stdin write error: %s", e)
+                    break
 
             elif msg_type == "resize":
-                new_rows = data.get("rows", 24)
-                new_cols = data.get("cols", 80)
+                # Handle both {cols: N, rows: M} and nested {cols: {cols: N, rows: M}}
+                cols_data = data.get("cols", 80)
+                rows_data = data.get("rows", 24)
+                # If cols_data is a dict (xterm 5.x resize event object), extract values
+                if isinstance(cols_data, dict):
+                    new_cols = int(cols_data.get("cols", 80))
+                    new_rows = int(cols_data.get("rows", 24))
+                else:
+                    new_cols = int(cols_data)
+                    new_rows = int(rows_data)
                 try:
                     process.change_terminal_size(new_cols, new_rows)
                 except Exception as e:
@@ -356,4 +359,4 @@ async def _ssh_to_ws(ws, process):
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        logger.warning("ssh_to_ws error: %s", e)
+        logger.warning("ssh_to_ws error: %s (type=%s)", e, type(e).__name__)
