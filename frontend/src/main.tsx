@@ -11,6 +11,7 @@ import { RemotePage } from "./pages/RemotePage"
 import { SettingsPage } from "./pages/SettingsPage"
 import { ServicesPage } from "./pages/ServicesPage"
 import { CloudsPage } from "./pages/CloudsPage"
+import { NotesPage } from "./pages/NotesPage"
 import "./styles.css"
 
 function AppRoutes() {
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/clouds" element={<CloudsPage />} />
+        <Route path="/notes" element={<NotesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
