@@ -1744,3 +1744,8 @@ INFO:     Started server process [17463]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=142&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTM3NjA5M30.b7-4r7q_lLjXPJ6yMvMajD0s6t3pa5V8fmGtfRGzO_U" [accepted]
+INFO:     connection open
+2026-07-29 11:43:36,396 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-07-29 11:43:36,862 INFO SSH connected: root@163.44.124.142:22
+2026-07-29 11:43:36,992 INFO Remote PTY created
