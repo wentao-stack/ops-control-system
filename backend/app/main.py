@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, verify_password
 from .database import Base, SessionLocal, engine
-from .models import Alert, Asset, AssetService, Change, Runbook, User
+from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
@@ -27,14 +27,15 @@ from .remote_supervisor import (
 from .schemas import (
     AlertListResponse, AlertResponse, AssetDetailResponse, AssetListResponse, AssetResponse,
     ChangeListResponse, ChangeResponse, GPUMetricsResponse, HostMetricsResponse,
-    InventorySummaryResponse, LoginRequest, RemoteExecRequest, RemoteExecResponse,
-    RemoteGPUMetricsResponse, RemoteHostMetricsResponse, RemoteHostsMetricsResponse,
-    RemoteAllServicesResponse, RemoteHostServicesResponse, RemotePingResponse,
-    RemoteServiceResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
+    InventorySummaryResponse, LoginRequest, NoteCreate, NoteListResponse, NoteResponse, NoteUpdate,
+    RemoteExecRequest, RemoteExecResponse, RemoteGPUMetricsResponse, RemoteHostMetricsResponse,
+    RemoteHostsMetricsResponse, RemoteAllServicesResponse, RemoteHostServicesResponse,
+    RemotePingResponse, RemoteServiceResponse, RunbookListResponse, RunbookResponse, ServiceResponse,
     SupervisorActionRequest, SupervisorActionResponse, SupervisorAllStatusResponse,
     SupervisorHostStatusResponse, SupervisorLogSourceResponse, SupervisorProcessResponse,
     SupervisorTailRequest, SupervisorTailResponse,
     TokenResponse, UserResponse,
+    ExecLogResponse, ExecLogListResponse,
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
@@ -256,6 +257,7 @@ def list_runbooks(
 def remote_exec(
     req: RemoteExecRequest,
     session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> RemoteExecResponse:
     asset = session.scalar(select(Asset).where(Asset.id == req.asset_id))
     if asset is None:
@@ -264,6 +266,22 @@ def remote_exec(
         raise HTTPException(status_code=400, detail="Asset has no SSH configuration")
     port = asset.ssh_port or 22
     result = ssh_exec(asset.ssh_host, port, asset.ssh_user, req.command, timeout=req.timeout)
+
+    # Log execution
+    session.add(
+        ExecLog(
+            asset_id=req.asset_id,
+            command=req.command,
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+            exit_code=result.get("exit_code", -1),
+            duration=result.get("duration", 0),
+            user=user.username,
+            created_at=datetime.now(UTC).replace(microsecond=0),
+        )
+    )
+    session.commit()
+
     return RemoteExecResponse(**result)
 
 
@@ -602,6 +620,190 @@ async def websocket_ssh(ws: WebSocket, asset_id: str):
         await ws.close()
     except Exception:
         pass
+
+
+from uuid import uuid4
+from sqlalchemy import or_
+
+# ── Notes CRUD ────────────────────────────────────────────────────────────────
+
+def _parse_tags(tags_raw: str) -> list[str]:
+    """Parse tags JSON string into list."""
+    try:
+        import json
+
+        return json.loads(tags_raw)
+    except Exception:
+        return []
+
+
+def _serialize_tags(tags: list[str]) -> str:
+    """Serialize tags list to JSON string."""
+    import json
+
+    return json.dumps(tags, ensure_ascii=False)
+
+
+@app.post("/api/v1/notes", response_model=NoteResponse)
+async def create_note(note_in: NoteCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    now = datetime.now(UTC).replace(microsecond=0)
+    note = Note(
+        id=note_in.title[:32].replace(" ", "-") + str(uuid4())[:8],
+        title=note_in.title,
+        category=note_in.category,
+        content=note_in.content,
+        tags=_serialize_tags(note_in.tags),
+        author=user.username,
+        pinned=note_in.pinned,
+        published=note_in.published,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(note)
+    session.commit()
+    session.refresh(note)
+    return note
+
+
+@app.get("/api/v1/notes", response_model=NoteListResponse)
+async def list_notes(
+    page: int = 1,
+    page_size: int = 50,
+    category: str | None = None,
+    search: str | None = None,
+    session: Session = Depends(get_session),
+):
+    q = session.query(Note)
+    if category:
+        q = q.filter(Note.category == category)
+    if search:
+        pattern = f"%{search}%"
+        q = q.filter(
+            or_(
+                Note.title.ilike(pattern),
+                Note.content.ilike(pattern),
+            )
+        )
+    total = q.count()
+    items = (
+        q.order_by(Note.pinned.desc(), Note.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return NoteListResponse(
+        items=[
+            NoteResponse(
+                **n.__dict__,
+                tags=_parse_tags(n.tags),
+            )
+            for n in items
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        generated_at=datetime.now(UTC).replace(microsecond=0),
+    )
+
+
+@app.get("/api/v1/notes/{note_id}", response_model=NoteResponse)
+async def get_note(note_id: str, session: Session = Depends(get_session)):
+    note = session.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return NoteResponse(**note.__dict__, tags=_parse_tags(note.tags))
+
+
+@app.put("/api/v1/notes/{note_id}", response_model=NoteResponse)
+async def update_note(
+    note_id: str,
+    note_in: NoteUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    note = session.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    update_data = note_in.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None:
+            if key == "tags":
+                setattr(note, key, _serialize_tags(value))
+            else:
+                setattr(note, key, value)
+
+    note.version += 1
+    note.updated_at = datetime.now(UTC).replace(microsecond=0)
+    session.commit()
+    session.refresh(note)
+    return NoteResponse(**note.__dict__, tags=_parse_tags(note.tags))
+
+
+@app.delete("/api/v1/notes/{note_id}")
+async def delete_note(note_id: str, session: Session = Depends(get_session)):
+    note = session.query(Note).filter(Note.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    session.delete(note)
+    session.commit()
+    return {"ok": True}
+
+
+@app.post("/api/v1/notes/import-localstorage")
+async def import_localstorage_notes(
+    notes_data: list[NoteCreate],
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Import notes from browser localStorage to SQLite."""
+    imported = 0
+    for n in notes_data:
+        existing = session.query(Note).filter(Note.id == n.title[:32].replace(" ", "-")[:64]).first()
+        if not existing:
+            now = datetime.now(UTC).replace(microsecond=0)
+            note = Note(
+                id=n.title[:32].replace(" ", "-") + str(uuid4())[:8],
+                title=n.title,
+                category=n.category,
+                content=n.content,
+                tags=_serialize_tags(n.tags),
+                author=user.username,
+                pinned=n.pinned,
+                published=n.published,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(note)
+            imported += 1
+    session.commit()
+    return {"imported": imported}
+
+
+# ── ExecLog API ───────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/exec-log", response_model=ExecLogListResponse)
+async def list_exec_log(
+    page: int = 1,
+    page_size: int = 50,
+    asset_id: str | None = None,
+    session: Session = Depends(get_session),
+):
+    q = session.query(ExecLog)
+    if asset_id:
+        q = q.filter(ExecLog.asset_id == asset_id)
+    total = q.count()
+    items = q.order_by(ExecLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return ExecLogListResponse(
+        items=[ExecLogResponse(**e.__dict__) for e in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        generated_at=datetime.now(UTC).replace(microsecond=0),
+    )
+
+
+# ── SPA Fallback ──────────────────────────────────────────────────────────────
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Index
 
 from .database import Base
 
@@ -97,3 +98,42 @@ class Runbook(Base):
     author: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    category: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    tags: Mapped[str] = mapped_column(String(500), nullable=False, server_default="[]")
+    author: Mapped[str] = mapped_column(String(64), nullable=False, server_default="admin", index=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    published: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_notes_pinned_updated", "pinned", "updated_at"),
+    )
+
+
+class ExecLog(Base):
+    __tablename__ = "exec_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    command: Mapped[str] = mapped_column(Text, nullable=False)
+    stdout: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    stderr: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    exit_code: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    duration: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    user: Mapped[str] = mapped_column(String(64), nullable=False, server_default="admin")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_exec_log_asset_time", "asset_id", "created_at"),
+        Index("idx_exec_log_user_time", "user", "created_at"),
+    )

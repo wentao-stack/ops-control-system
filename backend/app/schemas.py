@@ -320,3 +320,73 @@ class SupervisorLogSourceResponse(BaseModel):
     label: str
     path: str
     lines: list[str]
+
+
+# ── Notes schemas ────────────────────────────────────────────────────────────
+
+class NoteCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    category: str = Field(min_length=1, max_length=24)
+    content: str = ""
+    tags: list[str] = []
+    pinned: bool = False
+    published: bool = True
+
+
+class NoteUpdate(BaseModel):
+    title: str | None = None
+    category: str | None = None
+    content: str | None = None
+    tags: list[str] | None = None
+    pinned: bool | None = None
+    published: bool | None = None
+
+
+class NoteResponse(BaseModel):
+    id: str
+    title: str
+    category: str
+    content: str
+    tags: list[str]
+    author: str
+    pinned: bool
+    published: bool
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NoteListResponse(BaseModel):
+    items: list[NoteResponse]
+    total: int
+    page: int
+    page_size: int
+    generated_at: datetime
+
+
+# ── ExecLog schemas ──────────────────────────────────────────────────────────
+
+class ExecLogResponse(BaseModel):
+    id: int
+    asset_id: str
+    command: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration: float
+    user: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExecLogListResponse(BaseModel):
+    items: list[ExecLogResponse]
+    total: int
+    page: int
+    page_size: int
+    generated_at: datetime

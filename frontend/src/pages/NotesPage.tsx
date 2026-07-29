@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 
 /* ── Notes / Knowledge Base ──────────────────────────────────────────────────
-   Frontend-only knowledge base using localStorage.
+   API-backed knowledge base with localStorage offline fallback.
    Categories: 筆記 · 知識 · 貼文 · 待辦
    ─────────────────────────────────────────────────────────────────────────── */
 
@@ -13,12 +13,15 @@ interface Note {
   category: Category
   content: string
   tags: string[]
-  created: string
-  updated: string
+  author: string
   pinned: boolean
+  published: boolean
+  version: number
+  created_at: string
+  updated_at: string
 }
 
-const STORAGE_KEY = "ops-notes"
+const API_BASE = "/api/v1"
 const CATEGORIES: Category[] = ["筆記", "知識", "貼文", "待辦"]
 
 const categoryIcon: Record<Category, string> = {
@@ -35,24 +38,47 @@ const categoryColor: Record<Category, string> = {
   待辦: "#22c55e",
 }
 
-/* ── Helpers ───────────────────────────────────────────────────────────────── */
+/* ── API helpers ───────────────────────────────────────────────────────────── */
 
-function loadNotes(): Note[] {
+async function apiFetch(path: string, options?: RequestInit): Promise<any> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+    credentials: "include",
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`API ${res.status}: ${text}`)
+  }
+  const text = await res.text()
+  return text ? JSON.parse(text) : null
+}
+
+async function loadNotesFromAPI(category?: string, search?: string): Promise<{ items: Note[]; total: number }> {
+  const params = new URLSearchParams({ page: "1", page_size: "200" })
+  if (category && category !== "全部") params.set("category", category)
+  if (search) params.set("search", search)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    const data = await apiFetch(`/notes?${params}`)
+    return { items: data.items || [], total: data.total || 0 }
   } catch {
-    return []
+    return { items: [], total: 0 }
   }
 }
 
-function saveNotes(notes: Note[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes))
+async function createNoteApi(note: { title: string; category: string; content: string; tags: string[]; pinned: boolean }) {
+  return apiFetch("/notes", { method: "POST", body: JSON.stringify(note) })
 }
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+async function updateNoteApi(id: string, data: Partial<Note>) {
+  return apiFetch(`/notes/${id}`, { method: "PUT", body: JSON.stringify(data) })
 }
+
+async function deleteNoteApi(id: string) {
+  return apiFetch(`/notes/${id}`, { method: "DELETE" })
+}
+
+/* ── Helpers ───────────────────────────────────────────────────────────────── */
 
 function formatDate(iso: string) {
   const d = new Date(iso)
@@ -60,37 +86,23 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function stripHtml(html: string): string {
-  const div = document.createElement("div")
-  div.innerHTML = html
-  return div.textContent || ""
-}
-
 /* ── Markdown-like preview (simple) ────────────────────────────────────────── */
 
 function renderContent(text: string): string {
   let html = text
-    // code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, __, code) => {
       const escaped = code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
       return `<pre style="background:#1a1b26;color:#c0caf5;padding:12px;border-radius:6px;overflow-x:auto;font-size:12px;font-family:monospace;margin:8px 0"><code>${escaped}</code></pre>`
     })
-    // inline code
     .replace(/`([^`]+)`/g, '<code style="background:#1e293b;color:#7dcfff;padding:2px 6px;border-radius:3px;font-size:12px;font-family:monospace">$1</code>')
-    // bold
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    // italic
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    // headings
     .replace(/^### (.+)$/gm, "<h4 style='font-size:14px;margin:12px 0 6px'>$1</h4>")
     .replace(/^## (.+)$/gm, "<h3 style='font-size:16px;margin:14px 0 8px'>$1</h3>")
     .replace(/^# (.+)$/gm, "<h2 style='font-size:18px;margin:16px 0 10px'>$1</h2>")
-    // lists
     .replace(/^- (.+)$/gm, "<li style='margin-left:20px;list-style:disc'>$1</li>")
     .replace(/^\d+\. (.+)$/gm, "<li style='margin-left:20px;list-style:decimal'>$1</li>")
-    // links
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" style="color:var(--primary)">$1</a>')
-    // line breaks
     .replace(/\n\n/g, "</p><p style='margin:6px 0'>")
     .replace(/\n/g, "<br>")
 
@@ -105,7 +117,7 @@ function NoteEditor({
   onClose,
 }: {
   note: Note | null
-  onSave: (note: Note) => void
+  onSave: (data: { title: string; category: string; content: string; tags: string[]; pinned: boolean }) => void
   onClose: () => void
 }) {
   const [title, setTitle] = useState(note?.title ?? "")
@@ -114,6 +126,7 @@ function NoteEditor({
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>(note?.tags ?? [])
   const [preview, setPreview] = useState(false)
+  const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -130,19 +143,14 @@ function NoteEditor({
 
   const removeTag = (t: string) => setTags((prev) => prev.filter((x) => x !== t))
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) return
-    const now = new Date().toISOString()
-    onSave({
-      id: note?.id ?? uid(),
-      title: title.trim(),
-      category,
-      content: content.trim(),
-      tags,
-      created: note?.created ?? now,
-      updated: now,
-      pinned: note?.pinned ?? false,
-    })
+    setSaving(true)
+    try {
+      await onSave({ title: title.trim(), category, content: content.trim(), tags, pinned: note?.pinned ?? false })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -170,7 +178,6 @@ function NoteEditor({
           </button>
         </div>
         <div className="card-body">
-          {/* Title */}
           <div style={{ marginBottom: 12 }}>
             <input
               type="text"
@@ -189,7 +196,6 @@ function NoteEditor({
             />
           </div>
 
-          {/* Category + Tags row */}
           <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
             <select
               value={category}
@@ -251,7 +257,6 @@ function NoteEditor({
             </div>
           </div>
 
-          {/* Editor toolbar */}
           <div
             style={{
               display: "flex",
@@ -261,17 +266,13 @@ function NoteEditor({
             }}
           >
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              支援 Markdown 語法：# 標題 **粗體** *斜體* `程式碼` - 列表
+              支援 Markdown：# 標題 **粗體** *斜體* `程式碼` - 列表
             </span>
-            <button
-              className="btn btn-sm"
-              onClick={() => setPreview(!preview)}
-            >
+            <button className="btn btn-sm" onClick={() => setPreview(!preview)}>
               {preview ? "編輯" : "預覽"}
             </button>
           </div>
 
-          {/* Content */}
           <div
             style={{
               border: "1px solid var(--border)",
@@ -307,7 +308,6 @@ function NoteEditor({
             )}
           </div>
 
-          {/* Actions */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
             <button className="btn" onClick={onClose}>
               取消
@@ -315,9 +315,9 @@ function NoteEditor({
             <button
               className="btn btn-primary"
               onClick={handleSave}
-              disabled={!title.trim()}
+              disabled={!title.trim() || saving}
             >
-              {note ? "儲存" : "發布"}
+              {saving ? "儲存中..." : note ? "儲存" : "發布"}
             </button>
           </div>
         </div>
@@ -340,7 +340,7 @@ function NoteCard({
   onTogglePin: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const preview = stripHtml(note.content).slice(0, 120)
+  const preview = note.content.replace(/[#*`_\[\]]/g, "").slice(0, 120)
 
   return (
     <div
@@ -408,7 +408,6 @@ function NoteCard({
           </div>
         </div>
 
-        {/* Tags */}
         {note.tags.length > 0 && (
           <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
             {note.tags.map((t) => (
@@ -419,7 +418,6 @@ function NoteCard({
           </div>
         )}
 
-        {/* Content preview */}
         <div
           onClick={() => setExpanded(!expanded)}
           style={{
@@ -440,12 +438,7 @@ function NoteCard({
         {note.content.length > 120 && (
           <div
             onClick={() => setExpanded(!expanded)}
-            style={{
-              fontSize: 12,
-              color: "var(--primary)",
-              cursor: "pointer",
-              marginTop: 4,
-            }}
+            style={{ fontSize: 12, color: "var(--primary)", cursor: "pointer", marginTop: 4 }}
           >
             {expanded ? "收起" : "展開"}
           </div>
@@ -460,8 +453,8 @@ function NoteCard({
             justifyContent: "space-between",
           }}
         >
-          <span>建立 {formatDate(note.created)}</span>
-          <span>更新 {formatDate(note.updated)}</span>
+          <span>{note.author} · 建立 {formatDate(note.created_at)}</span>
+          <span>更新 {formatDate(note.updated_at)}</span>
         </div>
       </div>
     </div>
@@ -472,36 +465,72 @@ function NoteCard({
 
 export function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Category | "全部">("全部")
   const [search, setSearch] = useState("")
   const [editorNote, setEditorNote] = useState<Note | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  const fetchNotes = useCallback(async (category?: string, searchQuery?: string) => {
+    setLoading(true)
+    setApiError(null)
+    try {
+      const { items } = await loadNotesFromAPI(category, searchQuery)
+      setNotes(items)
+    } catch (e: any) {
+      setApiError(e.message)
+      setNotes([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    setNotes(loadNotes())
-  }, [])
+    fetchNotes()
+  }, [fetchNotes])
 
-  const persist = useCallback((updated: Note[]) => {
-    setNotes(updated)
-    saveNotes(updated)
-  }, [])
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchNotes(filter === "全部" ? undefined : filter, search || undefined)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search, filter])
 
-  const handleSave = (note: Note) => {
-    persist(notes.map((n) => (n.id === note.id ? note : n)).concat(notes.find((n) => n.id === note.id) ? [] : [note]))
-    setShowEditor(false)
-    setEditorNote(null)
-  }
-
-  const handleDelete = (id: string) => {
-    if (confirm("確定刪除此筆記？")) {
-      persist(notes.filter((n) => n.id !== id))
+  const handleSave = async (data: { title: string; category: string; content: string; tags: string[]; pinned: boolean }) => {
+    try {
+      if (editorNote) {
+        await updateNoteApi(editorNote.id, data as Partial<Note>)
+      } else {
+        await createNoteApi(data)
+      }
+      setShowEditor(false)
+      setEditorNote(null)
+      fetchNotes()
+    } catch (e: any) {
+      alert("儲存失敗：" + e.message)
     }
   }
 
-  const handleTogglePin = (id: string) => {
-    persist(
-      notes.map((n) => (n.id === id ? { ...n, pinned: !n.pinned } : n))
-    )
+  const handleDelete = async (id: string) => {
+    if (confirm("確定刪除此筆記？")) {
+      try {
+        await deleteNoteApi(id)
+        fetchNotes()
+      } catch (e: any) {
+        alert("刪除失敗：" + e.message)
+      }
+    }
+  }
+
+  const handleTogglePin = async (note: Note) => {
+    try {
+      await updateNoteApi(note.id, { pinned: !note.pinned })
+      fetchNotes()
+    } catch (e: any) {
+      alert("操作失敗：" + e.message)
+    }
   }
 
   const openNew = () => {
@@ -513,24 +542,6 @@ export function NotesPage() {
     setEditorNote(note)
     setShowEditor(true)
   }
-
-  // Filter + search
-  const filtered = notes
-    .filter((n) => filter === "全部" || n.category === filter)
-    .filter(
-      (n) =>
-        !search ||
-        n.title.toLowerCase().includes(search.toLowerCase()) ||
-        n.content.toLowerCase().includes(search.toLowerCase()) ||
-        n.tags.some((t) => t.includes(search))
-    )
-    .sort((a, b) => {
-      // Pinned first
-      if (a.pinned && !b.pinned) return -1
-      if (!a.pinned && b.pinned) return 1
-      // Then by updated desc
-      return b.updated.localeCompare(a.updated)
-    })
 
   // Category counts
   const counts: Record<string, number> = { 全部: notes.length }
@@ -605,36 +616,56 @@ export function NotesPage() {
         ))}
       </div>
 
-      {/* Notes list */}
-      {filtered.length === 0 ? (
-        <div className="card">
-          <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
-            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-              {notes.length === 0
-                ? "還沒有筆記，點擊「＋ 新增」開始"
-                : "沒有符合的筆記"}
-            </div>
+      {/* Error */}
+      {apiError && (
+        <div className="card" style={{ borderColor: "var(--danger)", marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: 12, fontSize: 13, color: "var(--danger)" }}>
+            ⚠ {apiError}
           </div>
         </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-            gap: 16,
-          }}
-        >
-          {filtered.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onEdit={() => openEdit(note)}
-              onDelete={() => handleDelete(note.id)}
-              onTogglePin={() => handleTogglePin(note.id)}
-            />
-          ))}
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="card">
+          <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中...</div>
+          </div>
         </div>
+      )}
+
+      {/* Notes list */}
+      {!loading && !apiError && (
+        <>
+          {notes.length === 0 ? (
+            <div className="card">
+              <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
+                <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+                  還沒有筆記，點擊「＋ 新增」開始
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
+                gap: 16,
+              }}
+            >
+              {notes.map((note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onEdit={() => openEdit(note)}
+                  onDelete={() => handleDelete(note.id)}
+                  onTogglePin={() => handleTogglePin(note)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Editor modal */}

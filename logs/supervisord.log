@@ -150,3 +150,20 @@
 2026-07-29 11:42:50,611 WARN stopped: ops-control-backend (terminated by SIGTERM)
 2026-07-29 11:42:50,612 INFO spawned: 'ops-control-backend' with pid 17463
 2026-07-29 11:42:54,062 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-29 11:58:03,699 INFO waiting for ops-control-backend to stop
+2026-07-29 11:58:03,835 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-29 11:58:03,837 INFO spawned: 'ops-control-backend' with pid 22850
+2026-07-29 11:58:04,299 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:05,302 INFO spawned: 'ops-control-backend' with pid 22877
+2026-07-29 11:58:05,717 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:07,721 INFO spawned: 'ops-control-backend' with pid 22897
+2026-07-29 11:58:08,128 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:11,133 INFO spawned: 'ops-control-backend' with pid 22910
+2026-07-29 11:58:11,543 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:15,549 INFO spawned: 'ops-control-backend' with pid 22927
+2026-07-29 11:58:15,956 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:20,962 INFO spawned: 'ops-control-backend' with pid 22952
+2026-07-29 11:58:21,376 WARN exited: ops-control-backend (exit status 1; not expected)
+2026-07-29 11:58:22,377 INFO gave up: ops-control-backend entered FATAL state, too many start retries too quickly
+2026-07-29 11:58:27,907 INFO spawned: 'ops-control-backend' with pid 23014
+2026-07-29 11:58:31,575 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
