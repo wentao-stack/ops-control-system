@@ -31,7 +31,7 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
 
   // Fit terminal when it becomes active
   useEffect(() => {
-    if (active && fitRef.current) {
+    if (active && fitRef.current && termRef.current) {
       requestAnimationFrame(() => {
         fitRef.current?.fit()
       })
@@ -52,10 +52,13 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     setStatus("connecting")
     setErrorMsg("")
 
+    // Ensure terminal is fitted BEFORE reading cols/rows — otherwise we get defaults (80x24)
+    fitRef.current?.fit()
+
     // Determine WS protocol
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
     const host = window.location.host
-    // Pass cols/rows from the current terminal if already initialized
+    // Read cols/rows AFTER fit() so we get the real container dimensions
     const cols = termRef.current ? termRef.current.cols : 80
     const rows = termRef.current ? termRef.current.rows : 24
     const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
