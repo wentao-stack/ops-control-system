@@ -144,3 +144,5 @@ Port 5177 is in use, trying another one...
 
   ➜  Local:   http://127.0.0.1:5173/
 10:53:07 AM [vite] (client) hmr update /src/components/WebTerminal.tsx
+10:56:20 AM [vite] (client) hmr update /src/components/WebTerminal.tsx
+10:57:11 AM [vite] (client) hmr update /src/components/WebTerminal.tsx

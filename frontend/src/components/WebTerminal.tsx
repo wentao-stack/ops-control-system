@@ -38,7 +38,8 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     }
   }, [active])
 
-  const connect = useCallback(() => {
+  // Establish WebSocket connection with correct terminal dimensions
+  const connect = useCallback((cols: number, rows: number) => {
     // Clear any pending reconnect
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
@@ -52,22 +53,18 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     setStatus("connecting")
     setErrorMsg("")
 
-    // Ensure terminal is fitted BEFORE reading cols/rows — otherwise we get defaults (80x24)
-    fitRef.current?.fit()
+    console.log(`[WebTerminal] connecting with cols=${cols} rows=${rows}`)
 
     // Determine WS protocol
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
     const host = window.location.host
-    // Read cols/rows AFTER fit() so we get the real container dimensions
-    const cols = termRef.current ? termRef.current.cols : 80
-    const rows = termRef.current ? termRef.current.rows : 24
     const url = `${proto}//${host}/ws/ssh/${assetId}?cols=${cols}&rows=${rows}&token=${encodeURIComponent(token)}`
 
     const ws = new WebSocket(url)
     wsRef.current = ws
 
     ws.onopen = () => {
-      console.log("WebSSH connected")
+      console.log(`WebSSH connected cols=${cols} rows=${rows}`)
     }
 
     ws.onmessage = (event) => {
@@ -122,7 +119,9 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
 
   const reconnect = useCallback(() => {
     setReconnectCount(prev => prev + 1)
-    connect()
+    const cols = termRef.current?.cols ?? 80
+    const rows = termRef.current?.rows ?? 24
+    connect(cols, rows)
   }, [connect])
 
   useEffect(() => {
@@ -164,12 +163,6 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
 
     if (containerRef.current) {
       term.open(containerRef.current)
-      // Small delay to ensure container is rendered, only fit if active
-      requestAnimationFrame(() => {
-        if (activeRef.current) {
-          fit.fit()
-        }
-      })
     }
 
     // Send input to server
@@ -181,15 +174,16 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
 
     // Handle resize — xterm 5.x passes a single {cols, rows} object
     term.onResize((event) => {
+      let c: number, r: number
+      if (typeof event === "object" && "cols" in event) {
+        c = event.cols
+        r = event.rows
+      } else {
+        c = 80
+        r = 24
+      }
+      // Forward resize to server
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        let c: number, r: number
-        if (typeof event === "object" && "cols" in event) {
-          c = event.cols
-          r = event.rows
-        } else {
-          c = 80
-          r = 24
-        }
         wsRef.current.send(JSON.stringify({ type: "resize", cols: c, rows: r }))
       }
     })
@@ -204,8 +198,32 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
       resizeObserver.observe(containerRef.current)
     }
 
-    // Auto-connect
-    connect()
+    // Fit terminal first, then connect with correct dimensions.
+    // fit() triggers onResize synchronously, so we listen for that.
+    const initConnect = () => {
+      const cols = term.cols
+      const rows = term.rows
+      console.log(`[WebTerminal] init cols=${cols} rows=${rows}`)
+      if (cols > 0 && rows > 0) {
+        connect(cols, rows)
+      }
+    }
+
+    if (activeRef.current) {
+      // Fit and connect immediately
+      fit.fit()
+      // fit() is synchronous in xterm-addon-fit, but the onResize event
+      // may fire before we set up the listener, so call connect directly
+      // after a brief nextTick to ensure onResize has fired
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          initConnect()
+        })
+      })
+    } else {
+      // Not active yet — fit and connect when it becomes active
+      term.on("resize", initConnect)
+    }
 
     return () => {
       if (reconnectTimerRef.current) {
