@@ -10,6 +10,7 @@ import { MonitoringPage } from "./pages/MonitoringPage"
 import { RemotePage } from "./pages/RemotePage"
 import { SettingsPage } from "./pages/SettingsPage"
 import { ServicesPage } from "./pages/ServicesPage"
+import { CloudsPage } from "./pages/CloudsPage"
 import "./styles.css"
 
 function AppRoutes() {
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/remote" element={<RemotePage />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/clouds" element={<CloudsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
