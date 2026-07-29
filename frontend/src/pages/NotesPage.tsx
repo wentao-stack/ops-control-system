@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 
 /* ── Notes / Knowledge Base ──────────────────────────────────────────────────
-   API-backed knowledge base with localStorage offline fallback.
+   API-backed knowledge base with pagination, click-to-detail, and editor.
    Categories: 筆記 · 知識 · 貼文 · 待辦
    ─────────────────────────────────────────────────────────────────────────── */
 
@@ -23,6 +24,7 @@ interface Note {
 
 const API_BASE = "/api/v1"
 const CATEGORIES: Category[] = ["筆記", "知識", "貼文", "待辦"]
+const PAGE_SIZE = 10
 
 const categoryIcon: Record<Category, string> = {
   筆記: "📝",
@@ -54,8 +56,8 @@ async function apiFetch(path: string, options?: RequestInit): Promise<any> {
   return text ? JSON.parse(text) : null
 }
 
-async function loadNotesFromAPI(category?: string, search?: string): Promise<{ items: Note[]; total: number }> {
-  const params = new URLSearchParams({ page: "1", page_size: "200" })
+async function loadNotesFromAPI(page: number, category?: string, search?: string): Promise<{ items: Note[]; total: number }> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) })
   if (category && category !== "全部") params.set("category", category)
   if (search) params.set("search", search)
   try {
@@ -173,9 +175,7 @@ function NoteEditor({
       >
         <div className="card-header">
           <h2>{note ? "編輯" : "新增"}{note ? ` — ${note.category}` : ""}</h2>
-          <button className="btn btn-sm" onClick={onClose}>
-            ✕
-          </button>
+          <button className="btn btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="card-body">
           <div style={{ marginBottom: 12 }}>
@@ -192,6 +192,7 @@ function NoteEditor({
                 border: "1px solid var(--border)",
                 borderRadius: 6,
                 outline: "none",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -303,6 +304,7 @@ function NoteEditor({
                   fontSize: 13,
                   lineHeight: 1.7,
                   background: "transparent",
+                  boxSizing: "border-box",
                 }}
               />
             )}
@@ -333,14 +335,15 @@ function NoteCard({
   onEdit,
   onDelete,
   onTogglePin,
+  onView,
 }: {
   note: Note
-  onEdit: () => void
-  onDelete: () => void
-  onTogglePin: () => void
+  onEdit: (e: React.MouseEvent) => void
+  onDelete: (e: React.MouseEvent) => void
+  onTogglePin: (e: React.MouseEvent) => void
+  onView: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const preview = note.content.replace(/[#*`_\[\]]/g, "").slice(0, 120)
+  const preview = note.content.replace(/[#*`_\[\]]/g, "").slice(0, 150)
 
   return (
     <div
@@ -349,6 +352,20 @@ function NoteCard({
         cursor: "pointer",
         borderColor: note.pinned ? categoryColor[note.category] : undefined,
         boxShadow: note.pinned ? `0 0 0 1px ${categoryColor[note.category]}40` : undefined,
+        transition: "box-shadow 0.2s, transform 0.15s",
+      }}
+      onClick={onView}
+      onMouseEnter={(e) => {
+        if (!note.pinned) {
+          e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"
+          e.currentTarget.style.transform = "translateY(-2px)"
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!note.pinned) {
+          e.currentTarget.style.boxShadow = "none"
+          e.currentTarget.style.transform = "translateY(0)"
+        }
       }}
     >
       <div className="card-body" style={{ padding: 16 }}>
@@ -370,6 +387,7 @@ function NoteCard({
             >
               {categoryIcon[note.category]} {note.category}
             </span>
+            {note.pinned && <span style={{ color: "#f59e0b" }} title="置頂">★</span>}
             <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{note.title}</h3>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
@@ -377,7 +395,7 @@ function NoteCard({
               className="btn btn-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                onTogglePin()
+                onTogglePin(e)
               }}
               title={note.pinned ? "取消置頂" : "置頂"}
               style={{ color: note.pinned ? "#f59e0b" : undefined }}
@@ -388,7 +406,7 @@ function NoteCard({
               className="btn btn-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                onEdit()
+                onEdit(e)
               }}
               title="編輯"
             >
@@ -398,7 +416,7 @@ function NoteCard({
               className="btn btn-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                onDelete()
+                onDelete(e)
               }}
               title="刪除"
               style={{ color: "var(--danger)" }}
@@ -419,30 +437,16 @@ function NoteCard({
         )}
 
         <div
-          onClick={() => setExpanded(!expanded)}
           style={{
             fontSize: 13,
             color: "var(--text-secondary)",
             lineHeight: 1.6,
-            maxHeight: expanded ? "none" : 60,
+            maxHeight: 80,
             overflow: "hidden",
           }}
         >
-          {expanded ? (
-            <div dangerouslySetInnerHTML={{ __html: renderContent(note.content) }} />
-          ) : (
-            <p style={{ margin: 0 }}>{preview}{note.content.length > 120 ? "…" : ""}</p>
-          )}
+          <p style={{ margin: 0 }}>{preview}{note.content.length > 150 ? "…" : ""}</p>
         </div>
-
-        {note.content.length > 120 && (
-          <div
-            onClick={() => setExpanded(!expanded)}
-            style={{ fontSize: 12, color: "var(--primary)", cursor: "pointer", marginTop: 4 }}
-          >
-            {expanded ? "收起" : "展開"}
-          </div>
-        )}
 
         <div
           style={{
@@ -453,7 +457,7 @@ function NoteCard({
             justifyContent: "space-between",
           }}
         >
-          <span>{note.author} · 建立 {formatDate(note.created_at)}</span>
+          <span>{note.author} · {formatDate(note.created_at)}</span>
           <span>更新 {formatDate(note.updated_at)}</span>
         </div>
       </div>
@@ -461,42 +465,132 @@ function NoteCard({
   )
 }
 
+/* ── Pagination ────────────────────────────────────────────────────────────── */
+
+function Pagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  onPageChange,
+}: {
+  currentPage: number
+  totalPages: number
+  totalItems: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  const pages: (number | string)[] = []
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      pages.push(i)
+    } else if (pages[pages.length - 1] !== "...") {
+      pages.push("...")
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 20 }}>
+      <span style={{ fontSize: 13, color: "var(--text-secondary)", marginRight: 8 }}>
+        共 {totalItems} 篇
+      </span>
+      <button
+        className="btn btn-sm"
+        disabled={currentPage === 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        style={{ opacity: currentPage === 1 ? 0.4 : 1 }}
+      >
+        ‹ 上一頁
+      </button>
+      {pages.map((p, idx) =>
+        typeof p === "string" ? (
+          <span key={`ellipsis-${idx}`} style={{ padding: "4px 8px", color: "var(--text-secondary)" }}>
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            className="btn btn-sm"
+            onClick={() => onPageChange(p)}
+            style={
+              currentPage === p
+                ? {
+                    background: "var(--primary)",
+                    color: "#fff",
+                    borderColor: "var(--primary)",
+                  }
+                : {}
+            }
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        className="btn btn-sm"
+        disabled={currentPage === totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}
+      >
+        下一頁 ›
+      </button>
+    </div>
+  )
+}
+
 /* ── Main Page ─────────────────────────────────────────────────────────────── */
 
 export function NotesPage() {
+  const navigate = useNavigate()
   const [notes, setNotes] = useState<Note[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Category | "全部">("全部")
   const [search, setSearch] = useState("")
   const [editorNote, setEditorNote] = useState<Note | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
 
-  const fetchNotes = useCallback(async (category?: string, searchQuery?: string) => {
-    setLoading(true)
-    setApiError(null)
-    try {
-      const { items } = await loadNotesFromAPI(category, searchQuery)
-      setNotes(items)
-    } catch (e: any) {
-      setApiError(e.message)
-      setNotes([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  const fetchNotes = useCallback(
+    async (pageNum: number, category?: string, searchQuery?: string) => {
+      setLoading(true)
+      setApiError(null)
+      try {
+        const data = await loadNotesFromAPI(pageNum, category, searchQuery)
+        setNotes(data.items)
+        setTotal(data.total)
+      } catch (e: any) {
+        setApiError(e.message)
+        setNotes([])
+        setTotal(0)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
-    fetchNotes()
+    fetchNotes(1)
   }, [fetchNotes])
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchNotes(filter === "全部" ? undefined : filter, search || undefined)
+      setPage(1)
+      fetchNotes(1, filter === "全部" ? undefined : filter, search || undefined)
     }, 300)
     return () => clearTimeout(timer)
   }, [search, filter])
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage)
+    fetchNotes(newPage, filter === "全部" ? undefined : filter, search || undefined)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   const handleSave = async (data: { title: string; category: string; content: string; tags: string[]; pinned: boolean }) => {
     try {
@@ -507,7 +601,7 @@ export function NotesPage() {
       }
       setShowEditor(false)
       setEditorNote(null)
-      fetchNotes()
+      fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
     } catch (e: any) {
       alert("儲存失敗：" + e.message)
     }
@@ -517,7 +611,7 @@ export function NotesPage() {
     if (confirm("確定刪除此筆記？")) {
       try {
         await deleteNoteApi(id)
-        fetchNotes()
+        fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
       } catch (e: any) {
         alert("刪除失敗：" + e.message)
       }
@@ -527,7 +621,7 @@ export function NotesPage() {
   const handleTogglePin = async (note: Note) => {
     try {
       await updateNoteApi(note.id, { pinned: !note.pinned })
-      fetchNotes()
+      fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
     } catch (e: any) {
       alert("操作失敗：" + e.message)
     }
@@ -538,53 +632,31 @@ export function NotesPage() {
     setShowEditor(true)
   }
 
-  const openEdit = (note: Note) => {
+  const openEdit = (_e: React.MouseEvent, note: Note) => {
     setEditorNote(note)
     setShowEditor(true)
   }
 
-  // Category counts
-  const counts: Record<string, number> = { 全部: notes.length }
-  CATEGORIES.forEach((c) => {
-    counts[c] = notes.filter((n) => n.category === c).length
-  })
+  const handleViewNote = (noteId: string) => {
+    navigate(`/notes/${noteId}`)
+  }
+
+  // Category counts (approximate from current page for display)
+  const counts: Record<string, number> = { 全部: total }
+  // For accurate counts we'd need separate API calls; use current page as estimate
+  // Actually let's just show total and not per-category counts since pagination
+  // makes per-category count inaccurate without separate API calls
 
   return (
     <>
       <div className="page-header">
         <div>
           <h1>筆記</h1>
-          <p>知識管理 · 貼文 · 待辦</p>
+          <p>知識管理 · 貼文 · 待辦 · 共 {total} 篇</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>
           ＋ 新增
         </button>
-      </div>
-
-      {/* Stats */}
-      <div className="stats-row" style={{ marginBottom: 20 }}>
-        <div className="stat-card">
-          <div className="stat-label">總數</div>
-          <div className="stat-value">{notes.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">筆記</div>
-          <div className="stat-value" style={{ color: categoryColor["筆記"] }}>
-            {counts["筆記"] ?? 0}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">知識</div>
-          <div className="stat-value" style={{ color: categoryColor["知識"] }}>
-            {counts["知識"] ?? 0}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">待辦</div>
-          <div className="stat-value" style={{ color: categoryColor["待辦"] }}>
-            {counts["待辦"] ?? 0}
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
@@ -592,7 +664,7 @@ export function NotesPage() {
         <input
           className="search-input"
           type="text"
-          placeholder="搜尋標題、內容、標籤..."
+          placeholder="搜尋標題、內容..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -600,7 +672,10 @@ export function NotesPage() {
           <button
             key={c}
             className="btn btn-sm"
-            onClick={() => setFilter(c)}
+            onClick={() => {
+              setFilter(c)
+              setPage(1)
+            }}
             style={
               filter === c
                 ? {
@@ -611,7 +686,7 @@ export function NotesPage() {
                 : {}
             }
           >
-            {c !== "全部" && categoryIcon[c]} {c} ({counts[c] ?? 0})
+            {c !== "全部" && categoryIcon[c]} {c}
           </button>
         ))}
       </div>
@@ -642,28 +717,39 @@ export function NotesPage() {
               <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
                 <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                  還沒有筆記，點擊「＋ 新增」開始
+                  {total === 0 ? "還沒有筆記，點擊「＋ 新增」開始" : "沒有符合條件的筆記"}
                 </div>
               </div>
             </div>
           ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {notes.map((note) => (
-                <NoteCard
-                  key={note.id}
-                  note={note}
-                  onEdit={() => openEdit(note)}
-                  onDelete={() => handleDelete(note.id)}
-                  onTogglePin={() => handleTogglePin(note)}
-                />
-              ))}
-            </div>
+            <>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {notes.map((note) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    onEdit={(e) => openEdit(e, note)}
+                    onDelete={() => handleDelete(note.id)}
+                    onTogglePin={() => handleTogglePin(note)}
+                    onView={() => handleViewNote(note.id)}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={total}
+                onPageChange={handlePageChange}
+              />
+            </>
           )}
         </>
       )}

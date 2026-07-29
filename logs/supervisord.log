@@ -167,3 +167,11 @@
 2026-07-29 11:58:22,377 INFO gave up: ops-control-backend entered FATAL state, too many start retries too quickly
 2026-07-29 11:58:27,907 INFO spawned: 'ops-control-backend' with pid 23014
 2026-07-29 11:58:31,575 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-29 21:12:26,216 INFO waiting for ops-control-backend to stop
+2026-07-29 21:12:26,370 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-29 21:12:26,372 INFO spawned: 'ops-control-backend' with pid 61050
+2026-07-29 21:12:30,107 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-29 21:23:10,588 INFO waiting for ops-control-backend to stop
+2026-07-29 21:23:10,747 WARN stopped: ops-control-backend (terminated by SIGTERM)
+2026-07-29 21:23:10,748 INFO spawned: 'ops-control-backend' with pid 61852
+2026-07-29 21:23:14,198 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
