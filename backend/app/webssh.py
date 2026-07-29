@@ -148,7 +148,7 @@ async def _handle_remote(ws, host: str, port: int, user: str, cols: int, rows: i
             "",
             request_pty=True,
             term_type="xterm-256color",
-            term_size=(rows, cols),
+            term_size=(cols, rows),
             encoding=None,  # Force binary mode so stdout.read() returns bytes
             env={
                 "LANG": "zh_TW.UTF-8",
