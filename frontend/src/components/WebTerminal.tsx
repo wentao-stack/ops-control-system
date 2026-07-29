@@ -199,8 +199,10 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     }
 
     // Fit terminal first, then connect with correct dimensions.
-    // fit() triggers onResize synchronously, so we listen for that.
+    // fit() is synchronous — it measures the container and updates term.cols/rows immediately.
     const initConnect = () => {
+      if (!containerRef.current) return
+      fit.fit()
       const cols = term.cols
       const rows = term.rows
       console.log(`[WebTerminal] init cols=${cols} rows=${rows}`)
@@ -210,19 +212,15 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
     }
 
     if (activeRef.current) {
-      // Fit and connect immediately
-      fit.fit()
-      // fit() is synchronous in xterm-addon-fit, but the onResize event
-      // may fire before we set up the listener, so call connect directly
-      // after a brief nextTick to ensure onResize has fired
+      // Fit and connect immediately after layout is ready
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           initConnect()
         })
       })
     } else {
-      // Not active yet — fit and connect when it becomes active
-      term.on("resize", initConnect)
+      // Not active yet — fit and connect when it becomes active via onResize
+      term.onResize(initConnect)
     }
 
     return () => {

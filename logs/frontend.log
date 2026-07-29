@@ -146,3 +146,20 @@ Port 5177 is in use, trying another one...
 10:53:07 AM [vite] (client) hmr update /src/components/WebTerminal.tsx
 10:56:20 AM [vite] (client) hmr update /src/components/WebTerminal.tsx
 10:57:11 AM [vite] (client) hmr update /src/components/WebTerminal.tsx
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+Port 5173 is in use, trying another one...
+
+  VITE v8.1.5  ready in 109 ms
+
+  ➜  Local:   http://127.0.0.1:5174/
+
+> ops-control-system-dashboard@0.1.0 dev
+> vite
+
+
+  VITE v8.1.5  ready in 110 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
