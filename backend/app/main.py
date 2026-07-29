@@ -644,6 +644,14 @@ def _serialize_tags(tags: list[str]) -> str:
     return json.dumps(tags, ensure_ascii=False)
 
 
+def _to_note_response(note: Note) -> NoteResponse:
+    """Convert Note ORM model to NoteResponse, parsing tags from JSON string."""
+    d = note.__dict__.copy()
+    d.pop("tags", None)
+    d["tags"] = _parse_tags(note.tags)
+    return NoteResponse(**d)
+
+
 @app.post("/api/v1/notes", response_model=NoteResponse)
 async def create_note(note_in: NoteCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     now = datetime.now(UTC).replace(microsecond=0)
@@ -662,7 +670,7 @@ async def create_note(note_in: NoteCreate, session: Session = Depends(get_sessio
     session.add(note)
     session.commit()
     session.refresh(note)
-    return note
+    return _to_note_response(note)
 
 
 @app.get("/api/v1/notes", response_model=NoteListResponse)
@@ -692,13 +700,7 @@ async def list_notes(
         .all()
     )
     return NoteListResponse(
-        items=[
-            NoteResponse(
-                **n.__dict__,
-                tags=_parse_tags(n.tags),
-            )
-            for n in items
-        ],
+        items=[_to_note_response(n) for n in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -711,7 +713,7 @@ async def get_note(note_id: str, session: Session = Depends(get_session)):
     note = session.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
-    return NoteResponse(**note.__dict__, tags=_parse_tags(note.tags))
+    return _to_note_response(note)
 
 
 @app.put("/api/v1/notes/{note_id}", response_model=NoteResponse)
@@ -737,7 +739,7 @@ async def update_note(
     note.updated_at = datetime.now(UTC).replace(microsecond=0)
     session.commit()
     session.refresh(note)
-    return NoteResponse(**note.__dict__, tags=_parse_tags(note.tags))
+    return _to_note_response(note)
 
 
 @app.delete("/api/v1/notes/{note_id}")
