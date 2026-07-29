@@ -2149,3 +2149,10 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 INFO:     127.0.0.1:45312 - "GET /api/v1/notes HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /notes HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-wZllOcBc.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-DCHBgJzD.css HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=200 HTTP/1.1" 200 OK
