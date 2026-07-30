@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, selectinload
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, verify_password
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
+from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
@@ -58,6 +59,18 @@ from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 import json
 import logging
 from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
+
+from . import agent as agent_service
+from .agent_models import AgentConversation, AgentMessage
+from .agent_schemas import (
+    AgentChatRequest,
+    AgentConversationCreate,
+    AgentConversationListResponse,
+    AgentConversationResponse,
+    AgentHealthResponse,
+    AgentMessagesListResponse,
+)
 
 # ── Simple response cache ────────────────────────────────────────────────────
 _cache: dict[str, tuple[Any, float]] = {}
@@ -1040,6 +1053,82 @@ def get_workflow_execution_detail(
         started_at=execution.started_at,
         completed_at=execution.completed_at,
         duration_seconds=duration,
+    )
+
+
+# ── Agent endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/api/v1/agent/health", response_model=AgentHealthResponse)
+async def agent_health():
+    """Check LLM API health."""
+    return await agent_service.check_llm_health()
+
+
+@app.get("/api/v1/agent/conversations", response_model=AgentConversationListResponse)
+def agent_list_conversations(
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> AgentConversationListResponse:
+    """List all conversations for the current user."""
+    return agent_service.list_conversations(session, user.username)
+
+
+@app.post("/api/v1/agent/conversations", response_model=AgentConversationResponse)
+def agent_create_conversation(
+    body: AgentConversationCreate | None = None,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> AgentConversationResponse:
+    """Create a new conversation."""
+    model = (body or AgentConversationCreate()).model
+    return agent_service.create_conversation(session, user.username, model)
+
+
+@app.delete("/api/v1/agent/conversations/{conversation_id}", status_code=204)
+def agent_delete_conversation(
+    conversation_id: str,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Delete a conversation and all its messages."""
+    ok = agent_service.delete_conversation(session, conversation_id, user.username)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return None
+
+
+@app.get("/api/v1/agent/conversations/{conversation_id}/messages", response_model=AgentMessagesListResponse)
+def agent_get_messages(
+    conversation_id: str,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> AgentMessagesListResponse:
+    """Get messages for a conversation."""
+    # Verify ownership
+    conv = session.query(AgentConversation).filter(
+        AgentConversation.id == conversation_id,
+        AgentConversation.user == user.username,
+    ).first()
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return agent_service.get_messages(session, conversation_id)
+
+
+@app.post("/api/v1/agent/chat")
+async def agent_chat(
+    req: AgentChatRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """Chat with the agent — returns SSE stream."""
+    return StreamingResponse(
+        agent_service.chat_stream(session, req, user.username),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

@@ -136,13 +136,16 @@ async def _run_note_api_step(config: dict, context: dict) -> dict:
     """Note API step: call the Notes API via HTTP."""
     method = config.get("method", "GET").upper()
     path = config.get("path", "")
-    fields = config.get("fields", {})
+    fields = config.get("fields") or {}
 
     if not path:
         return {"error": "No path specified"}
 
-    # Merge fields with context: context values override config defaults
-    merged_fields: dict[str, any] = {}
+    # Merge configured defaults with runtime parameters. The workflow editor can
+    # intentionally leave fields empty and collect their values only when the
+    # workflow is run, so limiting this merge to ``fields.items()`` would drop
+    # every runtime value and send an empty request body.
+    merged_fields: dict[str, Any] = {}
     for key, val in fields.items():
         if key in context and context[key] not in ("", None):
             merged_fields[key] = context[key]
@@ -151,14 +154,38 @@ async def _run_note_api_step(config: dict, context: dict) -> dict:
         else:
             merged_fields[key] = val
 
+    note_field_names = {
+        "id", "title", "content", "category", "tags", "pinned", "published",
+        "page", "page_size", "search",
+    }
+    for key in note_field_names:
+        if key in context and context[key] not in ("", None):
+            merged_fields[key] = context[key]
+
     # Replace path params like {id} with field values
     final_path = path
     for key, val in merged_fields.items():
         final_path = final_path.replace("{" + key + "}", str(val))
 
     # Build request body for POST/PUT
-    body_keys = {"title", "content", "category", "tags"}
+    body_keys = {"title", "content", "category", "tags", "pinned", "published"}
     body = {k: v for k, v in merged_fields.items() if k in body_keys and v not in ("", None)}
+
+    # The workflow form accepts tags as a convenient comma-separated string,
+    # while NoteCreate expects a JSON list.
+    if isinstance(body.get("tags"), str):
+        raw_tags = body["tags"].strip()
+        if raw_tags.startswith("["):
+            try:
+                parsed_tags = json.loads(raw_tags)
+            except json.JSONDecodeError:
+                parsed_tags = None
+            if isinstance(parsed_tags, list):
+                body["tags"] = parsed_tags
+            else:
+                body["tags"] = [tag.strip() for tag in raw_tags.split(",") if tag.strip()]
+        else:
+            body["tags"] = [tag.strip() for tag in raw_tags.replace("，", ",").split(",") if tag.strip()]
 
     import httpx as _httpx
 
