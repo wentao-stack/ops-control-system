@@ -216,7 +216,7 @@ export default function WorkflowPage() {
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await api<{ items: WorkflowTemplate[]; total: number }>("/workflows/templates")
+      const res = await api<{ items: WorkflowTemplate[]; total: number }>("/api/v1/workflows/templates")
       setTemplates(res.items)
     } catch (e) {
       console.error("Failed to fetch templates:", e)
@@ -225,7 +225,7 @@ export default function WorkflowPage() {
 
   const fetchExecutions = useCallback(async () => {
     try {
-      const res = await api<{ items: WorkflowExecution[]; total: number }>("/workflows/executions?page_size=20")
+      const res = await api<{ items: WorkflowExecution[]; total: number }>("/api/v1/workflows/executions?page_size=20")
       setExecutions(res.items)
     } catch (e) {
       console.error("Failed to fetch executions:", e)
@@ -241,7 +241,7 @@ export default function WorkflowPage() {
     if (!selectedTemplate) return
     setRunning(true)
     try {
-      await api("/workflows/run", {
+      await api("/api/v1/workflows/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ template_id: selectedTemplate.id, parameters: params }),
