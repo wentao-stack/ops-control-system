@@ -129,3 +129,34 @@ register({
     ],
     "is_active": True,
 })
+
+
+# ── Template: session-log ──────────────────────────────────────────────────
+
+register({
+    "id": "session-log",
+    "name": "對話記錄",
+    "description": "將本次對話內容整理後寫入筆記系統",
+    "parameters": [
+        {"name": "topic", "type": "str", "description": "對話主題/標題", "required": True},
+        {"name": "summary", "type": "str", "description": "對話摘要內容", "required": True},
+        {"name": "category", "type": "str", "description": "筆記分類", "default": "對話"},
+        {"name": "tags", "type": "list", "description": "標籤", "default": []},
+    ],
+    "steps": [
+        {
+            "type": "llm",
+            "name": "format_note",
+            "config": {
+                "system_prompt": "你是一位技術記錄助手。請將提供的對話摘要整理為結構化的筆記文檔。使用繁體中文，Markdown 格式。包含：主題、討論內容、決策與結論、待辦事項（如有）。保持簡潔專業。",
+                "user_prompt": "主題：{{topic}}\n\n對話摘要：{{summary}}\n\n請整理為筆記文檔：",
+            },
+        },
+        {
+            "type": "note_create",
+            "name": "save_note",
+            "config": {},
+        },
+    ],
+    "is_active": True,
+})
