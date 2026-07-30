@@ -11,6 +11,10 @@ frontend/dist/
 frontend/vite.config.js
 frontend/vite.config.d.ts
 
+# Environment variables
+.env
+backend/.env
+
 # Supervisor runtime files
 supervisor/supervisord.pid
 supervisor/supervisor.sock

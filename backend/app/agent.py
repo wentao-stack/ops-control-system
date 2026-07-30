@@ -3,11 +3,18 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import AsyncIterator
 
 import httpx
+from dotenv import load_dotenv
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+# Load .env from project root
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
 
 from .agent_models import AgentConversation, AgentMessage
 from .agent_schemas import (
