@@ -9,6 +9,7 @@ const NAV = [
   { to: "/remote", label: "終端", icon: "⌨" },
   { to: "/clouds", label: "雲端", icon: "☁" },
   { to: "/notes", label: "筆記", icon: "📝" },
+  { to: "/agent", label: "助手", icon: "🤖" },
   { to: "/settings", label: "設定", icon: "⚙" },
 ]
 
@@ -20,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/remote": "終端",
   "/clouds": "雲端管理",
   "/notes": "筆記管理",
+  "/agent": "AI 助手",
   "/settings": "系統設定",
 }
 

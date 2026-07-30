@@ -13,6 +13,7 @@ import { ServicesPage } from "./pages/ServicesPage"
 import { CloudsPage } from "./pages/CloudsPage"
 import { NotesPage } from "./pages/NotesPage"
 import { NoteDetailPage } from "./pages/NoteDetailPage"
+import { AgentChatPage } from "./pages/AgentChatPage"
 import "./styles.css"
 
 function AppRoutes() {
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/clouds" element={<CloudsPage />} />
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/notes/:noteId" element={<NoteDetailPage />} />
+        <Route path="/agent" element={<AgentChatPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

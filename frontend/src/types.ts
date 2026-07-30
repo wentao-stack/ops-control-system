@@ -127,3 +127,34 @@ export type SupervisorLogSource = {
   path: string
   lines: string[]
 }
+
+// ── Agent Chat types ─────────────────────────────────────────────────────
+
+export type AgentConversation = {
+  id: string
+  title: string
+  model: string
+  created_at: string
+  updated_at: string
+  message_count: number
+}
+
+export type AgentMessage = {
+  id: number
+  conversation_id: string
+  role: "user" | "assistant" | "tool"
+  content: string
+  tool_name: string | null
+  tool_input: string | null
+  tool_result: string | null
+  created_at: string
+}
+
+export type ToolUse = {
+  id: string
+  name: string
+  parameters: Record<string, any>
+  confirmation_required: boolean
+  result?: string
+  confirmed?: boolean
+}

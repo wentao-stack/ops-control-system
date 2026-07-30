@@ -4685,3 +4685,119 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 INFO:     27.93.32.200:0 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /notes HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /assets/index-DCHBgJzD.css HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /assets/index-FvyqnGnm.js HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=2&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes/Namecheap-DNS-APIb7e3907c HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10&category=%E7%9F%A5%E8%AD%98 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes/Hermes-Agent-%E9%83%A8%E7%BD%B2%E8%88%87%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97b9ff9557 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10&category=%E7%9F%A5%E8%AD%98 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/inventory/summary HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/assets HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/services?cache=true HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status?cache=true HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/host/metrics HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/metrics?cache=true HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/metrics HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/assets?asset_type=host HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=134&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTQxMzA4MH0.Tqo7_7EPmtvXzDdo9iESR-iYUdN6F4lrMl6z1fSDoA4" [accepted]
+INFO:     connection open
+2026-07-29 23:12:03,390 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-07-29 23:12:04,620 INFO SSH connected: root@163.44.124.142:22
+2026-07-29 23:12:04,857 INFO Remote PTY created
+2026-07-29 23:12:05,093 WARNING ws_to_ssh error: (<CloseCode.NO_STATUS_RCVD: 1005>, '')
+2026-07-29 23:12:05,094 INFO SSH session ended: exit_code=0
+2026-07-29 23:12:05,094 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 179, in _handle_remote
+    await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "POST /api/v1/remote/ping HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes/Phase-3%3A-%E5%8E%86%E5%8F%B2%E8%BF%BD%E8%B8%AAee3b1ab8 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10&category=%E5%BE%85%E8%BE%A6 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/inventory/summary HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/services?cache=true HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status?cache=true HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/host/metrics HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/assets?asset_type=host HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=134&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTQxMzA4MH0.Tqo7_7EPmtvXzDdo9iESR-iYUdN6F4lrMl6z1fSDoA4" [accepted]
+INFO:     connection open
+2026-07-29 23:33:46,319 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/metrics?cache=true HTTP/1.1" 200 OK
+2026-07-29 23:33:48,099 INFO SSH connected: root@163.44.124.142:22
+INFO:     27.93.32.200:0 - "GET /api/v1/hosts/metrics HTTP/1.1" 200 OK
+2026-07-29 23:33:49,174 INFO Remote PTY created
+2026-07-29 23:33:49,174 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 160, in _handle_remote
+    await ws.send_text(json.dumps({"type": "ready"}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "POST /api/v1/remote/ping HTTP/1.1" 200 OK
+INFO:     27.93.32.200:0 - "GET /api/v1/notes?page=2&page_size=10 HTTP/1.1" 200 OK

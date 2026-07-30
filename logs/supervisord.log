@@ -175,3 +175,8 @@
 2026-07-29 21:23:10,747 WARN stopped: ops-control-backend (terminated by SIGTERM)
 2026-07-29 21:23:10,748 INFO spawned: 'ops-control-backend' with pid 61852
 2026-07-29 21:23:14,198 INFO success: ops-control-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 00:08:57,103 WARN exited: ops-control-frontend (terminated by SIGHUP; not expected)
+2026-07-30 00:08:57,103 WARN received SIGTERM indicating exit request
+2026-07-30 00:08:57,103 INFO waiting for ops-control-backend to die
+2026-07-30 00:08:57,104 WARN ignored SIGHUP indicating restart request (shutdown in progress)
+2026-07-30 00:08:58,105 WARN stopped: ops-control-backend (terminated by SIGHUP)
