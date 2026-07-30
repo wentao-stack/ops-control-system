@@ -45,10 +45,13 @@ from .workflow_models import WorkflowTemplate, WorkflowExecution
 from .workflow_schemas import (
     WorkflowRunRequest,
     WorkflowTemplateCreate,
+    WorkflowTemplateUpdate,
     WorkflowTemplateResponse,
     WorkflowTemplateListResponse,
     WorkflowExecutionResponse,
+    WorkflowExecutionDetailResponse,
     WorkflowExecutionListResponse,
+    ExecutionStepResult,
 )
 from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 
@@ -819,6 +822,20 @@ async def list_exec_log(
 
 # ── Workflow endpoints ──────────────────────────────────────────────────────
 
+
+def _safe_result_json(val: str | None) -> list[dict]:
+    """Parse result_json safely — always returns a list."""
+    if not val:
+        return []
+    try:
+        data = json.loads(val)
+        if isinstance(data, list):
+            return data
+        return []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
 @app.get("/api/v1/workflows/templates", response_model=WorkflowTemplateListResponse)
 def list_workflow_templates(session: Session = Depends(get_session)) -> WorkflowTemplateListResponse:
     items = session.query(WorkflowTemplate).filter(WorkflowTemplate.is_active == True).all()
@@ -831,6 +848,23 @@ def list_workflow_templates(session: Session = Depends(get_session)) -> Workflow
             created_at=t.created_at, updated_at=t.updated_at,
         ) for t in items],
         total=len(items),
+    )
+
+
+@app.get("/api/v1/workflows/templates/{template_id}", response_model=WorkflowTemplateResponse)
+def get_workflow_template(
+    template_id: str,
+    session: Session = Depends(get_session),
+) -> WorkflowTemplateResponse:
+    tpl = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == template_id).first()
+    if tpl is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return WorkflowTemplateResponse(
+        id=tpl.id, name=tpl.name, description=tpl.description,
+        parameters=json.loads(tpl.parameters_schema),
+        steps=json.loads(tpl.steps_json),
+        is_active=tpl.is_active,
+        created_at=tpl.created_at, updated_at=tpl.updated_at,
     )
 
 
@@ -859,6 +893,54 @@ def create_workflow_template(
     )
 
 
+@app.patch("/api/v1/workflows/templates/{template_id}", response_model=WorkflowTemplateResponse)
+def update_workflow_template(
+    template_id: str,
+    tpl: WorkflowTemplateUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> WorkflowTemplateResponse:
+    existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == template_id).first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    now = datetime.now(UTC).replace(microsecond=0)
+    update_data = tpl.model_dump(exclude_unset=True)
+    if "name" in update_data:
+        existing.name = update_data["name"]
+    if "description" in update_data:
+        existing.description = update_data["description"]
+    if "parameters" in update_data:
+        existing.parameters_schema = json.dumps([p.model_dump() for p in update_data["parameters"]], ensure_ascii=False)
+    if "steps" in update_data:
+        existing.steps_json = json.dumps([s.model_dump() for s in update_data["steps"]], ensure_ascii=False)
+    if "is_active" in update_data:
+        existing.is_active = update_data["is_active"]
+    existing.updated_at = now
+    session.commit()
+    return WorkflowTemplateResponse(
+        id=existing.id, name=existing.name, description=existing.description,
+        parameters=json.loads(existing.parameters_schema),
+        steps=json.loads(existing.steps_json),
+        is_active=existing.is_active,
+        created_at=existing.created_at, updated_at=existing.updated_at,
+    )
+
+
+@app.delete("/api/v1/workflows/templates/{template_id}", status_code=204)
+def delete_workflow_template(
+    template_id: str,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == template_id).first()
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    existing.is_active = False
+    existing.updated_at = datetime.now(UTC).replace(microsecond=0)
+    session.commit()
+    return None
+
+
 @app.post("/api/v1/workflows/run")
 async def run_workflow_endpoint(
     req: WorkflowRunRequest,
@@ -884,19 +966,6 @@ async def run_workflow_endpoint(
         started_at=execution.started_at,
         completed_at=execution.completed_at,
     )
-
-
-def _safe_result_json(val: str | None) -> list[dict]:
-    """Parse result_json safely — always returns a list."""
-    if not val:
-        return []
-    try:
-        data = json.loads(val)
-        if isinstance(data, list):
-            return data
-        return []
-    except (json.JSONDecodeError, TypeError):
-        return []
 
 
 @app.get("/api/v1/workflows/executions", response_model=WorkflowExecutionListResponse)
@@ -928,22 +997,47 @@ def list_workflow_executions(
     )
 
 
-@app.get("/api/v1/workflows/executions/{execution_id}", response_model=WorkflowExecutionResponse)
-def get_workflow_execution(
+@app.get("/api/v1/workflows/executions/{execution_id}", response_model=WorkflowExecutionDetailResponse)
+def get_workflow_execution_detail(
     execution_id: int,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
-) -> WorkflowExecutionResponse:
+) -> WorkflowExecutionDetailResponse:
     execution = session.query(WorkflowExecution).filter(WorkflowExecution.id == execution_id).first()
     if execution is None:
         raise HTTPException(status_code=404, detail="Execution not found")
-    return WorkflowExecutionResponse(
-        id=execution.id, template_id=execution.template_id,
+
+    template = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == execution.template_id).first()
+    template_name = template.name if template else execution.template_id
+
+    steps = []
+    for sr in _safe_result_json(execution.result_json):
+        steps.append(ExecutionStepResult(
+            step=sr.get("step", ""),
+            status=sr.get("status", ""),
+            result=sr.get("result", {}),
+            error=sr.get("error"),
+            started_at=sr.get("started_at"),
+            completed_at=sr.get("completed_at"),
+        ))
+
+    duration = 0.0
+    if execution.started_at and execution.completed_at:
+        delta = execution.completed_at - execution.started_at
+        duration = delta.total_seconds()
+
+    return WorkflowExecutionDetailResponse(
+        id=execution.id,
+        template_id=execution.template_id,
+        template_name=template_name,
         parameters=json.loads(execution.parameters_json),
         status=execution.status,
-        result=_safe_result_json(execution.result_json),
-        error=execution.error, user=execution.user,
-        started_at=execution.started_at, completed_at=execution.completed_at,
+        steps=steps,
+        error=execution.error,
+        user=execution.user,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+        duration_seconds=duration,
     )
 
 

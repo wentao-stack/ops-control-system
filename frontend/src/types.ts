@@ -197,3 +197,26 @@ export type WorkflowExecution = {
   started_at: string
   completed_at: string | null
 }
+
+export type ExecutionStepResult = {
+  step: string
+  status: string  // completed | failed
+  result: Record<string, any>
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+export type WorkflowExecutionDetail = {
+  id: number
+  template_id: string
+  template_name: string
+  parameters: Record<string, any>
+  status: string
+  steps: ExecutionStepResult[]
+  error: string | null
+  user: string
+  started_at: string
+  completed_at: string | null
+  duration_seconds: number
+}
