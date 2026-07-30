@@ -18,6 +18,34 @@ const STATUS_BG: Record<string, string> = {
   pending: "#f1f5f9", running: "#dbeafe", completed: "#dcfce7", failed: "#fee2e2",
 }
 
+/* ── Note API definitions ──────────────────────────────────────────── */
+const NOTE_APIS = [
+  { method: "POST", path: "/api/v1/notes", label: "建立筆記", fields: [
+    { key: "title", label: "標題", required: true, type: "str" },
+    { key: "category", label: "分類", required: true, type: "str" },
+    { key: "content", label: "內容", required: false, type: "text" },
+    { key: "tags", label: "標籤", required: false, type: "str" },
+  ]},
+  { method: "GET", path: "/api/v1/notes", label: "列出筆記", fields: [
+    { key: "page", label: "頁碼", required: false, type: "int" },
+    { key: "page_size", label: "每頁數量", required: false, type: "int" },
+    { key: "category", label: "分類篩選", required: false, type: "str" },
+  ]},
+  { method: "GET", path: "/api/v1/notes/{id}", label: "查看筆記", fields: [
+    { key: "id", label: "筆記 ID", required: true, type: "str" },
+  ]},
+  { method: "PUT", path: "/api/v1/notes/{id}", label: "更新筆記", fields: [
+    { key: "id", label: "筆記 ID", required: true, type: "str" },
+    { key: "title", label: "標題", required: false, type: "str" },
+    { key: "category", label: "分類", required: false, type: "str" },
+    { key: "content", label: "內容", required: false, type: "text" },
+    { key: "tags", label: "標籤", required: false, type: "str" },
+  ]},
+  { method: "DELETE", path: "/api/v1/notes/{id}", label: "刪除筆記", fields: [
+    { key: "id", label: "筆記 ID", required: true, type: "str" },
+  ]},
+]
+
 /* ── Execution Detail Drawer ─────────────────────────────────────────── */
 function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }) {
   const [detail, setDetail] = useState<WorkflowExecutionDetail | null>(null)
@@ -157,6 +185,113 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
   )
 }
 
+/* ── Step Config Editor ─────────────────────────────────────────────── */
+function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s: WorkflowStep) => void }) {
+  const [stepType, setStepType] = useState(step.type)
+  const [shellCmd, setShellCmd] = useState((step.config as any)?.command || "")
+  const [shellHost, setShellHost] = useState((step.config as any)?.host || "")
+  const [noteApiIdx, setNoteApiIdx] = useState(() => {
+    const path = (step.config as any)?.path || ""
+    const found = NOTE_APIS.findIndex(a => a.path === path)
+    return found >= 0 ? found : 0
+  })
+  const [noteFields, setNoteFields] = useState<Record<string, string>>(() => {
+    const existing = (step.config as any)?.fields || {}
+    return existing
+  })
+
+  // When step type changes, reset config
+  const handleTypeChange = (newType: string) => {
+    setStepType(newType)
+    if (newType === "shell") {
+      onChange({ type: "shell", name: step.name, config: { command: shellCmd, host: shellHost } })
+    } else if (newType === "note_api") {
+      const apiDef = NOTE_APIS[0]
+      setNoteApiIdx(0)
+      setNoteFields({})
+      onChange({ type: "note_api", name: step.name, config: { method: apiDef.method, path: apiDef.path, fields: {} } })
+    }
+  }
+
+  // When note API selection changes
+  const handleNoteApiChange = (idx: number) => {
+    setNoteApiIdx(idx)
+    const apiDef = NOTE_APIS[idx]
+    const newFields: Record<string, string> = {}
+    apiDef.fields.forEach(f => { newFields[f.key] = noteFields[f.key] || "" })
+    setNoteFields(newFields)
+    onChange({ type: "note_api", name: step.name, config: { method: apiDef.method, path: apiDef.path, fields: newFields } })
+  }
+
+  const handleNoteFieldChange = (key: string, val: string) => {
+    const nf = { ...noteFields, [key]: val }
+    setNoteFields(nf)
+    const apiDef = NOTE_APIS[noteApiIdx]
+    onChange({ type: "note_api", name: step.name, config: { method: apiDef.method, path: apiDef.path, fields: nf } })
+  }
+
+  return (
+    <div className="wf-step-config">
+      <div className="wf-step-type-row">
+        <span className="wf-step-type-label">類型</span>
+        <select className="wf-field-input wf-field-sm" value={stepType} onChange={e => handleTypeChange(e.target.value)}>
+          <option value="shell">🐚 Shell 指令</option>
+          <option value="note_api">📝 Note API</option>
+        </select>
+      </div>
+
+      {stepType === "shell" && (
+        <div className="wf-step-fields">
+          <div className="wf-field">
+            <label>主機</label>
+            <input className="wf-field-input" placeholder="例如: 163.44.124.142" value={shellHost} onChange={e => {
+              setShellHost(e.target.value)
+              onChange({ type: "shell", name: step.name, config: { command: shellCmd, host: e.target.value } })
+            }} />
+          </div>
+          <div className="wf-field">
+            <label>指令 <span className="wf-req">*</span></label>
+            <textarea className="wf-field-input wf-code" rows={3} placeholder="例如: systemctl restart nginx" value={shellCmd} onChange={e => {
+              setShellCmd(e.target.value)
+              onChange({ type: "shell", name: step.name, config: { command: e.target.value, host: shellHost } })
+            }} />
+          </div>
+        </div>
+      )}
+
+      {stepType === "note_api" && (
+        <div className="wf-step-fields">
+          <div className="wf-field">
+            <label>API 類型 <span className="wf-req">*</span></label>
+            <select className="wf-field-input" value={noteApiIdx} onChange={e => handleNoteApiChange(parseInt(e.target.value))}>
+              {NOTE_APIS.map((a, i) => (
+                <option key={i} value={i}>{a.method} {a.path} — {a.label}</option>
+              ))}
+            </select>
+            <span className="wf-api-hint">
+              <span className="wf-method-chip" style={{ background: NOTE_APIS[noteApiIdx]?.method === "POST" ? "#dcfce7" : NOTE_APIS[noteApiIdx]?.method === "DELETE" ? "#fee2e2" : "#dbeafe" }}>
+                {NOTE_APIS[noteApiIdx]?.method}
+              </span>
+              <code>{NOTE_APIS[noteApiIdx]?.path}</code>
+            </span>
+          </div>
+
+          {NOTE_APIS[noteApiIdx]?.fields.map(f => (
+            <div className="wf-field" key={f.key}>
+              <label>{f.label} {f.required && <span className="wf-req">*</span>}</label>
+              {f.type === "text" ? (
+                <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${f.label}`} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
+              ) : (
+                <input className="wf-field-input" placeholder={`輸入 ${f.label}`} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Edit Modal ─────────────────────────────────────────────────────── */
 function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (data: any) => void; onClose: () => void }) {
   const [name, setName] = useState(tpl.name)
@@ -168,7 +303,7 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
   const removeParam = (i: number) => setParams(params.filter((_, j) => j !== i))
   const updateParam = (i: number, p: WorkflowParameter) => { const n = [...params]; n[i] = p; setParams(n) }
 
-  const addStep = () => setSteps([...steps, { type: "llm", name: "", config: {} }])
+  const addStep = () => setSteps([...steps, { type: "shell", name: "", config: {} }])
   const removeStep = (i: number) => setSteps(steps.filter((_, j) => j !== i))
   const updateStep = (i: number, s: WorkflowStep) => { const n = [...steps]; n[i] = s; setSteps(n) }
 
@@ -181,27 +316,33 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
     <div className="wf-modal-overlay" onClick={onClose}>
       <div className="wf-modal wf-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="wf-modal-header">
-          <h3>✏️ 編輯: {tpl.name}</h3>
+          <h3>✏️ 編輯流程</h3>
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="wf-modal-body wf-scroll-body">
-          <div className="wf-field">
-            <label>名稱</label>
-            <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} />
-          </div>
-          <div className="wf-field">
-            <label>描述</label>
-            <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} />
+          {/* Basic Info */}
+          <div className="wf-edit-block">
+            <h4>基本資訊</h4>
+            <div className="wf-field">
+              <label>名稱 <span className="wf-req">*</span></label>
+              <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div className="wf-field">
+              <label>描述</label>
+              <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} />
+            </div>
           </div>
 
-          <div className="wf-edit-section">
+          {/* Parameters */}
+          <div className="wf-edit-block">
             <div className="wf-edit-section-header">
-              <h4>參數 ({params.length})</h4>
+              <h4>輸入參數 ({params.length})</h4>
               <button className="btn btn-sm" onClick={addParam}>+ 新增</button>
             </div>
+            {params.length === 0 && <p className="wf-hint">沒有參數，執行時不需要輸入</p>}
             {params.map((p, i) => (
               <div className="wf-edit-row" key={i}>
-                <input className="wf-field-input wf-field-sm" placeholder="名稱" value={p.name} onChange={e => updateParam(i, { ...p, name: e.target.value })} />
+                <input className="wf-field-input wf-field-sm" placeholder="參數名稱" value={p.name} onChange={e => updateParam(i, { ...p, name: e.target.value })} />
                 <select className="wf-field-input wf-field-sm" value={p.type} onChange={e => updateParam(i, { ...p, type: e.target.value })}>
                   <option value="str">str</option><option value="int">int</option><option value="number">number</option><option value="bool">bool</option><option value="list">list</option>
                 </select>
@@ -212,24 +353,21 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
             ))}
           </div>
 
-          <div className="wf-edit-section">
+          {/* Steps */}
+          <div className="wf-edit-block">
             <div className="wf-edit-section-header">
-              <h4>步驟 ({steps.length})</h4>
-              <button className="btn btn-sm" onClick={addStep}>+ 新增</button>
+              <h4>執行步驟 ({steps.length})</h4>
+              <button className="btn btn-sm" onClick={addStep}>+ 新增步驟</button>
             </div>
+            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增</p>}
             {steps.map((s, i) => (
               <div className="wf-edit-step" key={i}>
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
-                  <select className="wf-field-input wf-field-sm" value={s.type} onChange={e => updateStep(i, { ...s, type: e.target.value })}>
-                    <option value="llm">🤖 LLM 生成</option>
-                    <option value="api">🌐 API 呼叫</option>
-                    <option value="note_create">📝 建立筆記</option>
-                  </select>
-                  <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} />
+                  <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
-                <textarea className="wf-field-input wf-code" rows={3} placeholder="config JSON" value={JSON.stringify(s.config, null, 2)} onChange={e => { try { updateStep(i, { ...s, config: JSON.parse(e.target.value) }) } catch {} }} />
+                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
               </div>
             ))}
           </div>
@@ -271,29 +409,26 @@ function ExecItem({ exec, tplName, onClick }: { exec: WorkflowExecution; tplName
   )
 }
 
-/* ── Template Card ──────────────────────────────────────────────────── */
-function TplCard({ tpl, onRun, onEdit }: { tpl: WorkflowTemplate; onRun: (t: WorkflowTemplate) => void; onEdit: (t: WorkflowTemplate) => void }) {
+/* ── Template Row ───────────────────────────────────────────────────── */
+function TplRow({ tpl, onRun, onEdit }: { tpl: WorkflowTemplate; onRun: (t: WorkflowTemplate) => void; onEdit: (t: WorkflowTemplate) => void }) {
   return (
-    <div className="wf-tpl-card">
-      <div className="wf-tpl-card-top">
-        <div className="wf-tpl-card-icon">⚡</div>
-        <div className="wf-tpl-card-info">
-          <h3>{tpl.name}</h3>
-          <p>{tpl.description}</p>
-        </div>
+    <div className="wf-tpl-row">
+      <div className="wf-tpl-row-icon">⚡</div>
+      <div className="wf-tpl-row-info">
+        <div className="wf-tpl-row-name">{tpl.name}</div>
+        <div className="wf-tpl-row-desc">{tpl.description}</div>
       </div>
-      <div className="wf-tpl-card-steps">
+      <div className="wf-tpl-row-steps">
         {tpl.steps.map((s, i) => (
-          <div key={i} className="wf-flow-step">
-            <span className="wf-flow-step-num">{i + 1}</span>
-            <span className="wf-flow-step-name">{s.name}</span>
-            <span className="wf-flow-step-type">{s.type}</span>
-          </div>
+          <span key={i} className="wf-step-chip">
+            <span className="wf-step-chip-num">{i + 1}</span>
+            {s.name}
+          </span>
         ))}
       </div>
-      <div className="wf-tpl-card-actions">
-        <button className="btn btn-primary wf-run-card-btn" onClick={() => onRun(tpl)}>▶ 執行</button>
-        <button className="btn" onClick={() => onEdit(tpl)}>✏️ 編輯</button>
+      <div className="wf-tpl-row-actions">
+        <button className="btn btn-primary btn-sm" onClick={() => onRun(tpl)}>▶ 執行</button>
+        <button className="btn btn-sm" onClick={() => onEdit(tpl)}>✏️ 編輯</button>
       </div>
     </div>
   )
@@ -355,7 +490,7 @@ export default function WorkflowPage() {
         </div>
       </div>
 
-      {/* Template Cards */}
+      {/* Template List */}
       <div className="wf-section">
         <div className="wf-section-header">
           <h2 className="wf-section-title">流程模板</h2>
@@ -366,9 +501,9 @@ export default function WorkflowPage() {
         ) : templates.length === 0 ? (
           <div className="wf-empty-state">暫無流程模板</div>
         ) : (
-          <div className="wf-tpl-grid">
+          <div className="wf-tpl-list">
             {templates.map(t => (
-              <TplCard key={t.id} tpl={t} onRun={setRunTpl} onEdit={setEditTpl} />
+              <TplRow key={t.id} tpl={t} onRun={setRunTpl} onEdit={setEditTpl} />
             ))}
           </div>
         )}
