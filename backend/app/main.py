@@ -911,9 +911,9 @@ def update_workflow_template(
     if "description" in update_data:
         existing.description = update_data["description"]
     if "parameters" in update_data:
-        existing.parameters_schema = json.dumps([p.model_dump() for p in update_data["parameters"]], ensure_ascii=False)
+        existing.parameters_schema = json.dumps(update_data["parameters"], ensure_ascii=False)
     if "steps" in update_data:
-        existing.steps_json = json.dumps([s.model_dump() for s in update_data["steps"]], ensure_ascii=False)
+        existing.steps_json = json.dumps(update_data["steps"], ensure_ascii=False)
     if "is_active" in update_data:
         existing.is_active = update_data["is_active"]
     existing.updated_at = now
