@@ -81,15 +81,33 @@ async def _run_api_step(config: dict, context: dict) -> dict:
 
 
 async def _run_shell_step(config: dict, context: dict) -> dict:
-    """Shell step: execute a command on a remote host via SSH."""
-    from .remote import ssh_exec
-
+    """Shell step: execute a command locally if no host, or via SSH if host specified."""
     command = config.get("command", "")
     host = config.get("host", "")
+
     if not command:
-        return {"error": "No command specified"}
+        return {"status": "skipped", "message": "No command specified, step skipped"}
+
     if not host:
-        return {"error": "No host specified"}
+        # Execute locally
+        import subprocess
+        try:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=60
+            )
+            return {
+                "status": "completed",
+                "exit_code": result.returncode,
+                "stdout": result.stdout[:2000],
+                "stderr": result.stderr[:2000],
+            }
+        except subprocess.TimeoutExpired:
+            return {"error": "Command timed out (60s)"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    # Remote SSH execution
+    from .remote import ssh_exec
 
     # Parse host:port
     port = 22
@@ -148,14 +166,18 @@ async def _run_note_api_step(config: dict, context: dict) -> dict:
     url = f"{base_url}{final_path}"
 
     async with _httpx.AsyncClient(timeout=30) as client:
+        headers = {}
+        token = context.get("_auth_token")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         if method == "GET":
-            resp = await client.get(url)
+            resp = await client.get(url, headers=headers)
         elif method == "POST":
-            resp = await client.post(url, json=body)
+            resp = await client.post(url, json=body, headers=headers)
         elif method == "PUT":
-            resp = await client.put(url, json=body)
+            resp = await client.put(url, json=body, headers=headers)
         elif method == "DELETE":
-            resp = await client.delete(url)
+            resp = await client.delete(url, headers=headers)
         else:
             return {"error": f"Unsupported method: {method}"}
 
@@ -223,6 +245,7 @@ async def run_workflow(
     parameters: dict,
     user: str,
     session: Session,
+    auth_token: str | None = None,
 ) -> WorkflowExecution:
     """Execute a workflow template with given parameters."""
     # Parse template
@@ -253,6 +276,8 @@ async def run_workflow(
 
     # Execute steps sequentially
     context = dict(parameters)
+    if auth_token:
+        context["_auth_token"] = auth_token
     step_results: list[dict] = []
 
     try:

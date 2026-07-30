@@ -955,7 +955,8 @@ async def run_workflow_endpoint(
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found or inactive")
 
-    execution = await run_workflow(template, req.parameters, user.username, session)
+    token = create_access_token(data={"sub": user.username})
+    execution = await run_workflow(template, req.parameters, user.username, session, auth_token=token)
     return WorkflowExecutionResponse(
         id=execution.id,
         template_id=execution.template_id,
