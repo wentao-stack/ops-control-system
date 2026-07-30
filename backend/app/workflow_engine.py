@@ -84,10 +84,11 @@ async def _run_note_create_step(config: dict, context: dict) -> dict:
     """Note create step: create a note directly via DB (no HTTP loopback)."""
     from uuid import uuid4
 
-    title = context.get("note_title", "工作流生成文檔")
-    content = context.get("note_content", "")
-    category = context.get("note_category", "知識")
-    tags = context.get("note_tags", [])
+    # Priority: explicit note_* fields > topic/summary > defaults
+    title = context.get("note_title", context.get("topic", "工作流生成文檔"))
+    content = context.get("note_content", context.get("summary", ""))
+    category = context.get("note_category", context.get("category", "知識"))
+    tags = context.get("note_tags", context.get("tags", []))
     pinned = context.get("note_pinned", False)
 
     # Import here to avoid circular import
