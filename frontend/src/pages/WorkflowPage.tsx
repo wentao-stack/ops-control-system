@@ -357,15 +357,18 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
               <h4>執行步驟 ({steps.length})</h4>
               <button className="btn btn-sm" onClick={addStep}>+ 新增步驟</button>
             </div>
-            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增</p>}
+            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增。步驟詳細配置在建立後可以編輯。</p>}
             {steps.map((s, i) => (
               <div className="wf-edit-step" key={i}>
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
                   <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
+                  <select className="wf-field-input wf-field-sm" value={s.type} onChange={e => updateStep(i, { ...s, type: e.target.value, config: {} })}>
+                    <option value="shell">Shell</option>
+                    <option value="note_api">Note API</option>
+                  </select>
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
-                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
               </div>
             ))}
           </div>
@@ -452,9 +455,12 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
                   <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
+                  <select className="wf-field-input wf-field-sm" value={s.type} onChange={e => updateStep(i, { ...s, type: e.target.value, config: {} })}>
+                    <option value="shell">Shell</option>
+                    <option value="note_api">Note API</option>
+                  </select>
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
-                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
               </div>
             ))}
           </div>

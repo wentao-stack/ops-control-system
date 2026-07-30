@@ -22,7 +22,7 @@ class WorkflowStep(BaseModel):
 
 
 class WorkflowTemplateCreate(BaseModel):
-    id: str = Field(max_length=64)
+    id: str | None = None
     name: str = Field(max_length=120)
     description: str = ""
     parameters: list[WorkflowParameter] = []

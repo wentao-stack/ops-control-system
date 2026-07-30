@@ -874,12 +874,13 @@ def create_workflow_template(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> WorkflowTemplateResponse:
+    tpl_id = tpl.id or f"wf-{uuid4().hex[:12]}"
     now = datetime.now(UTC).replace(microsecond=0)
-    existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == tpl.id).first()
+    existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == tpl_id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Template already exists")
     session.add(WorkflowTemplate(
-        id=tpl.id, name=tpl.name, description=tpl.description,
+        id=tpl_id, name=tpl.name, description=tpl.description,
         parameters_schema=json.dumps([p.model_dump() for p in tpl.parameters], ensure_ascii=False),
         steps_json=json.dumps([s.model_dump() for s in tpl.steps], ensure_ascii=False),
         is_active=tpl.is_active,
