@@ -193,7 +193,7 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
         <div className="wf-modal-body">
           {dynParams.length > 0 ? dynParams.map(p => (
             <div className="wf-field" key={p.key}>
-              <label>{p.label} {p.required && <span className="wf-req">*</span>}</label>
+              <label>{p.label}</label>
               {p.type === "text" ? (
                 <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               ) : (
@@ -217,7 +217,6 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
 function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s: WorkflowStep) => void }) {
   const [stepType, setStepType] = useState(step.type)
   const [shellCmd, setShellCmd] = useState((step.config as any)?.command || "")
-  const [shellHost, setShellHost] = useState((step.config as any)?.host || "")
   const [noteApiIdx, setNoteApiIdx] = useState(() => {
     const path = (step.config as any)?.path || ""
     const found = NOTE_APIS.findIndex(a => a.path === path)
@@ -232,7 +231,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
   const handleTypeChange = (newType: string) => {
     setStepType(newType)
     if (newType === "shell") {
-      onChange({ type: "shell", name: step.name, config: { command: shellCmd, host: shellHost } })
+      onChange({ type: "shell", name: step.name, config: { command: shellCmd } })
     } else if (newType === "note_api") {
       const apiDef = NOTE_APIS[0]
       setNoteApiIdx(0)
@@ -271,17 +270,10 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
       {stepType === "shell" && (
         <div className="wf-step-fields">
           <div className="wf-field">
-            <label>主機</label>
-            <input className="wf-field-input" placeholder="例如: 163.44.124.142" value={shellHost} onChange={e => {
-              setShellHost(e.target.value)
-              onChange({ type: "shell", name: step.name, config: { command: shellCmd, host: e.target.value } })
-            }} />
-          </div>
-          <div className="wf-field">
-            <label>指令 <span className="wf-req">*</span></label>
+            <label>指令</label>
             <textarea className="wf-field-input wf-code" rows={3} placeholder="例如: systemctl restart nginx" value={shellCmd} onChange={e => {
               setShellCmd(e.target.value)
-              onChange({ type: "shell", name: step.name, config: { command: e.target.value, host: shellHost } })
+              onChange({ type: "shell", name: step.name, config: { command: e.target.value } })
             }} />
           </div>
         </div>
@@ -290,7 +282,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
       {stepType === "note_api" && (
         <div className="wf-step-fields">
           <div className="wf-field">
-            <label>API 類型 <span className="wf-req">*</span></label>
+            <label>API 類型</label>
             <select className="wf-field-input" value={noteApiIdx} onChange={e => handleNoteApiChange(parseInt(e.target.value))}>
               {NOTE_APIS.map((a, i) => (
                 <option key={i} value={i}>{a.method} {a.path} — {a.label}</option>
@@ -306,7 +298,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
 
           {NOTE_APIS[noteApiIdx]?.fields.map(f => (
             <div className="wf-field" key={f.key}>
-              <label>{f.label} {f.required && <span className="wf-req">*</span>}</label>
+              <label>{f.label}</label>
               {f.type === "text" ? (
                 <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${f.label}`} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
               ) : (
