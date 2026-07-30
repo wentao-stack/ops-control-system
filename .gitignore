@@ -10,3 +10,9 @@ frontend/dist/
 *.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+# Supervisor runtime files
+supervisor/supervisord.pid
+supervisor/supervisor.sock
+supervisor/supervisord.log
+supervisor/log/
