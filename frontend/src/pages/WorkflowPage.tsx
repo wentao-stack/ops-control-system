@@ -250,7 +250,7 @@ export default function WorkflowPage() {
       fetchExecutions()
     } catch (e) {
       console.error("Failed to run workflow:", e)
-      alert("工作流執行失敗: " + (e as Error).message)
+      alert("流程執行失敗: " + (e as Error).message)
     } finally {
       setRunning(false)
     }
@@ -263,8 +263,8 @@ export default function WorkflowPage() {
   return (
     <div className="page workflow-page">
       <div className="workflow-header">
-        <h1 className="page-title">工作流</h1>
-        <p className="page-subtitle">定義、執行和管理自動化工作流</p>
+        <h1 className="page-title">流程</h1>
+        <p className="page-subtitle">定義、執行和管理自動化流程</p>
       </div>
 
       <div className="workflow-tabs">
@@ -287,7 +287,7 @@ export default function WorkflowPage() {
           {loading ? (
             <div className="wf-loading">載入中...</div>
           ) : templates.length === 0 ? (
-            <div className="wf-empty">暫無工作流模板</div>
+            <div className="wf-empty">暫無流程模板</div>
           ) : (
             <div className="wf-template-grid">
               {templates.map((tpl) => (
