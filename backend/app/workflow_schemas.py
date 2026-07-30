@@ -58,7 +58,7 @@ class WorkflowExecutionResponse(BaseModel):
     template_id: str
     parameters: dict = {}
     status: str
-    result: dict = {}
+    result: list[dict] = []
     error: str | None = None
     user: str
     started_at: datetime

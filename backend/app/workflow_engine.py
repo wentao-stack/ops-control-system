@@ -81,8 +81,8 @@ async def _run_api_step(config: dict, context: dict) -> dict:
 
 
 async def _run_note_create_step(config: dict, context: dict) -> dict:
-    """Note create step: create a note via internal API call."""
-    from .auth import create_access_token
+    """Note create step: create a note directly via DB (no HTTP loopback)."""
+    from uuid import uuid4
 
     title = context.get("note_title", "工作流生成文檔")
     content = context.get("note_content", "")
@@ -90,33 +90,35 @@ async def _run_note_create_step(config: dict, context: dict) -> dict:
     tags = context.get("note_tags", [])
     pinned = context.get("note_pinned", False)
 
-    # Use internal API
-    from .main import app
-    from .database import SessionLocal
+    # Import here to avoid circular import
     from .models import Note
-    from uuid import uuid4
+    import json as _json
 
-    token = create_access_token({"sub": "system"})
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # Create note directly in DB
+    from .database import SessionLocal
+    note_id = title[:32].replace(" ", "-") + str(uuid4())[:8]
+    now = datetime.now(UTC).replace(microsecond=0)
 
-    note_data = {
-        "title": title,
-        "category": category,
-        "content": content,
-        "tags": tags,
-        "pinned": pinned,
-        "published": True,
+    with SessionLocal() as session:
+        note = Note(
+            id=note_id,
+            title=title,
+            category=category,
+            content=content,
+            tags=_json.dumps(tags, ensure_ascii=False),
+            author="system",
+            pinned=pinned,
+            published=True,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(note)
+        session.commit()
+
+    return {
+        "note_id": note_id,
+        "note_url": f"/notes/{note_id}",
     }
-
-    async with httpx.AsyncClient(timeout=30) as client:
-        base_url = "http://127.0.0.1:18080"
-        resp = await client.post(f"{base_url}/api/v1/notes", json=note_data, headers=headers)
-        resp.raise_for_status()
-        result = resp.json()
-        return {
-            "note_id": result.get("id", ""),
-            "note_url": f"/notes/{result.get('id', '')}",
-        }
 
 
 # ── Engine ─────────────────────────────────────────────────────────────────
