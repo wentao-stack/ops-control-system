@@ -878,12 +878,25 @@ async def run_workflow_endpoint(
         template_id=execution.template_id,
         parameters=json.loads(execution.parameters_json),
         status=execution.status,
-        result=json.loads(execution.result_json) if execution.result_json else [],
+        result=_safe_result_json(execution.result_json),
         error=execution.error,
         user=execution.user,
         started_at=execution.started_at,
         completed_at=execution.completed_at,
     )
+
+
+def _safe_result_json(val: str | None) -> list[dict]:
+    """Parse result_json safely — always returns a list."""
+    if not val:
+        return []
+    try:
+        data = json.loads(val)
+        if isinstance(data, list):
+            return data
+        return []
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 @app.get("/api/v1/workflows/executions", response_model=WorkflowExecutionListResponse)
@@ -907,7 +920,7 @@ def list_workflow_executions(
             id=e.id, template_id=e.template_id,
             parameters=json.loads(e.parameters_json),
             status=e.status,
-            result=json.loads(e.result_json) if e.result_json else [],
+            result=_safe_result_json(e.result_json),
             error=e.error, user=e.user,
             started_at=e.started_at, completed_at=e.completed_at,
         ) for e in items],
@@ -928,7 +941,7 @@ def get_workflow_execution(
         id=execution.id, template_id=execution.template_id,
         parameters=json.loads(execution.parameters_json),
         status=execution.status,
-        result=json.loads(execution.result_json) if execution.result_json else {},
+        result=_safe_result_json(execution.result_json),
         error=execution.error, user=execution.user,
         started_at=execution.started_at, completed_at=execution.completed_at,
     )
