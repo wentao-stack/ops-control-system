@@ -49,6 +49,7 @@ const NOTE_APIS = [
 /* ── Execution Detail Drawer ─────────────────────────────────────────── */
 function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }) {
   const [detail, setDetail] = useState<WorkflowExecutionDetail | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     api<WorkflowExecutionDetail>(`/api/v1/workflows/executions/${execId}`)
@@ -406,8 +407,69 @@ function ExecItem({ exec, tplName, onClick }: { exec: WorkflowExecution; tplName
   )
 }
 
+/* ── Create Modal ───────────────────────────────────────────────────── */
+function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose: () => void }) {
+  const [name, setName] = useState("")
+  const [desc, setDesc] = useState("")
+  const [steps, setSteps] = useState<WorkflowStep[]>([])
+
+  const addStep = () => setSteps([...steps, { type: "shell", name: "", config: {} }])
+  const removeStep = (i: number) => setSteps(steps.filter((_, j) => j !== i))
+  const updateStep = (i: number, s: WorkflowStep) => { const n = [...steps]; n[i] = s; setSteps(n) }
+
+  const save = () => {
+    if (!name) return alert("請填寫名稱")
+    onSave({ name, description: desc, parameters: [], steps })
+  }
+
+  return (
+    <div className="wf-modal-overlay" onClick={onClose}>
+      <div className="wf-modal wf-modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="wf-modal-header">
+          <h3>+ 新增流程</h3>
+          <button className="wf-icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="wf-modal-body wf-scroll-body">
+          <div className="wf-edit-block">
+            <h4>基本資訊</h4>
+            <div className="wf-field">
+              <label>名稱 <span className="wf-req">*</span></label>
+              <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} placeholder="例如: 部署更新" />
+            </div>
+            <div className="wf-field">
+              <label>描述</label>
+              <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} placeholder="簡述流程用途" />
+            </div>
+          </div>
+          <div className="wf-edit-block">
+            <div className="wf-edit-section-header">
+              <h4>執行步驟 ({steps.length})</h4>
+              <button className="btn btn-sm" onClick={addStep}>+ 新增步驟</button>
+            </div>
+            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增</p>}
+            {steps.map((s, i) => (
+              <div className="wf-edit-step" key={i}>
+                <div className="wf-edit-step-header">
+                  <span className="wf-step-num">#{i + 1}</span>
+                  <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
+                  <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
+                </div>
+                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="wf-modal-footer">
+          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={save}>💾 建立</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Template Row ───────────────────────────────────────────────────── */
-function TplRow({ tpl, onRun, onEdit }: { tpl: WorkflowTemplate; onRun: (t: WorkflowTemplate) => void; onEdit: (t: WorkflowTemplate) => void }) {
+function TplRow({ tpl, onRun, onEdit, onDelete }: { tpl: WorkflowTemplate; onRun: (t: WorkflowTemplate) => void; onEdit: (t: WorkflowTemplate) => void; onDelete: (id: string) => void }) {
   return (
     <div className="wf-tpl-row">
       <div className="wf-tpl-row-icon">⚡</div>
@@ -426,6 +488,7 @@ function TplRow({ tpl, onRun, onEdit }: { tpl: WorkflowTemplate; onRun: (t: Work
       <div className="wf-tpl-row-actions">
         <button className="btn btn-primary btn-sm" onClick={() => onRun(tpl)}>▶ 執行</button>
         <button className="btn btn-sm" onClick={() => onEdit(tpl)}>✏️ 編輯</button>
+        <button className="btn btn-sm btn-danger" onClick={() => onDelete(tpl.id)}>🗑 刪除</button>
       </div>
     </div>
   )
@@ -438,6 +501,7 @@ export default function WorkflowPage() {
   const [runTpl, setRunTpl] = useState<WorkflowTemplate | null>(null)
   const [editTpl, setEditTpl] = useState<WorkflowTemplate | null>(null)
   const [viewExec, setViewExec] = useState<number | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const fetchAll = useCallback(async () => {
@@ -453,6 +517,25 @@ export default function WorkflowPage() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  const handleCreate = async (data: any) => {
+    try {
+      await api("/api/v1/workflows/templates", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      setShowCreate(false)
+      fetchAll()
+    } catch (e) { alert("建立失敗: " + (e as Error).message) }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("確定刪除此流程？")) return
+    try {
+      await api(`/api/v1/workflows/templates/${id}`, { method: "DELETE" })
+      fetchAll()
+    } catch (e) { alert("刪除失敗: " + (e as Error).message) }
+  }
 
   const handleRun = async (params: Record<string, any>) => {
     if (!runTpl) return
@@ -485,7 +568,13 @@ export default function WorkflowPage() {
           <h1 className="wf-page-title">流程</h1>
           <p className="wf-page-subtitle">自動化流程管理</p>
         </div>
+        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ 新增流程</button>
       </div>
+
+      {/* Create Modal */}
+      {showCreate && (
+        <CreateModal onSave={handleCreate} onClose={() => setShowCreate(false)} />
+      )}
 
       {/* Template List */}
       <div className="wf-section">
@@ -500,7 +589,7 @@ export default function WorkflowPage() {
         ) : (
           <div className="wf-tpl-list">
             {templates.map(t => (
-              <TplRow key={t.id} tpl={t} onRun={setRunTpl} onEdit={setEditTpl} />
+              <TplRow key={t.id} tpl={t} onRun={setRunTpl} onEdit={setEditTpl} onDelete={handleDelete} />
             ))}
           </div>
         )}
