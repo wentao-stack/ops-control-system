@@ -44,6 +44,9 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
     }
     throw new Error(`Request failed: ${response.status}`)
   }
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return null as T
+  }
   return response.json()
 }
 
