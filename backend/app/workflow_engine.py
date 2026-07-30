@@ -80,6 +80,91 @@ async def _run_api_step(config: dict, context: dict) -> dict:
         return {"status": resp.status_code, "data": resp.json()}
 
 
+async def _run_shell_step(config: dict, context: dict) -> dict:
+    """Shell step: execute a command on a remote host via SSH."""
+    from .remote import ssh_exec
+
+    command = config.get("command", "")
+    host = config.get("host", "")
+    if not command:
+        return {"error": "No command specified"}
+    if not host:
+        return {"error": "No host specified"}
+
+    # Parse host:port
+    port = 22
+    if ":" in host:
+        h, p = host.rsplit(":", 1)
+        host = h
+        try:
+            port = int(p)
+        except ValueError:
+            port = 22
+
+    # Look up SSH user from assets
+    from .database import SessionLocal
+    from .models import Asset
+    user = "root"
+    with SessionLocal() as session:
+        asset = session.query(Asset).filter(Asset.ssh_host == host).first()
+        if asset and asset.ssh_user:
+            user = asset.ssh_user
+
+    result = ssh_exec(host, port, user, command, timeout=60)
+    return result
+
+
+async def _run_note_api_step(config: dict, context: dict) -> dict:
+    """Note API step: call the Notes API via HTTP."""
+    method = config.get("method", "GET").upper()
+    path = config.get("path", "")
+    fields = config.get("fields", {})
+
+    if not path:
+        return {"error": "No path specified"}
+
+    # Merge fields with context: context values override config defaults
+    merged_fields: dict[str, any] = {}
+    for key, val in fields.items():
+        if key in context and context[key] not in ("", None):
+            merged_fields[key] = context[key]
+        elif val not in ("", None):
+            merged_fields[key] = val
+        else:
+            merged_fields[key] = val
+
+    # Replace path params like {id} with field values
+    final_path = path
+    for key, val in merged_fields.items():
+        final_path = final_path.replace("{" + key + "}", str(val))
+
+    # Build request body for POST/PUT
+    body_keys = {"title", "content", "category", "tags"}
+    body = {k: v for k, v in merged_fields.items() if k in body_keys and v not in ("", None)}
+
+    import httpx as _httpx
+
+    base_url = os.getenv("OPS_API_BASE_URL", "http://127.0.0.1:18080")
+    url = f"{base_url}{final_path}"
+
+    async with _httpx.AsyncClient(timeout=30) as client:
+        if method == "GET":
+            resp = await client.get(url)
+        elif method == "POST":
+            resp = await client.post(url, json=body)
+        elif method == "PUT":
+            resp = await client.put(url, json=body)
+        elif method == "DELETE":
+            resp = await client.delete(url)
+        else:
+            return {"error": f"Unsupported method: {method}"}
+
+    return {
+        "status": resp.status_code,
+        "data": resp.json() if resp.status_code != 204 else None,
+    }
+
+
 async def _run_note_create_step(config: dict, context: dict) -> dict:
     """Note create step: create a note directly via DB (no HTTP loopback)."""
     from uuid import uuid4
@@ -128,6 +213,8 @@ STEP_EXECUTORS = {
     "llm": _run_llm_step,
     "api": _run_api_step,
     "note_create": _run_note_create_step,
+    "shell": _run_shell_step,
+    "note_api": _run_note_api_step,
 }
 
 

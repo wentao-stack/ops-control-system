@@ -860,7 +860,7 @@ def get_workflow_template(
     if tpl is None:
         raise HTTPException(status_code=404, detail="Template not found")
     return WorkflowTemplateResponse(
-        id=tpl_id, name=tpl.name, description=tpl.description,
+        id=tpl.id, name=tpl.name, description=tpl.description,
         parameters=json.loads(tpl.parameters_schema),
         steps=json.loads(tpl.steps_json),
         is_active=tpl.is_active,

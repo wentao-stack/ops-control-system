@@ -142,7 +142,7 @@ function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }
 /* ── Extract dynamic params from step configs ───────────────────────── */
 function extractDynParams(steps: WorkflowStep[]) {
   const seen = new Set<string>()
-  const params: Array<{ key: string; label: string; required: boolean; type: string }> = []
+  const params: Array<{ key: string; label: string; required: boolean; type: string; default: string }> = []
   for (const step of steps) {
     const cfg = step.config as any
     if (step.type === "note_api" && cfg.fields) {
@@ -151,7 +151,7 @@ function extractDynParams(steps: WorkflowStep[]) {
         for (const f of apiDef.fields) {
           if (!seen.has(f.key)) {
             seen.add(f.key)
-            params.push({ key: f.key, label: f.label, required: f.required, type: f.type })
+            params.push({ key: f.key, label: f.label, required: f.required, type: f.type, default: cfg.fields[f.key] || "" })
           }
         }
       }
@@ -163,7 +163,13 @@ function extractDynParams(steps: WorkflowStep[]) {
 /* ── Run Modal ──────────────────────────────────────────────────────── */
 function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: Record<string, any>) => void; onClose: () => void }) {
   const dynParams = extractDynParams(tpl.steps)
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    for (const p of dynParams) {
+      init[p.key] = p.default || ""
+    }
+    return init
+  })
   const [running, setRunning] = useState(false)
 
   const submit = async () => {
@@ -363,12 +369,9 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
                   <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
-                  <select className="wf-field-input wf-field-sm" value={s.type} onChange={e => updateStep(i, { ...s, type: e.target.value, config: {} })}>
-                    <option value="shell">Shell</option>
-                    <option value="note_api">Note API</option>
-                  </select>
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
+                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
               </div>
             ))}
           </div>
@@ -455,12 +458,9 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
                   <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
-                  <select className="wf-field-input wf-field-sm" value={s.type} onChange={e => updateStep(i, { ...s, type: e.target.value, config: {} })}>
-                    <option value="shell">Shell</option>
-                    <option value="note_api">Note API</option>
-                  </select>
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
+                <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
               </div>
             ))}
           </div>
