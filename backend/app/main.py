@@ -40,7 +40,19 @@ from .schemas import (
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
 from . import webssh
+from .workflow_engine import run_workflow
+from .workflow_models import WorkflowTemplate, WorkflowExecution
+from .workflow_schemas import (
+    WorkflowRunRequest,
+    WorkflowTemplateCreate,
+    WorkflowTemplateResponse,
+    WorkflowTemplateListResponse,
+    WorkflowExecutionResponse,
+    WorkflowExecutionListResponse,
+)
+from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 
+import json
 import logging
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -802,6 +814,123 @@ async def list_exec_log(
         page=page,
         page_size=page_size,
         generated_at=datetime.now(UTC).replace(microsecond=0),
+    )
+
+
+# ── Workflow endpoints ──────────────────────────────────────────────────────
+
+@app.get("/api/v1/workflows/templates", response_model=WorkflowTemplateListResponse)
+def list_workflow_templates(session: Session = Depends(get_session)) -> WorkflowTemplateListResponse:
+    items = session.query(WorkflowTemplate).filter(WorkflowTemplate.is_active == True).all()
+    return WorkflowTemplateListResponse(
+        items=[WorkflowTemplateResponse(
+            id=t.id, name=t.name, description=t.description,
+            parameters=json.loads(t.parameters_schema),
+            steps=json.loads(t.steps_json),
+            is_active=t.is_active,
+            created_at=t.created_at, updated_at=t.updated_at,
+        ) for t in items],
+        total=len(items),
+    )
+
+
+@app.post("/api/v1/workflows/templates", response_model=WorkflowTemplateResponse)
+def create_workflow_template(
+    tpl: WorkflowTemplateCreate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> WorkflowTemplateResponse:
+    now = datetime.now(UTC).replace(microsecond=0)
+    existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == tpl.id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Template already exists")
+    session.add(WorkflowTemplate(
+        id=tpl.id, name=tpl.name, description=tpl.description,
+        parameters_schema=json.dumps([p.model_dump() for p in tpl.parameters], ensure_ascii=False),
+        steps_json=json.dumps([s.model_dump() for s in tpl.steps], ensure_ascii=False),
+        is_active=tpl.is_active,
+        created_at=now, updated_at=now,
+    ))
+    session.commit()
+    return WorkflowTemplateResponse(
+        id=tpl.id, name=tpl.name, description=tpl.description,
+        parameters=tpl.parameters, steps=tpl.steps,
+        is_active=tpl.is_active, created_at=now, updated_at=now,
+    )
+
+
+@app.post("/api/v1/workflows/run")
+async def run_workflow_endpoint(
+    req: WorkflowRunRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    template = session.query(WorkflowTemplate).filter(
+        WorkflowTemplate.id == req.template_id,
+        WorkflowTemplate.is_active == True,
+    ).first()
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found or inactive")
+
+    execution = await run_workflow(template, req.parameters, user.username, session)
+    return WorkflowExecutionResponse(
+        id=execution.id,
+        template_id=execution.template_id,
+        parameters=json.loads(execution.parameters_json),
+        status=execution.status,
+        result=json.loads(execution.result_json) if execution.result_json else {},
+        error=execution.error,
+        user=execution.user,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+    )
+
+
+@app.get("/api/v1/workflows/executions", response_model=WorkflowExecutionListResponse)
+def list_workflow_executions(
+    template_id: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> WorkflowExecutionListResponse:
+    q = session.query(WorkflowExecution)
+    if template_id:
+        q = q.filter(WorkflowExecution.template_id == template_id)
+    if status:
+        q = q.filter(WorkflowExecution.status == status)
+    total = q.count()
+    items = q.order_by(WorkflowExecution.started_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return WorkflowExecutionListResponse(
+        items=[WorkflowExecutionResponse(
+            id=e.id, template_id=e.template_id,
+            parameters=json.loads(e.parameters_json),
+            status=e.status,
+            result=json.loads(e.result_json) if e.result_json else {},
+            error=e.error, user=e.user,
+            started_at=e.started_at, completed_at=e.completed_at,
+        ) for e in items],
+        total=total,
+    )
+
+
+@app.get("/api/v1/workflows/executions/{execution_id}", response_model=WorkflowExecutionResponse)
+def get_workflow_execution(
+    execution_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> WorkflowExecutionResponse:
+    execution = session.query(WorkflowExecution).filter(WorkflowExecution.id == execution_id).first()
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    return WorkflowExecutionResponse(
+        id=execution.id, template_id=execution.template_id,
+        parameters=json.loads(execution.parameters_json),
+        status=execution.status,
+        result=json.loads(execution.result_json) if execution.result_json else {},
+        error=execution.error, user=execution.user,
+        started_at=execution.started_at, completed_at=execution.completed_at,
     )
 
 

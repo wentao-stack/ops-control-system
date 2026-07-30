@@ -1113,3 +1113,297 @@ tbody tr:last-child td { border-bottom: none; }
   .agent-sidebar { display: none; }
   .agent-main { margin-left: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Workflow page styles
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.workflow-header {
+  margin-bottom: 1.5rem;
+}
+
+.workflow-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.wf-tab {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.wf-tab:hover {
+  color: var(--text);
+}
+
+.wf-tab-active {
+  color: var(--primary) !important;
+  border-bottom-color: var(--primary) !important;
+}
+
+/* Template grid */
+.wf-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1rem;
+}
+
+.wf-template-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wf-template-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wf-template-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.wf-template-id {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg);
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-family: var(--mono);
+}
+
+.wf-template-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.wf-template-meta {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.wf-badge {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-secondary);
+}
+
+.wf-template-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wf-step-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.25rem 0;
+}
+
+.wf-step-icon {
+  font-size: 0.9rem;
+}
+
+.wf-step-name {
+  flex: 1;
+  color: var(--text);
+}
+
+.wf-step-type {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+}
+
+.wf-run-btn {
+  margin-top: auto;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Parameter form */
+.wf-params {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wf-param-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  color: var(--text-secondary);
+}
+
+.wf-required {
+  color: var(--danger);
+}
+
+.wf-param-field input,
+.wf-param-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.wf-param-field input:focus,
+.wf-param-field textarea:focus {
+  border-color: var(--primary);
+}
+
+.wf-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Modal */
+.wf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.wf-modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 90%;
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.wf-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.wf-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.wf-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem;
+}
+
+.wf-modal-body {
+  padding: 1.25rem;
+}
+
+.wf-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Execution list */
+.wf-exec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wf-exec-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.wf-exec-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.wf-exec-info {
+  flex: 1;
+}
+
+.wf-exec-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.wf-exec-status {
+  font-size: 0.8rem;
+  font-weight: normal;
+}
+
+.wf-exec-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* Empty / loading */
+.wf-empty,
+.wf-loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* responsive */
+@media (max-width: 768px) {
+  .wf-template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

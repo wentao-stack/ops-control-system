@@ -158,3 +158,42 @@ export type ToolUse = {
   result?: string
   confirmed?: boolean
 }
+
+// ── Workflow types ────────────────────────────────────────────────────────
+
+export type WorkflowParameter = {
+  name: string
+  type: string
+  description: string
+  required: boolean
+  default: any
+}
+
+export type WorkflowStep = {
+  type: string  // llm | api | note_create | script
+  name: string
+  config: Record<string, any>
+}
+
+export type WorkflowTemplate = {
+  id: string
+  name: string
+  description: string
+  parameters: WorkflowParameter[]
+  steps: WorkflowStep[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type WorkflowExecution = {
+  id: number
+  template_id: string
+  parameters: Record<string, any>
+  status: "pending" | "running" | "completed" | "failed"
+  result: Record<string, any>
+  error: string | null
+  user: string
+  started_at: string
+  completed_at: string | null
+}

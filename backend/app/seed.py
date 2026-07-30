@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from .auth import hash_password
 from .models import Asset, User
+from .workflow_models import WorkflowTemplate
+from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 
 
 def _now():
@@ -58,5 +60,29 @@ def seed_development_data(session: Session) -> None:
         else:
             for field, value in [("ssh_host", ip), ("ssh_port", port), ("ssh_user", user)]:
                 setattr(existing, field, value)
+            existing.updated_at = now
+        session.commit()
+
+    # ── Workflow templates (idempotent) ─────────────────────────────────────
+    import json as _json
+    for tpl in BUILTIN_TEMPLATES:
+        existing = session.query(WorkflowTemplate).filter(WorkflowTemplate.id == tpl["id"]).first()
+        if existing is None:
+            session.add(WorkflowTemplate(
+                id=tpl["id"],
+                name=tpl["name"],
+                description=tpl["description"],
+                parameters_schema=_json.dumps(tpl.get("parameters", []), ensure_ascii=False),
+                steps_json=_json.dumps(tpl.get("steps", []), ensure_ascii=False),
+                is_active=tpl.get("is_active", True),
+                created_at=now,
+                updated_at=now,
+            ))
+        else:
+            existing.name = tpl["name"]
+            existing.description = tpl["description"]
+            existing.parameters_schema = _json.dumps(tpl.get("parameters", []), ensure_ascii=False)
+            existing.steps_json = _json.dumps(tpl.get("steps", []), ensure_ascii=False)
+            existing.is_active = tpl.get("is_active", True)
             existing.updated_at = now
         session.commit()
