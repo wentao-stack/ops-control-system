@@ -220,6 +220,8 @@ export default function WorkflowPage() {
       setTemplates(res.items)
     } catch (e) {
       console.error("Failed to fetch templates:", e)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
