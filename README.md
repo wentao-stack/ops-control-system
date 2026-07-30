@@ -81,27 +81,59 @@ deploy/
   frp/ops-control-system.toml
 ```
 
-## Local development
+## Quick Start
 
-Backend (Python 3.12+):
+All services are managed by Supervisor under `supervisor/`. One command starts everything:
 
 ```bash
+# Start (or restart) all services
+./backend/.venv/bin/supervisord -c supervisor/supervisord.conf
+
+# Check status
+./backend/.venv/bin/supervisorctl -c supervisor/supervisord.conf status
+
+# Restart a single service
+./backend/.venv/bin/supervisorctl -c supervisor/supervisord.conf restart ocs-backend
+./backend/.venv/bin/supervisorctl -c supervisor/supervisord.conf restart ocs-frontend
+```
+
+Services:
+- **ocs-backend** — FastAPI on `127.0.0.1:18080`
+- **ocs-frontend** — Vite dev server on `127.0.0.1:5173`
+
+Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` and `/ws` to the backend.
+
+### First-time setup
+
+```bash
+# Backend
 cd backend
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e '.[dev]'
+pip install supervisor        # project-level supervisor lives here
+
+# Frontend
+cd frontend
+npm install
+```
+
+### Manual dev mode (without Supervisor)
+
+Backend:
+
+```bash
+cd backend
+. .venv/bin/activate
 uvicorn app.main:app --reload --host 127.0.0.1 --port 18080
 ```
 
-Frontend (Node.js 20+):
+Frontend:
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
-
-Open `http://127.0.0.1:5173`. The Vite development server proxies `/api` and `/ws` to the backend on port 18080.
 
 ## API Endpoints
 

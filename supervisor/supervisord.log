@@ -1,0 +1,33 @@
+2026-07-30 17:26:10,124 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-07-30 17:26:10,124 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-07-30 17:26:10,125 INFO RPC interface 'supervisor' initialized
+2026-07-30 17:26:10,125 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-07-30 17:26:10,126 INFO daemonizing the supervisord process
+2026-07-30 17:26:10,127 INFO supervisord started with pid 80885
+2026-07-30 17:26:11,129 INFO spawned: 'ocs-backend' with pid 80892
+2026-07-30 17:26:11,130 INFO spawned: 'ocs-frontend' with pid 80893
+2026-07-30 17:26:11,719 WARN exited: ocs-backend (exit status 3; not expected)
+2026-07-30 17:26:12,722 INFO spawned: 'ocs-backend' with pid 80954
+2026-07-30 17:26:13,288 WARN exited: ocs-backend (exit status 3; not expected)
+2026-07-30 17:26:15,291 INFO spawned: 'ocs-backend' with pid 80973
+2026-07-30 17:26:15,850 WARN exited: ocs-backend (exit status 3; not expected)
+2026-07-30 17:26:16,851 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-07-30 17:26:19,244 INFO spawned: 'ocs-backend' with pid 80998
+2026-07-30 17:26:19,838 WARN exited: ocs-backend (exit status 3; not expected)
+2026-07-30 17:26:23,843 INFO spawned: 'ocs-backend' with pid 81044
+2026-07-30 17:26:26,155 WARN exited: ocs-backend (terminated by SIGKILL; not expected)
+2026-07-30 17:26:29,725 INFO spawned: 'ocs-backend' with pid 81089
+2026-07-30 17:26:33,210 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 17:29:18,193 INFO waiting for ocs-backend, ocs-frontend to die
+2026-07-30 17:29:18,202 WARN stopped: ocs-frontend (exit status 143)
+2026-07-30 17:29:18,321 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 17:29:48,985 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-07-30 17:29:48,985 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-07-30 17:29:48,986 INFO RPC interface 'supervisor' initialized
+2026-07-30 17:29:48,986 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-07-30 17:29:48,988 INFO daemonizing the supervisord process
+2026-07-30 17:29:48,988 INFO supervisord started with pid 82131
+2026-07-30 17:29:49,990 INFO spawned: 'ocs-backend' with pid 82137
+2026-07-30 17:29:49,991 INFO spawned: 'ocs-frontend' with pid 82138
+2026-07-30 17:29:53,050 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 17:29:55,053 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)

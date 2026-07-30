@@ -1,14 +1,15 @@
 [Unit]
-Description=Ops Control System Dashboard (development)
+Description=Ops Control System (Supervisor managed)
 After=network.target
 
 [Service]
 Type=simple
 User=wentao
 Group=wentao
-WorkingDirectory=/home/wentao/project/ops-control-system/backend
+WorkingDirectory=/home/wentao/project/ops-control-system
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/wentao/project/ops-control-system/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 18080
+ExecStart=/home/wentao/project/ops-control-system/backend/.venv/bin/supervisord -c /home/wentao/project/ops-control-system/supervisor/supervisord.conf
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
 UMask=0077
