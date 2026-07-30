@@ -138,18 +138,39 @@ function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }
   )
 }
 
+/* ── Extract dynamic params from step configs ───────────────────────── */
+function extractDynParams(steps: WorkflowStep[]) {
+  const seen = new Set<string>()
+  const params: Array<{ key: string; label: string; required: boolean; type: string }> = []
+  for (const step of steps) {
+    const cfg = step.config as any
+    if (step.type === "note_api" && cfg.fields) {
+      const apiDef = NOTE_APIS.find(a => a.path === (cfg.path || ""))
+      if (apiDef) {
+        for (const f of apiDef.fields) {
+          if (!seen.has(f.key)) {
+            seen.add(f.key)
+            params.push({ key: f.key, label: f.label, required: f.required, type: f.type })
+          }
+        }
+      }
+    }
+  }
+  return params
+}
+
 /* ── Run Modal ──────────────────────────────────────────────────────── */
 function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: Record<string, any>) => void; onClose: () => void }) {
+  const dynParams = extractDynParams(tpl.steps)
   const [values, setValues] = useState<Record<string, string>>({})
   const [running, setRunning] = useState(false)
 
   const submit = async () => {
     const parsed: Record<string, any> = {}
-    for (const p of tpl.parameters) {
-      const raw = values[p.name] || ""
-      if (p.type === "list") parsed[p.name] = raw.split(",").map(s => s.trim()).filter(Boolean)
-      else if (p.type === "int" || p.type === "number") parsed[p.name] = parseInt(raw, 10) || 0
-      else parsed[p.name] = raw
+    for (const p of dynParams) {
+      const raw = values[p.key] || ""
+      if (p.type === "int") parsed[p.key] = parseInt(raw, 10) || 0
+      else parsed[p.key] = raw
     }
     setRunning(true)
     try { await onRun(parsed) } finally { setRunning(false) }
@@ -163,13 +184,13 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="wf-modal-body">
-          {tpl.parameters.length > 0 ? tpl.parameters.map(p => (
-            <div className="wf-field" key={p.name}>
-              <label>{p.name} {p.required && <span className="wf-req">*</span>}</label>
-              {p.type === "list" ? (
-                <textarea className="wf-field-input" rows={2} placeholder={p.description || "逗號分隔"} value={values[p.name] || ""} onChange={e => setValues({ ...values, [p.name]: e.target.value })} />
+          {dynParams.length > 0 ? dynParams.map(p => (
+            <div className="wf-field" key={p.key}>
+              <label>{p.label} {p.required && <span className="wf-req">*</span>}</label>
+              {p.type === "text" ? (
+                <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               ) : (
-                <input className="wf-field-input" placeholder={p.description || p.name} value={values[p.name] || ""} onChange={e => setValues({ ...values, [p.name]: e.target.value })} />
+                <input className="wf-field-input" placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               )}
             </div>
           )) : <p className="wf-hint">此流程不需要參數</p>}
@@ -296,12 +317,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
 function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (data: any) => void; onClose: () => void }) {
   const [name, setName] = useState(tpl.name)
   const [desc, setDesc] = useState(tpl.description)
-  const [params, setParams] = useState<WorkflowParameter[]>([...tpl.parameters])
   const [steps, setSteps] = useState<WorkflowStep[]>([...tpl.steps])
-
-  const addParam = () => setParams([...params, { name: "", type: "str", description: "", required: false, default: null }])
-  const removeParam = (i: number) => setParams(params.filter((_, j) => j !== i))
-  const updateParam = (i: number, p: WorkflowParameter) => { const n = [...params]; n[i] = p; setParams(n) }
 
   const addStep = () => setSteps([...steps, { type: "shell", name: "", config: {} }])
   const removeStep = (i: number) => setSteps(steps.filter((_, j) => j !== i))
@@ -309,7 +325,7 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
 
   const save = () => {
     if (!name) return alert("請填寫名稱")
-    onSave({ name, description: desc, parameters: params, steps })
+    onSave({ name, description: desc, parameters: [], steps })
   }
 
   return (
@@ -333,25 +349,6 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
             </div>
           </div>
 
-          {/* Parameters */}
-          <div className="wf-edit-block">
-            <div className="wf-edit-section-header">
-              <h4>輸入參數 ({params.length})</h4>
-              <button className="btn btn-sm" onClick={addParam}>+ 新增</button>
-            </div>
-            {params.length === 0 && <p className="wf-hint">沒有參數，執行時不需要輸入</p>}
-            {params.map((p, i) => (
-              <div className="wf-edit-row" key={i}>
-                <input className="wf-field-input wf-field-sm" placeholder="參數名稱" value={p.name} onChange={e => updateParam(i, { ...p, name: e.target.value })} />
-                <select className="wf-field-input wf-field-sm" value={p.type} onChange={e => updateParam(i, { ...p, type: e.target.value })}>
-                  <option value="str">str</option><option value="int">int</option><option value="number">number</option><option value="bool">bool</option><option value="list">list</option>
-                </select>
-                <input className="wf-field-input wf-field-sm" placeholder="描述" value={p.description} onChange={e => updateParam(i, { ...p, description: e.target.value })} />
-                <label className="wf-check-label"><input type="checkbox" checked={p.required} onChange={e => updateParam(i, { ...p, required: e.target.checked })} />必填</label>
-                <button className="wf-icon-btn" onClick={() => removeParam(i)}>✕</button>
-              </div>
-            ))}
-          </div>
 
           {/* Steps */}
           <div className="wf-edit-block">
