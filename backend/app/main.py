@@ -1136,20 +1136,33 @@ async def agent_chat(
 
 
 # ── Code browser ──────────────────────────────────────────────────────────────
+# 程式碼瀏覽器功能：讓使用者在 OPS 控制系統中直接瀏覽專案原始碼
+# 提供兩個 API：
+#   GET /api/v1/code/tree      — 掃描專案目錄，回傳遞迴檔案樹
+#   GET /api/v1/code/file/{p}  — 讀取單一檔案內容，支援語法著色
 
+# 專案根目錄 = ops-control-system/（main.py 的祖父目錄）
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Extensions commonly excluded (large/binary/generated)
+# 排除的檔案副檔名（編譯產物、二進位檔、快取）
 _EXCLUDED_PATTERNS = {".pyc", ".pyo", ".so", ".egg-info", "__pycache__", ".git"}
+# 排除的目錄名稱（虛擬環境、依賴、建構產物、測試快取）
 _EXCLUDED_DIRS = {".git", ".venv", "node_modules", "dist", ".data", ".pytest_cache", ".next", ".mypy_cache"}
+# 單一檔案最大 256KB，避免載入過大的二進位檔或壓縮檔
 _MAX_FILE_SIZE = 256 * 1024  # 256KB max
 
 
 def _should_exclude(name: str) -> bool:
+    """判斷檔案/目錄名稱是否應該排除在檔案樹之外。"""
     return name in _EXCLUDED_DIRS or any(name.endswith(p) for p in _EXCLUDED_PATTERNS)
 
 
 def _build_tree(directory: Path) -> list[CodeTreeItem]:
+    """遞迴掃描目錄，建構完整的檔案樹結構。
+
+    遍歷目錄下所有檔案和子目錄，排除 _EXCLUDED_DIRS 和 _EXCLUDED_PATTERNS。
+    資料夾節點會遞迴展開其子內容，檔案節點包含大小資訊。
+    """
     items: list[CodeTreeItem] = []
     for entry in sorted(directory.iterdir()):
         name = entry.name
@@ -1157,9 +1170,11 @@ def _build_tree(directory: Path) -> list[CodeTreeItem]:
             continue
         rel = str(entry.relative_to(_PROJECT_ROOT))
         if entry.is_dir():
+            # 遞迴處理子目錄
             children = _build_tree(entry)
             items.append(CodeTreeItem(name=name, path=rel, type="dir", children=children))
         else:
+            # 檔案節點：取得大小，讀取失敗時設為 0
             try:
                 size = entry.stat().st_size
             except OSError:
@@ -1169,6 +1184,10 @@ def _build_tree(directory: Path) -> list[CodeTreeItem]:
 
 
 def _count_tree(items: list[CodeTreeItem]) -> tuple[int, int]:
+    """遞迴計算檔案樹中的檔案總數和資料夾總數。
+
+    回傳 (檔案數, 資料夾數)，用於前端顯示統計資訊。
+    """
     files = dirs = 0
     for item in items:
         if item.type == "dir":
@@ -1182,6 +1201,11 @@ def _count_tree(items: list[CodeTreeItem]) -> tuple[int, int]:
 
 
 def _detect_language(path: str) -> str:
+    """根據檔案副檔名偵測程式語言，回傳 Prism.js 可用的語言名稱。
+
+    前端使用 Prism.js 進行語法著色，此函數提供語言映射。
+    未知副檔名預設回傳 "text"（純文字）。
+    """
     ext_map = {
         ".py": "python", ".ts": "typescript", ".tsx": "typescript", ".js": "javascript",
         ".jsx": "javascript", ".html": "html", ".css": "css", ".json": "json",
@@ -1199,7 +1223,10 @@ def _detect_language(path: str) -> str:
 
 @app.get("/api/v1/code/tree", response_model=CodeTreeResponse)
 def get_code_tree() -> CodeTreeResponse:
-    """Scan the project directory and return a file tree."""
+    """掃描專案根目錄，回傳完整的檔案樹結構與統計資訊。
+
+    前端呼叫此 API 初始化檔案瀏覽器，顯示所有檔案和資料夾的樹狀結構。
+    """
     tree = _build_tree(_PROJECT_ROOT)
     files, dirs = _count_tree(tree)
     return CodeTreeResponse(tree=tree, total_files=files, total_dirs=dirs)
@@ -1207,8 +1234,18 @@ def get_code_tree() -> CodeTreeResponse:
 
 @app.get("/api/v1/code/file/{file_path:path}", response_model=CodeFileResponse)
 def get_code_file(file_path: str) -> CodeFileResponse:
-    """Read a source file by its relative path."""
+    """讀取單一檔案內容，支援路徑安全檢查和語法偵測。
+
+    安全機制:
+      1. 防止路徑穿越攻擊（.. 跳脫專案目錄）
+      2. 限制檔案大小（256KB）
+      3. 僅支援 UTF-8 文字檔
+
+    參數:
+        file_path: 相對於專案根目錄的路徑（如 "backend/app/main.py"）
+    """
     target = (_PROJECT_ROOT / file_path).resolve()
+    # 安全檢查：防止路徑穿越攻擊
     if not str(target).startswith(str(_PROJECT_ROOT)):
         raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
     if not target.is_file():

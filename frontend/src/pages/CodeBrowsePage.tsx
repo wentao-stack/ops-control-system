@@ -1,6 +1,13 @@
+/**
+ * CodeBrowsePage — 程式碼瀏覽器頁面
+ *
+ * 功能: 左側檔案樹 + 右側程式碼檢視器
+ * 資料流程: 掛載時載入檔案樹 → 點擊檔案載入內容 → 顯示行號
+ */
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../auth';
 
+/** 檔案樹節點：檔案或資料夾 */
 interface TreeItem {
   name: string;
   path: string;
@@ -9,12 +16,14 @@ interface TreeItem {
   children?: TreeItem[];
 }
 
+/** 檔案樹 API 回應 */
 interface TreeResponse {
   tree: TreeItem[];
   total_files: number;
   total_dirs: number;
 }
 
+/** 單一檔案 API 回應 */
 interface FileResponse {
   path: string;
   content: string;
@@ -22,7 +31,10 @@ interface FileResponse {
   line_count: number;
 }
 
-/* ── Icon helpers ─────────────────────────────────────────────────────── */
+/**
+ * 根據副檔名回傳對應的 emoji 圖示
+ * 用於檔案樹和檔案標題的視覺識別
+ */
 function fileIcon(name: string): string {
   if (name.endsWith('.tsx') || name.endsWith('.jsx')) return '⚛️';
   if (name.endsWith('.ts')) return '🔷';
@@ -39,13 +51,20 @@ function fileIcon(name: string): string {
   return '📄';
 }
 
+/** 將位元數轉換為人類可讀的檔案大小字串 (B/KB/MB) */
 function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + 'B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
   return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
 }
 
-/* ── Recursive Tree Node ──────────────────────────────────────────────── */
+/**
+ * TreeNode — 遞迴檔案樹節點組件
+ *
+ * 每個節點顯示圖示、名稱和大小（檔案）。
+ * 資料夾可展開/收縮，檔案可點擊載入內容。
+ * 使用 depth 參數控制縮排深度。
+ */
 function TreeNode({
   item,
   depth,
@@ -105,7 +124,15 @@ function TreeNode({
   );
 }
 
-/* ── Main Page ────────────────────────────────────────────────────────── */
+/**
+ * CodeBrowsePage — 主頁面組件
+ *
+ * 狀態管理:
+ *   - tree: 完整檔案樹資料
+ *   - selectedFile/selectedPath: 目前選取的檔案
+ *   - expandedPaths: 已展開的資料夾路徑集合
+ *   - searchQuery: 搜尋過濾字串
+ */
 export function CodeBrowsePage() {
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [stats, setStats] = useState({ files: 0, dirs: 0 });
@@ -117,7 +144,7 @@ export function CodeBrowsePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
-  /* Collect all dir paths recursively */
+  /** 遞迴收集所有資料夾路徑 — 用於「全部展開」功能 */
   const getAllDirPaths = useCallback((items: TreeItem[]): string[] => {
     const dirs: string[] = [];
     for (const item of items) {
@@ -129,18 +156,18 @@ export function CodeBrowsePage() {
     return dirs;
   }, []);
 
-  /* Expand all directories */
+  /** 展開所有資料夾 */
   const expandAll = useCallback(() => {
     const allDirs = getAllDirPaths(tree);
     setExpandedPaths(new Set(allDirs));
   }, [tree, getAllDirPaths]);
 
-  /* Collapse all directories */
+  /** 收縮所有資料夾 */
   const collapseAll = useCallback(() => {
     setExpandedPaths(new Set());
   }, []);
 
-  /* Load tree */
+  /** 從後端載入完整檔案樹 — 組件掛載時自動執行 */
   const loadTree = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -148,7 +175,7 @@ export function CodeBrowsePage() {
       const data = await api<TreeResponse>('/api/v1/code/tree');
       setTree(data.tree);
       setStats({ files: data.total_files, dirs: data.total_dirs });
-      // Auto-expand top-level dirs
+      // 預設展開第一層資料夾，方便使用者快速瀏覽
       const initialExpanded = new Set<string>();
       for (const item of data.tree) {
         if (item.type === 'dir') initialExpanded.add(item.path);
@@ -165,7 +192,7 @@ export function CodeBrowsePage() {
     loadTree();
   }, [loadTree]);
 
-  /* Load file content */
+  /** 點擊檔案時呼叫：從後端載入檔案內容 */
   const loadFile = useCallback(
     async (path: string) => {
       setSelectedPath(path);
@@ -183,7 +210,7 @@ export function CodeBrowsePage() {
     []
   );
 
-  /* Toggle directory expand/collapse */
+  /** 切換資料夾展開/收縮狀態 — 使用 Set 管理已展開路徑 */
   const toggleDir = (path: string) => {
     setExpandedPaths((prev) => {
       const next = new Set(prev);
@@ -193,7 +220,7 @@ export function CodeBrowsePage() {
     });
   };
 
-  /* Filter tree based on search */
+  /** 遞迴過濾檔案樹 — 根據搜尋字串過濾檔案和資料夾 */
   function filterTree(items: TreeItem[], query: string): TreeItem[] {
     if (!query) return items;
     const q = query.toLowerCase();
@@ -212,12 +239,12 @@ export function CodeBrowsePage() {
 
   const filteredTree = filterTree(tree, searchQuery);
 
-  /* Line numbers for code display */
+  /** 將檔案內容分割為行陣列，用於前端逐行顯示行號 */
   const lines = selectedFile?.content.split('\n') ?? [];
 
   return (
     <div className="code-browse">
-      {/* Header */}
+      {/* 頁面標題 + 統計資訊 */}
       <div className="code-browse__header">
         <h2>📂 原始碼瀏覽器</h2>
         <div className="code-browse__stats">
@@ -227,14 +254,14 @@ export function CodeBrowsePage() {
         </div>
       </div>
 
-      {/* Error banner */}
+      {/* 錯誤提示列 — 點擊可關閉 */}
       {error && (
         <div className="alert alert--error" onClick={() => setError(null)}>
           ❌ {error}
         </div>
       )}
 
-      {/* Search */}
+      {/* 搜尋列 + 展開/收縮/重新整理按鈕 */}
       <div className="code-browse__search">
         <input
           type="text"
@@ -254,9 +281,9 @@ export function CodeBrowsePage() {
         </button>
       </div>
 
-      {/* Two-column layout */}
+      {/* 雙欄布局：左側檔案樹 + 右側程式碼檢視器 */}
       <div className="code-browse__layout">
-        {/* Left: File tree */}
+        {/* 左欄：檔案樹 */}
         <div className="code-browse__tree">
           {loading ? (
             <div className="loading">載入中...</div>
@@ -275,7 +302,7 @@ export function CodeBrowsePage() {
           )}
         </div>
 
-        {/* Right: Code viewer */}
+        {/* 右欄：程式碼檢視器 */}
         <div className="code-browse__viewer">
           {fileLoading ? (
             <div className="loading">載入檔案...</div>

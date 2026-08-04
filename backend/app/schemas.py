@@ -393,23 +393,27 @@ class ExecLogListResponse(BaseModel):
 
 
 # ── Code browser schemas ─────────────────────────────────────────────────────
+# 程式碼瀏覽器 API 的回應結構，用於前端展示專案檔案樹和檔案內容
 
 class CodeTreeItem(BaseModel):
-    name: str
-    path: str
-    type: str  # "file" | "dir"
-    size: int = 0
-    children: list["CodeTreeItem"] = []
+    """檔案樹中的一個節點（檔案或資料夾）。資料夾節點會包含 children 子節點列表，形成遞迴樹狀結構。"""
+    name: str  # 檔案或資料夾名稱
+    path: str  # 相對於專案根目錄的路徑
+    type: str  # "file"（檔案）或 "dir"（資料夾）
+    size: int = 0  # 檔案大小（位元組），僅檔案有值，資料夾為 0
+    children: list["CodeTreeItem"] = []  # 僅資料夾有子節點，檔案為空列表
 
 
 class CodeTreeResponse(BaseModel):
-    tree: list[CodeTreeItem]
-    total_files: int
-    total_dirs: int
+    """檔案樹 API 的完整回應，包含樹狀結構和統計資訊。"""
+    tree: list[CodeTreeItem]  # 根層級的檔案樹節點列表
+    total_files: int  # 整個專案的檔案總數（不含資料夾）
+    total_dirs: int  # 整個專案的資料夾總數
 
 
 class CodeFileResponse(BaseModel):
-    path: str
-    content: str
-    language: str
-    line_count: int
+    """單一檔案內容 API 的回應，包含檔案內容、語言偵測和行數。"""
+    path: str  # 相對於專案根目錄的路徑
+    content: str  # 檔案完整文字內容
+    language: str  # 根據副檔名偵測的程式語言（用於語法著色）
+    line_count: int  # 檔案總行數
