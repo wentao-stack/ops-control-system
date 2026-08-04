@@ -14,6 +14,7 @@ import { CloudsPage } from "./pages/CloudsPage"
 import { NotesPage } from "./pages/NotesPage"
 import { NoteDetailPage } from "./pages/NoteDetailPage"
 import { AgentChatPage } from "./pages/AgentChatPage"
+import { CodeBrowsePage } from "./pages/CodeBrowsePage"
 import WorkflowPage from "./pages/WorkflowPage"
 import "./styles.css"
 
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route path="/notes/:noteId" element={<NoteDetailPage />} />
         <Route path="/agent" element={<AgentChatPage />} />
         <Route path="/workflow" element={<WorkflowPage />} />
+        <Route path="/code" element={<CodeBrowsePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

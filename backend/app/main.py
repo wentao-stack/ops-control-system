@@ -37,6 +37,7 @@ from .schemas import (
     SupervisorTailRequest, SupervisorTailResponse,
     TokenResponse, UserResponse,
     ExecLogResponse, ExecLogListResponse,
+    CodeTreeItem, CodeTreeResponse, CodeFileResponse,
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
@@ -58,6 +59,8 @@ from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 
 import json
 import logging
+import os
+import shutil
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
@@ -1129,6 +1132,98 @@ async def agent_chat(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+# ── Code browser ──────────────────────────────────────────────────────────────
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# Extensions commonly excluded (large/binary/generated)
+_EXCLUDED_PATTERNS = {".pyc", ".pyo", ".so", ".egg-info", "__pycache__", ".git"}
+_EXCLUDED_DIRS = {".git", ".venv", "node_modules", "dist", ".data", ".pytest_cache", ".next", ".mypy_cache"}
+_MAX_FILE_SIZE = 256 * 1024  # 256KB max
+
+
+def _should_exclude(name: str) -> bool:
+    return name in _EXCLUDED_DIRS or any(name.endswith(p) for p in _EXCLUDED_PATTERNS)
+
+
+def _build_tree(directory: Path) -> list[CodeTreeItem]:
+    items: list[CodeTreeItem] = []
+    for entry in sorted(directory.iterdir()):
+        name = entry.name
+        if _should_exclude(name):
+            continue
+        rel = str(entry.relative_to(_PROJECT_ROOT))
+        if entry.is_dir():
+            children = _build_tree(entry)
+            items.append(CodeTreeItem(name=name, path=rel, type="dir", children=children))
+        else:
+            try:
+                size = entry.stat().st_size
+            except OSError:
+                size = 0
+            items.append(CodeTreeItem(name=name, path=rel, type="file", size=size))
+    return items
+
+
+def _count_tree(items: list[CodeTreeItem]) -> tuple[int, int]:
+    files = dirs = 0
+    for item in items:
+        if item.type == "dir":
+            dirs += 1
+            fc, dc = _count_tree(item.children)
+            files += fc
+            dirs += dc
+        else:
+            files += 1
+    return files, dirs
+
+
+def _detect_language(path: str) -> str:
+    ext_map = {
+        ".py": "python", ".ts": "typescript", ".tsx": "typescript", ".js": "javascript",
+        ".jsx": "javascript", ".html": "html", ".css": "css", ".json": "json",
+        ".yaml": "yaml", ".yml": "yaml", ".toml": "toml", ".md": "markdown",
+        ".sh": "bash", ".bash": "bash", ".xml": "xml", ".sql": "sql",
+        ".txt": "text", ".conf": "ini", ".env": "bash", ".log": "text",
+        ".csv": "csv", ".cfg": "ini", ".ini": "ini",
+        ".toml": "toml", ".lock": "text",
+    }
+    for ext, lang in ext_map.items():
+        if path.endswith(ext):
+            return lang
+    return "text"
+
+
+@app.get("/api/v1/code/tree", response_model=CodeTreeResponse)
+def get_code_tree() -> CodeTreeResponse:
+    """Scan the project directory and return a file tree."""
+    tree = _build_tree(_PROJECT_ROOT)
+    files, dirs = _count_tree(tree)
+    return CodeTreeResponse(tree=tree, total_files=files, total_dirs=dirs)
+
+
+@app.get("/api/v1/code/file/{file_path:path}", response_model=CodeFileResponse)
+def get_code_file(file_path: str) -> CodeFileResponse:
+    """Read a source file by its relative path."""
+    target = (_PROJECT_ROOT / file_path).resolve()
+    if not str(target).startswith(str(_PROJECT_ROOT)):
+        raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.stat().st_size > _MAX_FILE_SIZE:
+        raise HTTPException(status_code=403, detail="File too large")
+    try:
+        content = target.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        raise HTTPException(status_code=400, detail="Cannot read file as text")
+    return CodeFileResponse(
+        path=file_path,
+        content=content,
+        language=_detect_language(file_path),
+        line_count=len(content.splitlines()),
     )
 
 

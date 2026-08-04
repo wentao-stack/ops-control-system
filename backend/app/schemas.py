@@ -390,3 +390,26 @@ class ExecLogListResponse(BaseModel):
     page: int
     page_size: int
     generated_at: datetime
+
+
+# ── Code browser schemas ─────────────────────────────────────────────────────
+
+class CodeTreeItem(BaseModel):
+    name: str
+    path: str
+    type: str  # "file" | "dir"
+    size: int = 0
+    children: list["CodeTreeItem"] = []
+
+
+class CodeTreeResponse(BaseModel):
+    tree: list[CodeTreeItem]
+    total_files: int
+    total_dirs: int
+
+
+class CodeFileResponse(BaseModel):
+    path: str
+    content: str
+    language: str
+    line_count: int
