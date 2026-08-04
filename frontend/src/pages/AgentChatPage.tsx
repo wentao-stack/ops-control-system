@@ -283,7 +283,7 @@ export function AgentChatPage() {
         message,
       })
 
-      const response = await api<StreamingResponse>(`/api/v1/agent/chat`, {
+      const response = await api<Response>(`/api/v1/agent/chat`, {
         method: "POST",
         body,
         signal: abortCtrl.signal,

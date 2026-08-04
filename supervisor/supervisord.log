@@ -167,3 +167,24 @@
 2026-08-04 17:53:28,812 WARN stopped: ocs-frontend (exit status 143)
 2026-08-04 17:53:28,814 INFO spawned: 'ocs-frontend' with pid 34757
 2026-08-04 17:53:33,949 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 18:39:32,444 WARN exited: ocs-backend (terminated by SIGTERM; not expected)
+2026-08-04 18:39:33,447 INFO spawned: 'ocs-backend' with pid 39363
+2026-08-04 18:39:36,964 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 18:41:56,869 WARN exited: ocs-frontend (exit status 143; not expected)
+2026-08-04 18:41:56,925 INFO spawned: 'ocs-frontend' with pid 39893
+2026-08-04 18:41:57,031 WARN exited: ocs-backend (terminated by SIGTERM; not expected)
+2026-08-04 18:41:57,062 INFO spawned: 'ocs-backend' with pid 39934
+2026-08-04 18:42:00,559 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 18:42:02,561 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 18:42:32,941 INFO waiting for ocs-backend to stop
+2026-08-04 18:42:33,137 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-04 18:42:33,137 INFO waiting for ocs-frontend to stop
+2026-08-04 18:42:33,145 WARN stopped: ocs-frontend (exit status 143)
+2026-08-04 18:42:33,147 INFO spawned: 'ocs-backend' with pid 39997
+2026-08-04 18:42:36,642 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 18:42:36,644 INFO spawned: 'ocs-frontend' with pid 40003
+2026-08-04 18:42:41,783 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 18:45:50,885 INFO waiting for ocs-backend to stop
+2026-08-04 18:45:51,075 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-04 18:45:51,077 INFO spawned: 'ocs-backend' with pid 40979
+2026-08-04 18:45:54,569 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
