@@ -714,3 +714,43 @@ INFO:     106.155.49.94:0 - "GET /api/v1/code/file/README.md HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/code/file/docs/STORAGE.md HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/code/file/frontend/package-lock.json HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/code/file/backend/app/agent.py HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /code HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /assets/index-CBR4H8qY.css HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /assets/index-ryPBdrnH.js HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/code/tree HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/inventory/summary HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/assets HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/hosts/services?cache=true HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/supervisor/status?cache=true HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/host/metrics HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/hosts/metrics?cache=true HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/hosts/metrics HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/assets?asset_type=host HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/remote/ping HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/workflows/templates HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/workflows/executions?page_size=20 HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/chat HTTP/1.1" 422 Unprocessable Entity
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-cddedd01e635/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ca6c6ac4db76/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ca6c6ac4db76/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ca6c6ac4db76/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ca6c6ac4db76/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ca6c6ac4db76/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "DELETE /api/v1/agent/conversations/conv-ca6c6ac4db76 HTTP/1.1" 204 No Content
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/chat HTTP/1.1" 422 Unprocessable Entity
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-cddedd01e635/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/chat HTTP/1.1" 422 Unprocessable Entity
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK

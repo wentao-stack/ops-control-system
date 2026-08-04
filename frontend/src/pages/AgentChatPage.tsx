@@ -285,6 +285,7 @@ export function AgentChatPage() {
 
       const response = await api<Response>(`/api/v1/agent/chat`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body,
         signal: abortCtrl.signal,
       })
