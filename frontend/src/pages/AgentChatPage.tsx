@@ -225,6 +225,30 @@ export function AgentChatPage() {
     }
   }
 
+  /* create new conversation and return the id (for handleSend auto-create) */
+  const handleNewAndGetId = async (): Promise<string> => {
+    if (creatingConv) {
+      // Already creating, wait a bit and retry
+      await new Promise(r => setTimeout(r, 200))
+      return activeId ?? handleNewAndGetId()
+    }
+    setCreatingConv(true)
+    try {
+      const r = await api<AgentConversation>(`/api/v1/agent/conversations`, { method: "POST" })
+      setConversations(prev => [r, ...prev])
+      setActiveId(r.id)
+      setMessages([])
+      return r.id
+    } catch {
+      const id = `local-${Date.now()}`
+      setActiveId(id)
+      setMessages([])
+      return id
+    } finally {
+      setCreatingConv(false)
+    }
+  }
+
   /* delete conversation */
   const handleDelete = async (id: string) => {
     try {
@@ -247,10 +271,14 @@ export function AgentChatPage() {
   /* send message with SSE streaming */
   const handleSend = async (text?: string) => {
     const message = text || input.trim()
-    if (!message || streaming || !activeId) return
+    if (!message || streaming) return
 
     setInput("")
-    const convId = activeId
+    let convId = activeId
+    // Auto-create conversation if none active
+    if (!convId) {
+      convId = await handleNewAndGetId()
+    }
 
     // optimistically add user message
     const userMsg: AgentMessage = {
@@ -463,7 +491,7 @@ export function AgentChatPage() {
               <button
                 className="agent-send-btn"
                 onClick={() => handleSend()}
-                disabled={!input.trim() || !activeId}
+                disabled={!input.trim()}
                 title="發送"
               >
                 ▶
