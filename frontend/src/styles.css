@@ -90,6 +90,59 @@ a { color: var(--primary); text-decoration: none; }
 
 .sidebar nav a .nav-icon { width: 18px; text-align: center; font-size: 14px; }
 
+/* ── Sidebar collapsed state ─────────────────────────────────────── */
+
+.sidebar--collapsed {
+  width: 56px !important;
+}
+
+.sidebar--collapsed .brand span:last-child,
+.sidebar--collapsed .sidebar nav a span:not(.nav-icon),
+.sidebar--collapsed .sidebar nav a .badge,
+.sidebar--collapsed .user-info,
+.sidebar--collapsed .logout-btn {
+  display: none;
+}
+
+.sidebar--collapsed .brand {
+  justify-content: center;
+  padding: 16px 8px;
+}
+
+.sidebar--collapsed .sidebar nav a {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar--collapsed .sidebar-user {
+  justify-content: center;
+  padding: 12px 8px;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 6px 0;
+  background: rgba(255,255,255,.06);
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  color: rgba(255,255,255,.4);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.8);
+}
+
+.content--expanded {
+  margin-left: 56px !important;
+}
+
 .sidebar nav a .badge {
   margin-left: auto;
   background: var(--danger);

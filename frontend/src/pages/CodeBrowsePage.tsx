@@ -117,6 +117,29 @@ export function CodeBrowsePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
+  /* Collect all dir paths recursively */
+  const getAllDirPaths = useCallback((items: TreeItem[]): string[] => {
+    const dirs: string[] = [];
+    for (const item of items) {
+      if (item.type === 'dir') {
+        dirs.push(item.path);
+        if (item.children) dirs.push(...getAllDirPaths(item.children));
+      }
+    }
+    return dirs;
+  }, []);
+
+  /* Expand all directories */
+  const expandAll = useCallback(() => {
+    const allDirs = getAllDirPaths(tree);
+    setExpandedPaths(new Set(allDirs));
+  }, [tree, getAllDirPaths]);
+
+  /* Collapse all directories */
+  const collapseAll = useCallback(() => {
+    setExpandedPaths(new Set());
+  }, []);
+
   /* Load tree */
   const loadTree = useCallback(async () => {
     setLoading(true);
@@ -196,11 +219,11 @@ export function CodeBrowsePage() {
     <div className="code-browse">
       {/* Header */}
       <div className="code-browse__header">
-        <h2>📂 Source Code Browser</h2>
+        <h2>📂 原始碼瀏覽器</h2>
         <div className="code-browse__stats">
-          <span>{stats.dirs} directories</span>
+          <span>{stats.dirs} 目錄</span>
           <span>·</span>
-          <span>{stats.files} files</span>
+          <span>{stats.files} 檔案</span>
         </div>
       </div>
 
@@ -215,13 +238,19 @@ export function CodeBrowsePage() {
       <div className="code-browse__search">
         <input
           type="text"
-          placeholder="🔍 Search files..."
+          placeholder="🔍 搜尋檔案..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="input"
         />
-        <button className="btn btn--sm" onClick={() => { loadTree(); }}>
-          🔄 Refresh
+        <button className="btn btn--sm" onClick={expandAll} title="全部展開">
+          🔽
+        </button>
+        <button className="btn btn--sm" onClick={collapseAll} title="全部收縮">
+          🔼
+        </button>
+        <button className="btn btn--sm" onClick={() => { loadTree(); }} title="重新整理">
+          🔄
         </button>
       </div>
 
@@ -230,7 +259,7 @@ export function CodeBrowsePage() {
         {/* Left: File tree */}
         <div className="code-browse__tree">
           {loading ? (
-            <div className="loading">Loading file tree...</div>
+            <div className="loading">載入中...</div>
           ) : (
             filteredTree.map((item) => (
               <TreeNode
@@ -249,7 +278,7 @@ export function CodeBrowsePage() {
         {/* Right: Code viewer */}
         <div className="code-browse__viewer">
           {fileLoading ? (
-            <div className="loading">Loading file...</div>
+            <div className="loading">載入檔案...</div>
           ) : selectedFile ? (
             <div className="code-browse__file">
               <div className="code-browse__file-header">
@@ -259,7 +288,7 @@ export function CodeBrowsePage() {
                 <div className="code-browse__file-meta">
                   <span>{selectedFile.language}</span>
                   <span>·</span>
-                  <span>{selectedFile.line_count} lines</span>
+                  <span>{selectedFile.line_count} 行</span>
                 </div>
               </div>
               <div className="code-browse__code">
@@ -276,7 +305,7 @@ export function CodeBrowsePage() {
           ) : (
             <div className="code-browse__empty">
               <div className="code-browse__empty-icon">📄</div>
-              <p>Select a file from the tree to view its contents</p>
+              <p>從左側樹形結構選擇檔案查看內容</p>
             </div>
           )}
         </div>

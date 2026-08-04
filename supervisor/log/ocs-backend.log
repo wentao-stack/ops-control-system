@@ -654,3 +654,7 @@ INFO:     106.155.49.94:0 - "GET / HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/code/file/backend/.env HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET / HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/code/file/backend/app/agent_models.py HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/code/tree HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/code/file/deploy/supervisor.conf HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/code/file/README.md HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/code/file/backend/app/agent.py HTTP/1.1" 200 OK
