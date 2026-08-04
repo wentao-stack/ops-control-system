@@ -362,8 +362,7 @@ export function AgentChatPage() {
         }
       }
 
-      // reload conversations to get updated titles
-      loadConversations()
+      // reload messages for the active conversation
       if (convId) loadMessages(convId)
     } catch (e: any) {
       if (e.name !== "AbortError") {
