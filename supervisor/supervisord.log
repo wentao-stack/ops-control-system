@@ -65,3 +65,105 @@
 2026-07-30 18:00:41,711 WARN stopped: ocs-backend (terminated by SIGTERM)
 2026-07-30 18:00:41,712 INFO spawned: 'ocs-backend' with pid 3056
 2026-07-30 18:00:45,209 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:12:35,610 INFO waiting for ocs-backend to stop
+2026-07-30 18:12:35,776 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:12:35,778 INFO spawned: 'ocs-backend' with pid 3349
+2026-07-30 18:12:39,266 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:16:04,988 INFO waiting for ocs-backend to stop
+2026-07-30 18:16:05,154 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:16:05,156 INFO spawned: 'ocs-backend' with pid 3592
+2026-07-30 18:16:08,646 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:28:54,238 INFO waiting for ocs-backend to stop
+2026-07-30 18:28:54,372 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:28:54,374 INFO spawned: 'ocs-backend' with pid 5845
+2026-07-30 18:28:57,869 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:37:11,472 INFO waiting for ocs-backend to stop
+2026-07-30 18:37:11,602 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:37:11,604 INFO spawned: 'ocs-backend' with pid 6360
+2026-07-30 18:37:15,095 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:37:15,166 INFO waiting for ocs-frontend to stop
+2026-07-30 18:37:15,174 WARN stopped: ocs-frontend (exit status 143)
+2026-07-30 18:37:15,175 INFO spawned: 'ocs-frontend' with pid 6369
+2026-07-30 18:37:20,312 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-07-30 18:52:59,193 INFO waiting for ocs-backend to stop
+2026-07-30 18:52:59,339 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:52:59,341 INFO spawned: 'ocs-backend' with pid 7039
+2026-07-30 18:53:02,838 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-30 18:57:58,139 INFO waiting for ocs-backend to stop
+2026-07-30 18:57:58,339 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-07-30 18:57:58,341 INFO spawned: 'ocs-backend' with pid 7645
+2026-07-30 18:58:01,834 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-07-31 00:09:40,035 WARN exited: ocs-backend (terminated by SIGHUP; not expected)
+2026-07-31 00:09:40,035 WARN received SIGTERM indicating exit request
+2026-07-31 00:09:40,035 INFO waiting for ocs-frontend to die
+2026-07-31 00:09:40,036 WARN stopped: ocs-frontend (exit status 143)
+2026-07-31 00:09:40,036 WARN ignored SIGHUP indicating restart request (shutdown in progress)
+2026-08-03 09:26:29,446 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-08-03 09:26:29,446 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-08-03 09:26:29,448 INFO RPC interface 'supervisor' initialized
+2026-08-03 09:26:29,448 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-08-03 09:26:29,449 INFO daemonizing the supervisord process
+2026-08-03 09:26:29,450 INFO supervisord started with pid 1194
+2026-08-03 09:26:30,452 INFO spawned: 'ocs-backend' with pid 1568
+2026-08-03 09:26:30,454 INFO spawned: 'ocs-frontend' with pid 1569
+2026-08-03 09:26:30,454 WARN received SIGTERM indicating exit request
+2026-08-03 09:26:30,454 INFO waiting for ocs-backend, ocs-frontend to die
+2026-08-03 09:26:34,085 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-03 09:26:34,085 INFO waiting for ocs-backend, ocs-frontend to die
+2026-08-03 09:26:36,088 WARN killing 'ocs-frontend' (1569) with SIGKILL
+2026-08-03 09:26:36,096 WARN stopped: ocs-frontend (terminated by SIGKILL)
+2026-08-03 09:26:36,209 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-03 10:44:05,273 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-08-03 10:44:05,273 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-08-03 10:44:05,274 INFO RPC interface 'supervisor' initialized
+2026-08-03 10:44:05,274 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-08-03 10:44:05,275 INFO daemonizing the supervisord process
+2026-08-03 10:44:05,276 INFO supervisord started with pid 3116
+2026-08-03 10:44:06,278 INFO spawned: 'ocs-backend' with pid 3119
+2026-08-03 10:44:06,279 INFO spawned: 'ocs-frontend' with pid 3120
+2026-08-03 10:44:09,783 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-03 10:44:11,786 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 00:58:08,848 WARN exited: ocs-backend (terminated by SIGHUP; not expected)
+2026-08-04 00:58:08,849 WARN received SIGTERM indicating exit request
+2026-08-04 00:58:08,849 INFO waiting for ocs-frontend to die
+2026-08-04 00:58:08,849 WARN stopped: ocs-frontend (exit status 143)
+2026-08-04 00:58:08,849 WARN ignored SIGHUP indicating restart request (shutdown in progress)
+2026-08-04 12:27:05,386 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-08-04 12:27:05,386 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-08-04 12:27:05,390 INFO RPC interface 'supervisor' initialized
+2026-08-04 12:27:05,390 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-08-04 12:27:05,391 INFO daemonizing the supervisord process
+2026-08-04 12:27:05,392 INFO supervisord started with pid 1183
+2026-08-04 12:27:06,394 INFO spawned: 'ocs-backend' with pid 1549
+2026-08-04 12:27:06,396 INFO spawned: 'ocs-frontend' with pid 1550
+2026-08-04 12:27:06,396 WARN received SIGTERM indicating exit request
+2026-08-04 12:27:06,397 INFO waiting for ocs-backend, ocs-frontend to die
+2026-08-04 12:27:10,024 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 12:27:10,024 INFO waiting for ocs-backend, ocs-frontend to die
+2026-08-04 12:27:12,026 WARN killing 'ocs-frontend' (1550) with SIGKILL
+2026-08-04 12:27:12,036 WARN stopped: ocs-frontend (terminated by SIGKILL)
+2026-08-04 12:27:12,147 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-04 15:43:11,882 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-08-04 15:43:11,882 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-08-04 15:43:11,883 INFO RPC interface 'supervisor' initialized
+2026-08-04 15:43:11,883 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2026-08-04 15:43:11,884 INFO daemonizing the supervisord process
+2026-08-04 15:43:11,885 INFO supervisord started with pid 23106
+2026-08-04 15:43:12,887 INFO spawned: 'ocs-backend' with pid 23111
+2026-08-04 15:43:12,889 INFO spawned: 'ocs-frontend' with pid 23112
+2026-08-04 15:43:16,383 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 15:43:18,385 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 15:52:32,371 INFO waiting for ocs-backend to stop
+2026-08-04 15:52:32,501 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-04 15:52:32,503 INFO spawned: 'ocs-backend' with pid 24026
+2026-08-04 15:52:35,994 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-04 17:26:42,181 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-backend.conf" during parsing
+2026-08-04 17:26:42,181 INFO Included extra file "/home/wentao/project/ops-control-system/supervisor/conf.d/ocs-frontend.conf" during parsing
+2026-08-04 17:47:37,476 INFO waiting for ocs-frontend to stop
+2026-08-04 17:47:37,486 WARN stopped: ocs-frontend (exit status 143)
+2026-08-04 17:47:37,488 INFO spawned: 'ocs-frontend' with pid 33974
+2026-08-04 17:47:42,630 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
+2026-08-04 17:53:28,803 INFO waiting for ocs-frontend to stop
+2026-08-04 17:53:28,812 WARN stopped: ocs-frontend (exit status 143)
+2026-08-04 17:53:28,814 INFO spawned: 'ocs-frontend' with pid 34757
+2026-08-04 17:53:33,949 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)

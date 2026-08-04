@@ -260,7 +260,7 @@ export function AgentChatPage() {
     }
     setMessages(prev => [...prev, userMsg])
 
-    // placeholder assistant message for streaming
+    // placeholder assistant message for streaming (this is the ONLY bubble)
     const assistantId = Date.now() + 1
     setMessages(prev => [...prev, {
       id: assistantId,
@@ -283,13 +283,8 @@ export function AgentChatPage() {
         message,
       })
 
-      const token = localStorage.getItem("ops_token")
-      const response = await fetch("/api/v1/agent/chat", {
+      const response = await api<StreamingResponse>(`/api/v1/agent/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body,
         signal: abortCtrl.signal,
       })
@@ -378,6 +373,8 @@ export function AgentChatPage() {
     } finally {
       setStreaming(false)
       abortRef.current = null
+      // reload conversations so sidebar reflects the updated state
+      loadConversations()
     }
   }
 
@@ -432,16 +429,6 @@ export function AgentChatPage() {
           {messages.map(msg => (
             <MessageBubble key={msg.id} msg={msg} />
           ))}
-
-          {/* streaming indicator */}
-          {streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && !messages[messages.length - 1].content && (
-            <div className="agent-msg assistant">
-              <div className="agent-msg-avatar">🤖</div>
-              <div className="agent-msg-bubble">
-                <span className="typing-cursor" />
-              </div>
-            </div>
-          )}
 
           <div ref={messagesEndRef} />
         </div>

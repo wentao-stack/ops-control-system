@@ -1080,7 +1080,7 @@ def agent_create_conversation(
     user: User = Depends(get_current_user),
 ) -> AgentConversationResponse:
     """Create a new conversation."""
-    model = (body or AgentConversationCreate()).model
+    model = body.model if body and body.model else agent_service.DEFAULT_MODEL
     return agent_service.create_conversation(session, user.username, model)
 
 

@@ -25,7 +25,10 @@ class AgentConversationListResponse(BaseModel):
 
 
 class AgentConversationCreate(BaseModel):
-    model: str = "gpt-4o-mini"
+    # Leave the model unset so the service can use AGENT_DEFAULT_MODEL.
+    # A hard-coded schema default overrides the configured local model even
+    # when clients (such as the web UI) do not send a model field.
+    model: str | None = None
 
 
 # ── Message schemas ──────────────────────────────────────────────────────────
@@ -53,7 +56,7 @@ class AgentMessagesListResponse(BaseModel):
 class AgentChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str = Field(min_length=1)
-    model: str = "gpt-4o-mini"
+    model: str | None = None
 
 
 # ── Health ───────────────────────────────────────────────────────────────────

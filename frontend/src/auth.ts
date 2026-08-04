@@ -44,6 +44,10 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
     }
     throw new Error(`Request failed: ${response.status}`)
   }
+  // Handle streaming responses (SSE)
+  if (response.headers.get("content-type")?.includes("text/event-stream")) {
+    return response as unknown as T
+  }
   if (response.status === 204 || response.headers.get("content-length") === "0") {
     return null as T
   }
