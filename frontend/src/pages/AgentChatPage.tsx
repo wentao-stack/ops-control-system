@@ -161,6 +161,7 @@ export function AgentChatPage() {
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [llmReady, setLlmReady] = useState(true)
+  const [creatingConv, setCreatingConv] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -207,6 +208,8 @@ export function AgentChatPage() {
 
   /* create new conversation */
   const handleNew = async () => {
+    if (creatingConv) return
+    setCreatingConv(true)
     try {
       const r = await api<AgentConversation>(`/api/v1/agent/conversations`, { method: "POST" })
       setConversations(prev => [r, ...prev])
@@ -217,6 +220,8 @@ export function AgentChatPage() {
       const id = `local-${Date.now()}`
       setActiveId(id)
       setMessages([])
+    } finally {
+      setCreatingConv(false)
     }
   }
 
@@ -242,7 +247,7 @@ export function AgentChatPage() {
   /* send message with SSE streaming */
   const handleSend = async (text?: string) => {
     const message = text || input.trim()
-    if (!message || streaming) return
+    if (!message || streaming || !activeId) return
 
     setInput("")
     const convId = activeId
@@ -420,8 +425,8 @@ export function AgentChatPage() {
               <p>我可以幫您查看主機、服務、告警等 OPS 資源</p>
               <div className="agent-suggestions">
                 {SUGGESTIONS.map(s => (
-                  <button key={s} className="agent-suggestion" onClick={() => {
-                    if (!activeId) handleNew()
+                  <button key={s} className="agent-suggestion" onClick={async () => {
+                    if (!activeId) await handleNew()
                     setTimeout(() => handleSend(s), 100)
                   }}>
                     {s}

@@ -817,3 +817,44 @@ INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-f990590a410b/messages HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-f990590a410b/messages HTTP/1.1" 200 OK
 INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-d90af670a6f2/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /assets/index-CBR4H8qY.css HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /assets/index-BcuQq5mN.js HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-d90af670a6f2/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-d90af670a6f2/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-d90af670a6f2/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "DELETE /api/v1/agent/conversations/conv-d90af670a6f2 HTTP/1.1" 204 No Content
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "DELETE /api/v1/agent/conversations/conv-f990590a410b HTTP/1.1" 204 No Content
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "DELETE /api/v1/agent/conversations/conv-cddedd01e635 HTTP/1.1" 204 No Content
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /assets/index-BcuQq5mN.js HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /assets/index-CBR4H8qY.css HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ae4a69f7b4a0/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ae4a69f7b4a0/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /assets/index-CBR4H8qY.css HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /assets/index-BcuQq5mN.js HTTP/1.1" 304 Not Modified
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ae4a69f7b4a0/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ae4a69f7b4a0/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-a976be59f591/messages HTTP/1.1" 200 OK
+INFO:     106.155.49.94:0 - "GET /api/v1/agent/conversations/conv-ae4a69f7b4a0/messages HTTP/1.1" 200 OK
