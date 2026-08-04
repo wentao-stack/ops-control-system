@@ -314,7 +314,12 @@ export function AgentChatPage() {
 
               try {
                 const parsed = JSON.parse(data)
-                if (parsed.event === "token") {
+                if (parsed.event === "conv_id") {
+                  // Backend auto-created a conversation — update activeId
+                  if (!convId) {
+                    setActiveId(parsed.conv_id)
+                  }
+                } else if (parsed.event === "token") {
                   // append streaming token
                   setMessages(prev =>
                     prev.map(m =>
@@ -358,8 +363,7 @@ export function AgentChatPage() {
         }
       }
 
-      // reload messages for the active conversation
-      if (convId) loadMessages(convId)
+      // SSE stream complete — messages already updated via streaming, no need to reload
     } catch (e: any) {
       if (e.name !== "AbortError") {
         // show error in chat

@@ -725,6 +725,9 @@ async def chat_stream(
         conv_id = new_conv.id
         is_new = True
 
+    # Tell frontend the actual conversation id (important when auto-created)
+    yield f'data: {json.dumps({"event": "conv_id", "conv_id": conv_id})}\n\n'
+
     # Verify conversation exists and belongs to user
     conv = (
         session.query(AgentConversation)

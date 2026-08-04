@@ -656,3 +656,11 @@ Traceback (most recent call last):
   File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
     raise WebSocketDisconnect(code=1006)
 starlette.websockets.WebSocketDisconnect
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59316]
+INFO:     Started server process [61500]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
