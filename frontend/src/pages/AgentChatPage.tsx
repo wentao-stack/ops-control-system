@@ -453,9 +453,10 @@ export function AgentChatPage() {
               <p>我可以幫您查看主機、服務、告警等 OPS 資源</p>
               <div className="agent-suggestions">
                 {SUGGESTIONS.map(s => (
-                  <button key={s} className="agent-suggestion" onClick={async () => {
-                    if (!activeId) await handleNew()
-                    setTimeout(() => handleSend(s), 100)
+                  <button key={s} className="agent-suggestion" onClick={() => {
+                    setInput(s)
+                    // handleSend will auto-create conversation if needed
+                    setTimeout(() => handleSend(s), 50)
                   }}>
                     {s}
                   </button>
