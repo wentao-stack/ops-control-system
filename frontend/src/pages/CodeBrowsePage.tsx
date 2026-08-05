@@ -324,7 +324,7 @@ export function CodeBrowsePage() {
         </div>
       )}
 
-      {/* 搜尋列 + 展開/收縮/重新整理按鈕 */}
+      {/* 搜尋列 + 重新整理按鈕 */}
       <div className="code-browse__search">
         <input
           type="text"
@@ -333,12 +333,6 @@ export function CodeBrowsePage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="input"
         />
-        <button className="btn btn--sm" onClick={expandAll} title="全部展開">
-          🔽
-        </button>
-        <button className="btn btn--sm" onClick={collapseAll} title="全部收縮">
-          🔼
-        </button>
         <button className="btn btn--sm" onClick={() => { loadTree(); }} title="重新整理">
           🔄
         </button>
@@ -348,6 +342,18 @@ export function CodeBrowsePage() {
       <div className="code-browse__layout">
         {/* 左欄：檔案樹 */}
         <div className="code-browse__tree">
+          <div className="code-browse__tree-header">
+            <span className="code-browse__tree-title">📁 檔案樹</span>
+            <div className="code-browse__tree-actions">
+              <button className="btn btn--sm" onClick={expandAll} title="全部展開">
+                🔽
+              </button>
+              <button className="btn btn--sm" onClick={collapseAll} title="全部收縮">
+                🔼
+              </button>
+            </div>
+          </div>
+          <div className="code-browse__tree-content">
           {loading ? (
             <div className="loading">載入中...</div>
           ) : (
@@ -363,6 +369,7 @@ export function CodeBrowsePage() {
               />
             ))
           )}
+          </div>
         </div>
 
         {/* 右欄：程式碼檢視器 */}
@@ -450,9 +457,10 @@ export function CodeBrowsePage() {
       {/* Inline styles */}
       <style>{`
         .code-browse {
-          height: 100%;
+          height: calc(100vh - var(--topbar-h) - 48px);
           display: flex;
           flex-direction: column;
+          min-height: 400px;
         }
 
         .code-browse__header {
@@ -461,6 +469,7 @@ export function CodeBrowsePage() {
           justify-content: space-between;
           padding-bottom: 12px;
           border-bottom: 1px solid var(--border);
+          flex-shrink: 0;
         }
 
         .code-browse__header h2 {
@@ -477,6 +486,7 @@ export function CodeBrowsePage() {
           display: flex;
           gap: 8px;
           padding: 12px 0;
+          flex-shrink: 0;
         }
 
         .code-browse__search .input {
@@ -495,6 +505,33 @@ export function CodeBrowsePage() {
           width: 320px;
           min-width: 240px;
           border-right: 1px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .code-browse__tree-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 12px;
+          background: #f8fafc;
+          border-bottom: 1px solid var(--border);
+          flex-shrink: 0;
+        }
+
+        .code-browse__tree-title {
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .code-browse__tree-actions {
+          display: flex;
+          gap: 4px;
+        }
+
+        .code-browse__tree-content {
+          flex: 1;
           overflow-y: auto;
           padding-bottom: 16px;
         }
@@ -508,23 +545,29 @@ export function CodeBrowsePage() {
           font-size: 13px;
           white-space: nowrap;
           user-select: none;
+          border-left: 2px solid transparent;
+          transition: background 0.1s, border-color 0.1s;
         }
 
         .tree-node:hover {
           background: #f1f5f9;
+          border-left-color: var(--primary);
         }
 
         .tree-node--selected {
           background: #dbeafe;
           font-weight: 500;
+          border-left-color: var(--primary);
         }
 
         .tree-arrow {
-          width: 14px;
+          width: 20px;
           text-align: center;
-          font-size: 10px;
+          font-size: 12px;
           color: var(--text-secondary);
           flex-shrink: 0;
+          transition: transform 0.15s;
+          cursor: pointer;
         }
 
         .tree-icon {
@@ -859,12 +902,16 @@ export function CodeBrowsePage() {
         }
 
         @media (max-width: 768px) {
+          .code-browse {
+            height: auto;
+            min-height: unset;
+          }
           .code-browse__layout {
             flex-direction: column;
           }
           .code-browse__tree {
             width: 100%;
-            max-height: 200px;
+            max-height: 300px;
             border-right: none;
             border-bottom: 1px solid var(--border);
           }
