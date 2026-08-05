@@ -7,14 +7,15 @@ import { api } from "../auth"
    ─────────────────────────────────────────────────────────────────────────── */
 
 interface VultrAccount {
-  id: string
+  name: string
   email: string
-  status: string
+  org_name: string
+  country: string
   balance: string
-  balance_paid: string
-  funding_balance: string
-  funding_available: string
-  expected_charge_next_cycle: string
+  pending_charges: string
+  prepayment_remaining: string
+  last_payment_date: string
+  last_payment_amount: string
   fetched_at: string
 }
 
@@ -348,7 +349,7 @@ export function CloudsPage() {
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {vultrAccount
-                    ? `${vultrAccount.email} · 餘額 $${vultrAccount.balance} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}`
+                    ? `${vultrAccount.name} (${vultrAccount.email}) · 餘額 $${vultrAccount.balance} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}`
                     : "API 連接失敗，請檢查 VULTR_API_KEY"}
                 </span>
               </div>
@@ -369,23 +370,24 @@ export function CloudsPage() {
             {/* Balance detail */}
             {vultrAccount && (
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>帳號餘額</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>帳號資訊</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>當前餘額</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "var(--success)" }}>${vultrAccount.balance}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>可用資金</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.funding_available}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>下期待扣</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.pending_charges}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>下期預估費用</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "var(--danger)" }}>${vultrAccount.expected_charge_next_cycle}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>上次付款</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.last_payment_amount}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{vultrAccount.last_payment_date?.split("T")[0] ?? ""}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>已付</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.balance_paid}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>組織</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{vultrAccount.org_name}</div>
                   </div>
                 </div>
               </div>

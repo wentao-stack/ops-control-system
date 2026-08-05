@@ -45,27 +45,15 @@ async def fetch_vultr_account() -> dict:
     account = data.get("account", {})
 
     return {
-        "id": account.get("id", ""),
+        "name": account.get("name", ""),
         "email": account.get("email", ""),
-        "status": account.get("status", ""),
-        "allowed_ips": account.get("allowed_ips", []),
-        "expected_charge_next_cycle": account.get("expected_charge_next_cycle", ""),
-        "low_balance_threshold": account.get("low_balance_threshold", ""),
-        "balance": account.get("current_balance", ""),
-        "balance_paid": account.get("balance_paid", ""),
-        "funding_balance": account.get("funding_balance", ""),
-        "funding_pending": account.get("funding_pending", ""),
-        "funding_pending_desc": account.get("funding_pending_desc", ""),
-        "funding_available": account.get("funding_available", ""),
-        "funding_available_desc": account.get("funding_available_desc", ""),
-        "funding_low_threshold": account.get("funding_low_threshold", ""),
-        "funding_low_threshold_desc": account.get("funding_low_threshold_desc", ""),
-        "funding_low_threshold_enabled": account.get("funding_low_threshold_enabled", False),
-        "funding_low_threshold_enabled_desc": account.get("funding_low_threshold_enabled_desc", ""),
-        "funding_low_threshold_enabled_desc2": account.get("funding_low_threshold_enabled_desc2", ""),
-        "funding_low_threshold_enabled_desc3": account.get("funding_low_threshold_enabled_desc3", ""),
-        "funding_low_threshold_enabled_desc4": account.get("funding_low_threshold_enabled_desc4", ""),
-        "funding_low_threshold_enabled_desc5": account.get("funding_low_threshold_enabled_desc5", ""),
+        "org_name": account.get("org_name", ""),
+        "country": account.get("country", ""),
+        "balance": str(account.get("balance", "")),
+        "pending_charges": str(account.get("pending_charges", "")),
+        "prepayment_remaining": account.get("prepayment_remaining", ""),
+        "last_payment_date": account.get("last_payment_date", ""),
+        "last_payment_amount": str(account.get("last_payment_amount", "")),
         "fetched_at": datetime.now().isoformat(),
     }
 
@@ -94,9 +82,6 @@ async def fetch_vultr_instances() -> list[dict]:
     for inst in instances:
         result.append({
             "id": inst.get("ID", ""),
-            "os_id": inst.get("OS_ID", ""),
-            "ram_id": inst.get("RAM_ID", ""),
-            "disk_id": inst.get("DISK_ID", ""),
             "default_ip": inst.get("MAIN_IP", ""),
             "region": inst.get("REGION_ID", ""),
             "plan": inst.get("PLAN", ""),
@@ -107,11 +92,7 @@ async def fetch_vultr_instances() -> list[dict]:
             "vcpu_count": inst.get("VCPU_COUNT", 0),
             "memory": inst.get("MEMORY", 0),
             "disk": inst.get("DISK", 0),
-            "bandwidth": inst.get("BANDWIDTH", 0),
-            "net_ipv4": inst.get("MAIN_IP", ""),
-            "tags": inst.get("TAGS", []),
             "created": inst.get("DATE_CREATED", ""),
             "current_price": inst.get("CURRENT_PRICE", ""),
-            "price": inst.get("PRICE", 0),
         })
     return result

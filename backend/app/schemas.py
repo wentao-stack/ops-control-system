@@ -423,14 +423,15 @@ class CodeFileResponse(BaseModel):
 
 class VultrAccountResponse(BaseModel):
     """Vultr 帳號資訊，包含餘額和狀態。"""
-    id: str = ""
+    name: str = ""
     email: str = ""
-    status: str = ""
+    org_name: str = ""
+    country: str = ""
     balance: str = ""
-    balance_paid: str = ""
-    funding_balance: str = ""
-    funding_available: str = ""
-    expected_charge_next_cycle: str = ""
+    pending_charges: str = ""
+    prepayment_remaining: str = ""
+    last_payment_date: str = ""
+    last_payment_amount: str = ""
     fetched_at: str = ""
 
 
