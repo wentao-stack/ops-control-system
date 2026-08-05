@@ -40,6 +40,20 @@ interface VultrInstancesData {
   fetched_at: string
 }
 
+interface VultrBillingItem {
+  id: number
+  date: string
+  type: string
+  description: string
+  amount: number
+  balance: number
+  status: string
+}
+
+interface VultrBillingHistoryData {
+  billing_history: VultrBillingItem[]
+}
+
 /* ── Static ConoHa data ────────────────────────────────────────────────────── */
 
 interface StaticInstance {
@@ -237,6 +251,7 @@ export function CloudsPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [vultrAccount, setVultrAccount] = useState<VultrAccount | null>(null)
   const [vultrInstances, setVultrInstances] = useState<VultrInstance[]>([])
+  const [billingHistory, setBillingHistory] = useState<VultrBillingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -250,7 +265,7 @@ export function CloudsPage() {
       setLoading(true)
       setError(null)
       try {
-        const [account, instances] = await Promise.all([
+        const [account, instances, billing] = await Promise.all([
           api<VultrAccount>("/api/v1/clouds/vultr/account").catch((e: Error) => {
             if (!cancelled) setError(`Vultr API: ${e.message}`)
             return null
@@ -259,10 +274,15 @@ export function CloudsPage() {
             if (!cancelled) setError(`Vultr API: ${e.message}`)
             return null
           }),
+          api<VultrBillingHistoryData>("/api/v1/clouds/vultr/billing-history").catch((e: Error) => {
+            if (!cancelled) setError(`Vultr API: ${e.message}`)
+            return null
+          }),
         ])
         if (!cancelled) {
           if (account) setVultrAccount(account)
           if (instances) setVultrInstances(instances.instances ?? [])
+          if (billing) setBillingHistory(billing.billing_history ?? [])
           setLoading(false)
         }
       } catch (e: any) {
@@ -373,12 +393,17 @@ export function CloudsPage() {
                 <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>帳號資訊</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>當前餘額 (balance)</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Remaining Credit</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>
+                      ${billingHistory.length > 0 ? billingHistory[0].balance : parseFloat(vultrAccount.balance).toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+                      {billingHistory[0]?.date?.split("T")[0] ?? ""}
+                    </div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>預付餘額 (prepayment)</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.prepayment_remaining}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Account Balance</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>下期待扣</div>

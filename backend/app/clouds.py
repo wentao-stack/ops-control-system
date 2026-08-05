@@ -96,3 +96,37 @@ async def fetch_vultr_instances() -> list[dict]:
             "current_price": inst.get("CURRENT_PRICE", ""),
         })
     return result
+
+
+async def fetch_vultr_billing_history() -> list[dict]:
+    """Call Vultr API GET /billing/history and return recent billing records."""
+    api_key = os.environ.get("VULTR_API_KEY", "").strip()
+    if not api_key:
+        return []
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        try:
+            resp = await client.get(
+                f"{VULTR_API_BASE}/billing/history",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            logger.error("Vultr billing history API error: %s", e)
+            return []
+
+    data = resp.json()
+    history = data.get("billing_history", [])
+
+    result = []
+    for item in history[:20]:  # 最近 20 筆
+        result.append({
+            "id": item.get("id", ""),
+            "date": item.get("date", ""),
+            "type": item.get("type", ""),
+            "description": item.get("description", ""),
+            "amount": item.get("amount", 0),
+            "balance": item.get("balance", 0),
+            "status": item.get("status", ""),
+        })
+    return result

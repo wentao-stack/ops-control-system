@@ -1288,6 +1288,13 @@ async def vultr_instances():
     )
 
 
+@app.get("/api/v1/clouds/vultr/billing-history")
+async def vultr_billing_history():
+    """Fetch Vultr billing history."""
+    history = await clouds_service.fetch_vultr_billing_history()
+    return {"billing_history": history}
+
+
 # ── SPA Fallback ──────────────────────────────────────────────────────────────
 
 
