@@ -373,8 +373,12 @@ export function CloudsPage() {
                 <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>帳號資訊</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>當前餘額</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>當前餘額 (balance)</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
+                  </div>
+                  <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>預付餘額 (prepayment)</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.prepayment_remaining}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>下期待扣</div>
@@ -384,10 +388,6 @@ export function CloudsPage() {
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>上次付款</div>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.last_payment_amount}</div>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{vultrAccount.last_payment_date?.split("T")[0] ?? ""}</div>
-                  </div>
-                  <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>組織</div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{vultrAccount.org_name}</div>
                   </div>
                 </div>
               </div>
