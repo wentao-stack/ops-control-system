@@ -16,6 +16,7 @@ interface VultrAccount {
   prepayment_remaining: string
   last_payment_date: string
   last_payment_amount: string
+  remaining_credit: string
   fetched_at: string
 }
 
@@ -369,7 +370,7 @@ export function CloudsPage() {
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {vultrAccount
-                    ? `${vultrAccount.name} (${vultrAccount.email}) · 餘額 $${vultrAccount.balance} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}`
+                    ? `${vultrAccount.name} (${vultrAccount.email}) · Remaining Credit $${vultrAccount.remaining_credit} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}`
                     : "API 連接失敗，請檢查 VULTR_API_KEY"}
                 </span>
               </div>
@@ -394,11 +395,11 @@ export function CloudsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Remaining Credit</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>
-                      ${billingHistory.length > 0 ? billingHistory[0].balance : parseFloat(vultrAccount.balance).toFixed(2)}
+                    <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.remaining_credit) > 0 ? "var(--success)" : "var(--danger)" }}>
+                      ${vultrAccount.remaining_credit}
                     </div>
                     <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
-                      {billingHistory[0]?.date?.split("T")[0] ?? ""}
+                      = |{vultrAccount.balance}| - {vultrAccount.pending_charges}
                     </div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>

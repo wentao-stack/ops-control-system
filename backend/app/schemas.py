@@ -432,6 +432,7 @@ class VultrAccountResponse(BaseModel):
     prepayment_remaining: str = ""
     last_payment_date: str = ""
     last_payment_amount: str = ""
+    remaining_credit: str = ""
     fetched_at: str = ""
 
 

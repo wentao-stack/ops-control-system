@@ -54,6 +54,7 @@ async def fetch_vultr_account() -> dict:
         "prepayment_remaining": account.get("prepayment_remaining", ""),
         "last_payment_date": account.get("last_payment_date", ""),
         "last_payment_amount": str(account.get("last_payment_amount", "")),
+        "remaining_credit": str(round(abs(float(account.get("balance", 0))) - float(account.get("pending_charges", 0)), 2)),
         "fetched_at": datetime.now().isoformat(),
     }
 
