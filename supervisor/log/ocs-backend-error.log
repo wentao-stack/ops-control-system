@@ -704,3 +704,59 @@ INFO:     Started server process [70372]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [70372]
+INFO:     Started server process [71041]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     Started server process [1548]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1548]
+INFO:     Started server process [2919]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=142&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NTkyMjg2MX0.Enwa8241C_3IAvHbVG32wK1nhR81smaYl5KPXj-x4ao" [accepted]
+INFO:     connection open
+2026-08-05 10:14:48,683 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-08-05 10:14:49,175 INFO SSH connected: root@163.44.124.142:22
+2026-08-05 10:14:49,323 INFO Remote PTY created
+2026-08-05 10:14:50,756 WARNING ws_to_ssh error: (<CloseCode.NO_STATUS_RCVD: 1005>, '')
+2026-08-05 10:14:50,757 INFO SSH session ended: exit_code=0
+2026-08-05 10:14:50,757 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 179, in _handle_remote
+    await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
