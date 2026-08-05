@@ -82,19 +82,19 @@ async def fetch_vultr_instances() -> list[dict]:
     result = []
     for inst in instances:
         result.append({
-            "id": inst.get("ID", ""),
-            "default_ip": inst.get("MAIN_IP", ""),
-            "region": inst.get("REGION_ID", ""),
-            "plan": inst.get("PLAN", ""),
-            "status": inst.get("STATUS", ""),
-            "label": inst.get("LABEL", ""),
-            "hostname": inst.get("HOSTNAME", ""),
-            "os": inst.get("OS", ""),
-            "vcpu_count": inst.get("VCPU_COUNT", 0),
-            "memory": inst.get("MEMORY", 0),
-            "disk": inst.get("DISK", 0),
-            "created": inst.get("DATE_CREATED", ""),
-            "current_price": inst.get("CURRENT_PRICE", ""),
+            "id": inst.get("id", ""),
+            "default_ip": inst.get("main_ip", ""),
+            "region": inst.get("region", ""),
+            "plan": inst.get("plan", ""),
+            "status": inst.get("status", ""),
+            "label": inst.get("label", ""),
+            "hostname": inst.get("hostname", ""),
+            "os": inst.get("os", ""),
+            "vcpu_count": inst.get("vcpu_count", 0),
+            "memory": inst.get("ram", 0),
+            "disk": inst.get("disk", 0),
+            "created": inst.get("date_created", ""),
+            "current_price": inst.get("current_price", ""),
         })
     return result
 
