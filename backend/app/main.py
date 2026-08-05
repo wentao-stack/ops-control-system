@@ -1295,6 +1295,18 @@ async def vultr_billing_history():
     return {"billing_history": history}
 
 
+@app.get("/api/v1/clouds/conoha/instances", response_model=VultrInstancesResponse)
+async def conoha_instances():
+    """Fetch ConoHa VPS 3.0 instances list via OpenStack Nova API."""
+    from datetime import datetime
+    from .schemas import VultrInstanceResponse
+    instances = await clouds_service.fetch_conoha_instances()
+    return VultrInstancesResponse(
+        instances=[VultrInstanceResponse(**i) for i in instances],
+        fetched_at=datetime.now().isoformat(),
+    )
+
+
 # ── SPA Fallback ──────────────────────────────────────────────────────────────
 
 

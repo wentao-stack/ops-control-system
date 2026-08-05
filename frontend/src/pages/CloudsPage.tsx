@@ -55,9 +55,9 @@ interface VultrBillingHistoryData {
   billing_history: VultrBillingItem[]
 }
 
-/* ── Static ConoHa data ────────────────────────────────────────────────────── */
+/* ── ConoHa data (fetched from API) ─────────────────────────────────────────── */
 
-interface StaticInstance {
+interface ConoHaInstance {
   id: string
   name: string
   ip: string
@@ -65,19 +65,14 @@ interface StaticInstance {
   region: string
   os: string
   created: string
+  plan: string
+  label: string
+  hostname: string
+  vcpu_count: number
+  memory: number
+  disk: number
+  current_price: string
 }
-
-const CONOHA_INSTANCES: StaticInstance[] = [
-  {
-    id: "6a3f90c8-07af-4594-a2c7-991237d77ecd",
-    name: "vm-6d4d176a-a5",
-    ip: "163.44.124.142",
-    status: "ACTIVE",
-    region: "c3j1 (Japan)",
-    os: "Arch Linux",
-    created: "2026-06-26",
-  },
-]
 
 const VULTR_ENDPOINTS = [
   { method: "GET", path: "/account", desc: "Account info & balance" },
@@ -159,7 +154,8 @@ function VultrInstanceCard({ inst }: { inst: VultrInstance }) {
   )
 }
 
-function StaticInstanceCard({ inst }: { inst: StaticInstance }) {
+function ConoHaInstanceCard({ inst }: { inst: ConoHaInstance }) {
+  const name = inst.name || inst.hostname || inst.id
   return (
     <div
       style={{
@@ -180,11 +176,16 @@ function StaticInstanceCard({ inst }: { inst: StaticInstance }) {
         }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 13 }}>{inst.name}</div>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>{name}</div>
         <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
           {inst.ip} · {inst.region} · {inst.os}
         </div>
       </div>
+      {inst.current_price && (
+        <span className="tag" style={{ marginLeft: "auto" }}>
+          {inst.current_price}/mo
+        </span>
+      )}
       <span
         className="status"
         style={{
@@ -253,6 +254,9 @@ export function CloudsPage() {
   const [vultrAccount, setVultrAccount] = useState<VultrAccount | null>(null)
   const [vultrInstances, setVultrInstances] = useState<VultrInstance[]>([])
   const [billingHistory, setBillingHistory] = useState<VultrBillingItem[]>([])
+  const [conohaInstances, setConoHaInstances] = useState<ConoHaInstance[]>([])
+  const [conohaLoading, setConoHaLoading] = useState(true)
+  const [conohaError, setConoHaError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -297,10 +301,55 @@ export function CloudsPage() {
     return () => { cancelled = true }
   }, [])
 
-  const totalInstances = vultrInstances.length + CONOHA_INSTANCES.length
+  // Fetch ConoHa data on mount
+  useEffect(() => {
+    let cancelled = false
+    const fetchConoHa = async () => {
+      setConoHaLoading(true)
+      setConoHaError(null)
+      try {
+        const data = await api<VultrInstancesData>("/api/v1/clouds/conoha/instances").catch((e: Error) => {
+          if (!cancelled) setConoHaError(`ConoHa API: ${e.message}`)
+          return null
+        })
+        if (!cancelled) {
+          if (data) {
+            // Map VultrInstancesData shape to ConoHaInstance
+            const mapped: ConoHaInstance[] = (data.instances ?? []).map((i) => ({
+              id: i.id,
+              name: i.label || i.hostname || i.id,
+              ip: i.default_ip,
+              status: i.status,
+              region: i.region,
+              os: i.os,
+              created: i.created?.split("T")[0] ?? "",
+              plan: i.plan,
+              label: i.label,
+              hostname: i.hostname,
+              vcpu_count: i.vcpu_count,
+              memory: i.memory,
+              disk: i.disk,
+              current_price: i.current_price,
+            }))
+            setConoHaInstances(mapped)
+          }
+          setConoHaLoading(false)
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setConoHaError(e.message || "Unknown error")
+          setConoHaLoading(false)
+        }
+      }
+    }
+    fetchConoHa()
+    return () => { cancelled = true }
+  }, [])
+
+  const totalInstances = vultrInstances.length + conohaInstances.length
   const activeInstances =
     vultrInstances.filter((i) => i.status.toLowerCase() === "active").length +
-    CONOHA_INSTANCES.filter((i) => i.status.toLowerCase() === "active").length
+    conohaInstances.filter((i) => i.status.toLowerCase() === "active").length
 
   return (
     <>
@@ -459,7 +508,7 @@ export function CloudsPage() {
           </div>
         </div>
 
-        {/* ── ConoHa VPS 3.0 (static) ── */}
+        {/* ── ConoHa VPS 3.0 (live data) ── */}
         <div className="card">
           <div
             className="card-header"
@@ -469,9 +518,16 @@ export function CloudsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 20 }}>🔵</span>
               <div>
-                <h2 style={{ margin: 0 }}>ConoHa VPS 3.0</h2>
+                <h2 style={{ margin: 0 }}>
+                  ConoHa VPS 3.0
+                  {conohaLoading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> (載入中…)</span>}
+                </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                  gnct58663219 (gncu58663219)
+                  {conohaError
+                    ? `API 連接失敗：${conohaError}`
+                    : conohaInstances.length > 0
+                      ? `${conohaInstances.length} 個實例 · 更新 ${new Date().toLocaleTimeString("zh-TW")}`
+                      : "gnct58663219 (gncu58663219)"}
                 </span>
               </div>
             </div>
@@ -490,10 +546,11 @@ export function CloudsPage() {
           <div className="card-body">
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                實例 ({CONOHA_INSTANCES.length})
+                實例 ({conohaInstances.length})
               </h3>
-              {CONOHA_INSTANCES.map((inst) => (
-                <StaticInstanceCard key={inst.id} inst={inst} />
+              {conohaInstances.length === 0 && (conohaLoading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>載入中…</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>無實例或 API 連接失敗</p>)}
+              {conohaInstances.map((inst) => (
+                <ConoHaInstanceCard key={inst.id} inst={inst} />
               ))}
             </div>
 
@@ -514,10 +571,12 @@ export function CloudsPage() {
 
             <div style={{ background: "#1a1b26", borderRadius: 6, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#c0caf5", lineHeight: 1.8 }}>
               <div style={{ color: "#7aa2f7", marginBottom: 4 }}>SSH 連接方式</div>
-              <div>
-                <span style={{ color: "#9ece6a" }}>ssh root@{CONOHA_INSTANCES[0]?.ip}</span>
-                <span style={{ color: "#565f89" }}> # Arch Linux · Nginx + FRP</span>
-              </div>
+              {conohaInstances.map((inst) => (
+                <div key={inst.id}>
+                  <span style={{ color: "#9ece6a" }}>ssh root@{inst.ip}</span>
+                  <span style={{ color: "#565f89" }}> # {inst.name} · {inst.os}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
