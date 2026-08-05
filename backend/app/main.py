@@ -38,6 +38,7 @@ from .schemas import (
     TokenResponse, UserResponse,
     ExecLogResponse, ExecLogListResponse,
     CodeTreeItem, CodeTreeResponse, CodeFileResponse,
+    VultrAccountResponse, VultrInstancesResponse,
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
@@ -74,6 +75,7 @@ from .agent_schemas import (
     AgentHealthResponse,
     AgentMessagesListResponse,
 )
+from . import clouds as clouds_service
 
 # ── Simple response cache ────────────────────────────────────────────────────
 _cache: dict[str, tuple[Any, float]] = {}
@@ -1261,6 +1263,28 @@ def get_code_file(file_path: str) -> CodeFileResponse:
         content=content,
         language=_detect_language(file_path),
         line_count=len(content.splitlines()),
+    )
+
+
+# ── Cloud Platform APIs ──────────────────────────────────────────────────────
+
+
+@app.get("/api/v1/clouds/vultr/account", response_model=VultrAccountResponse)
+async def vultr_account():
+    """Fetch Vultr account info with real-time balance."""
+    data = await clouds_service.fetch_vultr_account()
+    return VultrAccountResponse(**data)
+
+
+@app.get("/api/v1/clouds/vultr/instances", response_model=VultrInstancesResponse)
+async def vultr_instances():
+    """Fetch Vultr instances list."""
+    from datetime import datetime
+    from .schemas import VultrInstanceResponse
+    instances = await clouds_service.fetch_vultr_instances()
+    return VultrInstancesResponse(
+        instances=[VultrInstanceResponse(**i) for i in instances],
+        fetched_at=datetime.now().isoformat(),
     )
 
 

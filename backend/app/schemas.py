@@ -417,3 +417,41 @@ class CodeFileResponse(BaseModel):
     content: str  # 檔案完整文字內容
     language: str  # 根據副檔名偵測的程式語言（用於語法著色）
     line_count: int  # 檔案總行數
+
+
+# ── Cloud platform schemas ───────────────────────────────────────────────────
+
+class VultrAccountResponse(BaseModel):
+    """Vultr 帳號資訊，包含餘額和狀態。"""
+    id: str = ""
+    email: str = ""
+    status: str = ""
+    balance: str = ""
+    balance_paid: str = ""
+    funding_balance: str = ""
+    funding_available: str = ""
+    expected_charge_next_cycle: str = ""
+    fetched_at: str = ""
+
+
+class VultrInstanceResponse(BaseModel):
+    """Vultr 單一實例資訊。"""
+    id: str = ""
+    default_ip: str = ""
+    region: str = ""
+    plan: str = ""
+    status: str = ""
+    label: str = ""
+    hostname: str = ""
+    os: str = ""
+    vcpu_count: int = 0
+    memory: int = 0
+    disk: int = 0
+    created: str = ""
+    current_price: str = ""
+
+
+class VultrInstancesResponse(BaseModel):
+    """Vultr 實例列表。"""
+    instances: list[VultrInstanceResponse] = []
+    fetched_at: str = ""
