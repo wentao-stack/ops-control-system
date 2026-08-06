@@ -459,6 +459,13 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
             (Asset.id == asset_id) | (Asset.name == asset_id)
         )
     ).scalar_one_or_none()
+
+    # Fuzzy match: if exact match failed, try partial name match (e.g. "vultr" → "vultr (149.28.44.218)")
+    if not asset:
+        asset = session.execute(
+            select(Asset).where(Asset.name.like(f"%{asset_id}%"))
+        ).scalar_one_or_none()
+
     if not asset:
         # Show available assets with SSH to help LLM retry
         ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
@@ -560,6 +567,13 @@ async def tool_supervisor_action(params: dict, session: Session) -> str:
             (Asset.id == asset_id) | (Asset.name == asset_id)
         )
     ).scalar_one_or_none()
+
+    # Fuzzy match: if exact match failed, try partial name match (e.g. "vultr" → "vultr (149.28.44.218)")
+    if not asset:
+        asset = session.execute(
+            select(Asset).where(Asset.name.like(f"%{asset_id}%"))
+        ).scalar_one_or_none()
+
     if not asset:
         # Show available assets with SSH to help LLM retry
         ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
