@@ -59,10 +59,10 @@ backend/
 │   │   └── {date}_{type}.csv
 │   └── backups/                        ← 數據庫備份
 │       └── ops_20260729.sql
-└── logs/                               ← 運行日誌 (已存在)
-    ├── backend.log
-    ├── frontend.log
-    └── supervisord.log
+└── logs/                               ← 運行日誌（已移除，使用 supervisor/log/）
+```
+
+> **注意**: `start.sh` 已移除，日誌統一在 `supervisor/log/` 目錄下。
 ```
 
 ---

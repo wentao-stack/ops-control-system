@@ -153,7 +153,6 @@ const data = await api<SomeType>('/api/v1/endpoint');
 | TS 檢查 | `cd frontend && npx tsc --noEmit` |
 | 構建 | `cd frontend && npm run build` |
 | 測試 | `cd backend && python3 -m pytest` |
-| 一鍵啟動 | `./start.sh -b`（背景）/ `./start.sh -s`（停止）/ `./start.sh -S`（狀態） |
 
 ## 安全規則
 

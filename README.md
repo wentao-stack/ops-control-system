@@ -46,7 +46,7 @@ Remote server operations control platform — inventory, monitoring, SSH executi
 .gitignore                          # Git 忽略規則（.venv/, node_modules/, .data/, dist/, .env 等）
 CLAUDE.md                           # Agent 工作手冊（開發流程、快捷命令、安全規則）
 README.md                           # 本文件
-start.sh                            # 一鍵啟動腳本（支援 dev/prod 模式、前台/背景、停止/狀態檢查）
+# 無（已移除，統一使用 Supervisor 管理服務）
 ```
 
 ### Backend — `backend/`
