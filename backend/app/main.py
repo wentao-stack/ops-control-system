@@ -1257,6 +1257,97 @@ def get_agent_usage(
     }
 
 
+@app.get("/api/v1/agent/memories")
+def get_agent_memories(
+    category: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get agent memories for current user."""
+    from .models import AgentMemory
+
+    q = select(AgentMemory).where(AgentMemory.user == current_user.username)
+    if category:
+        q = q.where(AgentMemory.category == category)
+    memories = session.scalars(q.order_by(AgentMemory.updated_at.desc())).all()
+    return {
+        "memories": [
+            {
+                "id": m.id,
+                "category": m.category,
+                "key": m.key,
+                "value": m.value,
+                "created_at": m.created_at.isoformat(),
+                "updated_at": m.updated_at.isoformat(),
+            }
+            for m in memories
+        ]
+    }
+
+
+@app.post("/api/v1/agent/memories")
+def save_agent_memory(
+    req: dict,
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Save or update an agent memory."""
+    from .models import AgentMemory
+    from datetime import UTC, datetime
+
+    key = req.get("key", "")
+    value = req.get("value", "")
+    category = req.get("category", "environment")
+
+    if not key or not value:
+        return {"error": "key and value required"}, 400
+
+    existing = session.scalar(
+        select(AgentMemory).where(
+            AgentMemory.user == current_user.username,
+            AgentMemory.key == key,
+        )
+    )
+    now = datetime.now(UTC)
+    if existing:
+        existing.value = value
+        existing.category = category
+        existing.updated_at = now
+    else:
+        session.add(AgentMemory(
+            user=current_user.username,
+            category=category,
+            key=key,
+            value=value,
+            created_at=now,
+            updated_at=now,
+        ))
+    session.commit()
+    return {"ok": True, "key": key}
+
+
+@app.delete("/api/v1/agent/memories/{memory_id}")
+def delete_agent_memory(
+    memory_id: int,
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete an agent memory."""
+    from .models import AgentMemory
+
+    mem = session.scalar(
+        select(AgentMemory).where(
+            AgentMemory.id == memory_id,
+            AgentMemory.user == current_user.username,
+        )
+    )
+    if not mem:
+        return {"error": "not found"}, 404
+    session.delete(mem)
+    session.commit()
+    return {"ok": True}
+
+
 # ── Code browser ──────────────────────────────────────────────────────────────
 # 程式碼瀏覽器功能：讓使用者在 OPS 控制系統中直接瀏覽專案原始碼
 # 提供兩個 API：

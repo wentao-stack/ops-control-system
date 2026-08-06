@@ -176,3 +176,20 @@ class AgentUsage(Base):
     __table_args__ = (
         Index("idx_agent_usage_user_time", "user", "created_at"),
     )
+
+
+class AgentMemory(Base):
+    __tablename__ = "agent_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_agent_memories_user_key", "user", "key", unique=False),
+        Index("idx_agent_memories_user_cat", "user", "category"),
+    )

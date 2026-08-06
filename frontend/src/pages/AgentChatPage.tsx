@@ -653,6 +653,7 @@ function fmtTokens(n: number): string {
 }
 
 function AgentUsagePanel() {
+  const [subTab, setSubTab] = useState<"usage" | "memories">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
   const [loading, setLoading] = useState(false)
@@ -675,6 +676,14 @@ function AgentUsagePanel() {
 
   return (
     <div className="usage-panel">
+      {/* Sub-tab switcher */}
+      <div className="usage-sub-tabs">
+        <button className={`usage-sub-tab ${subTab === "usage" ? "active" : ""}`} onClick={() => setSubTab("usage")}>📊 用量統計</button>
+        <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>🧠 記憶管理</button>
+      </div>
+
+      {subTab === "usage" ? (
+      <div className="usage-content">
       <div className="usage-header">
         <h3>📊 Token 用量統計</h3>
         <div className="usage-period">
@@ -786,6 +795,130 @@ function AgentUsagePanel() {
             </tbody>
           </table>
         </div>
+      )}
+      </div>) : (<AgentMemoryPanel />)}
+    </div>
+  )
+}
+
+/* ── Memory Panel ──────────────────────────────────────────────────────────── */
+
+type MemoryItem = {
+  id: number
+  category: string
+  key: string
+  value: string
+  created_at: string
+  updated_at: string
+}
+
+function AgentMemoryPanel() {
+  const [memories, setMemories] = useState<MemoryItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [newKey, setNewKey] = useState("")
+  const [newValue, setNewValue] = useState("")
+  const [newCategory, setNewCategory] = useState("environment")
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    api<{ memories: MemoryItem[] }>("/api/v1/agent/memories")
+      .then(r => setMemories(r.memories))
+      .catch(() => setMemories([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const handleSave = async () => {
+    if (!newKey.trim() || !newValue.trim()) return
+    setSaving(true)
+    try {
+      await api("/api/v1/agent/memories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: newKey, value: newValue, category: newCategory }),
+      })
+      setNewKey("")
+      setNewValue("")
+      load()
+    } catch (e) {
+      console.error("Save memory failed:", e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    try {
+      await api(`/api/v1/agent/memories/${id}`, { method: "DELETE" })
+      load()
+    } catch (e) {
+      console.error("Delete memory failed:", e)
+    }
+  }
+
+  if (loading) return <div className="usage-empty">載入中...</div>
+
+  // Group by category
+  const groups: Record<string, MemoryItem[]> = {}
+  for (const m of memories) {
+    groups[m.category] = groups[m.category] || []
+    groups[m.category].push(m)
+  }
+
+  return (
+    <div className="memory-panel">
+      <div className="memory-header">
+        <h3>🧠 記憶管理</h3>
+        <p className="memory-desc">Agent 的跨對話記憶 — 重要事實會自動保留到下次對話</p>
+      </div>
+
+      {/* Add new memory */}
+      <div className="memory-add">
+        <input
+          className="memory-input"
+          placeholder="鍵（如：preferred_language）"
+          value={newKey}
+          onChange={e => setNewKey(e.target.value)}
+        />
+        <select className="memory-select" value={newCategory} onChange={e => setNewCategory(e.target.value)}>
+          <option value="user">用戶</option>
+          <option value="environment">環境</option>
+          <option value="procedure">流程</option>
+          <option value="preference">偏好</option>
+        </select>
+        <input
+          className="memory-input"
+          placeholder="值（如：繁體中文）"
+          value={newValue}
+          onChange={e => setNewValue(e.target.value)}
+        />
+        <button className="memory-add-btn" onClick={handleSave} disabled={saving}>
+          {saving ? "儲存中..." : "＋ 新增"}
+        </button>
+      </div>
+
+      {/* Memory list */}
+      {Object.keys(groups).length === 0 ? (
+        <div className="memory-empty">暫無記憶 — Agent 會在對話中自動學習並記憶重要資訊</div>
+      ) : (
+        Object.entries(groups).map(([cat, items]) => (
+          <div key={cat} className="memory-group">
+            <h4 className="memory-group-title">[{cat}]</h4>
+            <div className="memory-list">
+              {items.map(m => (
+                <div key={m.id} className="memory-item">
+                  <div className="memory-item-content">
+                    <span className="memory-key">{m.key}</span>
+                    <span className="memory-value">{m.value}</span>
+                  </div>
+                  <button className="memory-delete-btn" onClick={() => handleDelete(m.id)}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
       )}
     </div>
   )

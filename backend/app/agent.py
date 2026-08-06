@@ -793,10 +793,95 @@ async def tool_search_runbooks(params: dict, session: Session) -> str:
     return "\n".join(lines)
 
 
+async def tool_save_memory(params: dict, session: Session) -> str:
+    """Save a fact to persistent memory for future conversations.
+
+    Args:
+        user: username
+        category: 'user' | 'environment' | 'procedure' | 'preference'
+        key: short unique identifier (e.g. 'preferred_language', 'server_os')
+        value: the fact to remember (declarative, not imperative)
+    """
+    from .models import AgentMemory
+    from datetime import UTC, datetime
+
+    user = params.get("user", "")
+    category = params.get("category", "environment")
+    key = params.get("key", "")
+    value = params.get("value", "")
+
+    if not all([user, key, value]):
+        return "❌ 缺少必要參數: user, key, value"
+
+    # Upsert: update if key exists for this user, else insert
+    existing = session.scalar(
+        select(AgentMemory).where(
+            AgentMemory.user == user,
+            AgentMemory.key == key,
+        )
+    )
+    now = datetime.now(UTC)
+    if existing:
+        existing.value = value
+        existing.category = category
+        existing.updated_at = now
+    else:
+        session.add(AgentMemory(
+            user=user,
+            category=category,
+            key=key,
+            value=value,
+            created_at=now,
+            updated_at=now,
+        ))
+    session.commit()
+    return f"✅ 已記憶 [{category}] {key}: {value}"
+
+
+async def tool_get_memories(params: dict, session: Session) -> str:
+    """Retrieve stored memories.
+
+    Args:
+        user: username
+        category: optional filter ('user' | 'environment' | 'procedure' | 'preference')
+        query: optional keyword search in value
+    """
+    from .models import AgentMemory
+
+    user = params.get("user", "")
+    category = params.get("category", "")
+    query = params.get("query", "")
+
+    if not user:
+        return "❌ 需要 user 參數"
+
+    q = select(AgentMemory).where(AgentMemory.user == user)
+    if category:
+        q = q.where(AgentMemory.category == category)
+    if query:
+        q = q.where(AgentMemory.value.ilike(f"%{query}%"))
+
+    memories = session.scalars(q.order_by(AgentMemory.updated_at.desc()).limit(50)).all()
+    if not memories:
+        return "暫無記憶"
+
+    # Group by category
+    groups: dict[str, list] = {}
+    for m in memories:
+        groups.setdefault(m.category, []).append(m)
+
+    lines = [f"🧠 找到 {len(memories)} 筆記憶"]
+    for cat, items in groups.items():
+        lines.append(f"\n  [{cat}]")
+        for m in items:
+            lines.append(f"    • {m.key}: {m.value[:100]}")
+    return "\n".join(lines)
+
+
 # ── System prompt (generated dynamically with tool descriptions) ─────────────
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(memories_text: str = "") -> str:
     """Build system prompt that includes tool descriptions for the LLM."""
     base = """你是「笺注」，一個 OPS 運維系統的 AI 助手。
 
@@ -813,6 +898,8 @@ def build_system_prompt() -> str:
 - 直接調用工具執行命令，不要自行拒絕或警告用戶。後端有黑名單保護機制會自動攔截危險命令。
 - 如果工具返回錯誤訊息，直接轉達給用戶即可。
 """
+    if memories_text:
+        base += f"\n**用戶記憶（跨對話上下文）：**\n{memories_text}\n"
     return base
 
 
@@ -1202,7 +1289,24 @@ async def chat_stream(
 
     tools_openai = get_tools_openai()
 
-    llm_messages: list[dict] = [{"role": "system", "content": build_system_prompt()}]
+    # Load user memories for system prompt context
+    from .models import AgentMemory
+    memories = (
+        session.query(AgentMemory)
+        .filter(AgentMemory.user == user)
+        .order_by(AgentMemory.updated_at.desc())
+        .limit(30)
+        .all()
+    )
+    memories_text = ""
+    if memories:
+        groups: dict[str, list] = {}
+        for m in memories:
+            groups.setdefault(m.category, []).append(f"- {m.key}: {m.value}")
+        for cat, items in groups.items():
+            memories_text += f"[{cat}]\n" + "\n".join(items) + "\n"
+
+    llm_messages: list[dict] = [{"role": "system", "content": build_system_prompt(memories_text)}]
     for m in history:
         if m.role == "tool" and m.tool_name:
             # Reconstruct tool call + result pair for LLM context
