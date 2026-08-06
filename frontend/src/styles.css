@@ -5186,15 +5186,15 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 0;
 }
 
-/* usage badge on assistant messages */
+/* usage badge inside assistant bubble */
 .agent-msg-usage {
-  margin-top: 6px;
-  padding: 3px 10px;
+  margin-top: 8px;
+  padding: 4px 10px;
   font-size: 11px;
   color: var(--text-secondary);
   background: var(--bg-tertiary);
   border-radius: 4px;
-  display: inline-block;
+  border-top: 1px solid var(--border);
 }
 
 /* input area */

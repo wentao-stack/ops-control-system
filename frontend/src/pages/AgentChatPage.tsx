@@ -151,16 +151,18 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
   return (
     <div className={`agent-msg ${isUser ? "user" : "assistant"}`}>
       <div className="agent-msg-avatar">{isUser ? "👤" : "🤖"}</div>
-      <div
-        className="agent-msg-bubble"
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-      />
-      {msg.role === "assistant" && msg.usage && (
-        <div className="agent-msg-usage">
-          📊 {msg.usage.total_tokens.toLocaleString()} tokens
-          {msg.usage.tool_calls > 0 && ` · ${msg.usage.tool_calls} tools`}
-        </div>
-      )}
+      <div className="agent-msg-content">
+        <div
+          className="agent-msg-bubble"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+        />
+        {msg.role === "assistant" && msg.usage && (
+          <div className="agent-msg-usage">
+            📊 {msg.usage.total_tokens.toLocaleString()} tokens
+            {msg.usage.tool_calls > 0 && ` · ${msg.usage.tool_calls} tools`}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
