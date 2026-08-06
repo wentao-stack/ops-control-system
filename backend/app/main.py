@@ -1188,8 +1188,8 @@ def get_agent_usage(
         query = query.where(AgentUsage.created_at >= start)
 
     # Non-admin can only see their own usage
-    if current_user.get("role") != "admin":
-        query = query.where(AgentUsage.user == current_user["username"])
+    if current_user.role != "admin":
+        query = query.where(AgentUsage.user == current_user.username)
     elif user:
         query = query.where(AgentUsage.user == user)
 

@@ -842,3 +842,49 @@ INFO:     118.3.227.75:0 - "DELETE /api/v1/notes/note-d04df19aaa39 HTTP/1.1" 200
 INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/notes/AIOps-Agent-12-%E9%80%B1%E5%AF%A6%E4%BD%9C%E8%A8%88%E5%8A%8324496501 HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=10&category=%E7%9F%A5%E8%AD%98 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/workflows/templates HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/workflows/executions?page_size=20 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-0ae67c33b2c9/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-0ae67c33b2c9 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-B9sp2na9.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-Cd7dWJI5.css HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-77d9394d8e29/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-50c7904f9abc HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-8f72fee8c9f9/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-8f72fee8c9f9 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-77d9394d8e29/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-77d9394d8e29 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error
+INFO:     59.132.66.4:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     59.132.66.4:0 - "GET /assets/index-B9sp2na9.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     59.132.66.4:0 - "GET /assets/index-Cd7dWJI5.css HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-B9sp2na9.js HTTP/1.1" 304 Not Modified
+INFO:     118.3.227.75:0 - "GET /assets/index-Cd7dWJI5.css HTTP/1.1" 304 Not Modified
+INFO:     59.132.66.4:0 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 500 Internal Server Error

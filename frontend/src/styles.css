@@ -4946,7 +4946,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 .agent-chat {
   display: flex;
-  height: calc(100vh - 180px);
+  flex-direction: column;
   min-height: 500px;
   gap: 0;
 }
@@ -5998,6 +5998,12 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* ── Agent tabs ─────────────────────────────────────────────────────────────── */
+
+.agent-chat-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 
 .agent-tabs {
   display: flex;

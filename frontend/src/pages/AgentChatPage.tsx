@@ -479,7 +479,8 @@ export function AgentChatPage() {
       </div>
 
       {tab === "chat" ? (
-      <div className="agent-chat-inner">
+      <div className="agent-chat-body">
+      <>
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -593,6 +594,7 @@ export function AgentChatPage() {
           </div>
         </div>
       </div>
+      </>
       </div>
       ) : (
       <AgentUsagePanel />
