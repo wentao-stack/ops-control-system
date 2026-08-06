@@ -1127,7 +1127,7 @@ async def agent_chat(
 ) -> StreamingResponse:
     """Chat with the agent — returns SSE stream."""
     return StreamingResponse(
-        agent_service.chat_stream(session, req, user.username),
+        agent_service.chat_stream(session, req, user.username, user.role),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

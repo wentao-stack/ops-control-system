@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Index
 
@@ -136,4 +136,25 @@ class ExecLog(Base):
     __table_args__ = (
         Index("idx_exec_log_asset_time", "asset_id", "created_at"),
         Index("idx_exec_log_user_time", "user", "created_at"),
+    )
+
+
+class AgentToolCall(Base):
+    __tablename__ = "agent_tool_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    user: Mapped[str] = mapped_column(String(64), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tool_level: Mapped[str] = mapped_column(String(16), nullable=False, server_default="read")
+    tool_input: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    tool_result: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+    confirmed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_agent_tool_calls_conv", "conversation_id", "created_at"),
+        Index("idx_agent_tool_calls_user", "user", "created_at"),
     )

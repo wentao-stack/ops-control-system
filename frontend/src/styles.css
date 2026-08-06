@@ -5972,3 +5972,27 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .agent-confirm-actions .btn-secondary:hover { background: #e2e8f0; }
 .agent-confirm-actions .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Risk level badges in confirm card */
+.agent-confirm-risk {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+.agent-confirm-risk-exec {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.agent-confirm-risk-write {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.agent-confirm-risk-read {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}

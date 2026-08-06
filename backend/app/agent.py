@@ -39,12 +39,13 @@ DEFAULT_MODEL = os.getenv("AGENT_DEFAULT_MODEL", "qwen36-27b-no-think-v1")
 class ToolDef:
     """A single tool definition with name, description, JSON schema params, and handler."""
 
-    def __init__(self, name: str, description: str, params_schema: dict[str, Any], handler, requires_confirm: bool = False):
+    def __init__(self, name: str, description: str, params_schema: dict[str, Any], handler, requires_confirm: bool = False, level: str = "read"):
         self.name = name
         self.description = description
         self.params_schema = params_schema  # JSON Schema object for the tool
         self.handler = handler  # async callable(params: dict, session: Session) -> str
         self.requires_confirm = requires_confirm
+        self.level = level  # "read" | "write" | "exec"
 
     def to_openai(self) -> dict:
         return {
@@ -61,10 +62,10 @@ class ToolDef:
 _tools: list[ToolDef] = []
 
 
-def register_tool(name: str, description: str, params_schema: dict[str, Any], requires_confirm: bool = False):
+def register_tool(name: str, description: str, params_schema: dict[str, Any], requires_confirm: bool = False, level: str = "read"):
     """Decorator to register a tool."""
     def wrapper(fn):
-        _tools.append(ToolDef(name, description, params_schema, fn, requires_confirm))
+        _tools.append(ToolDef(name, description, params_schema, fn, requires_confirm, level))
         return fn
     return wrapper
 
@@ -79,6 +80,53 @@ def get_tool_handler(name: str) -> ToolDef | None:
         if t.name == name:
             return t
     return None
+
+
+# ── Permission & audit helpers ───────────────────────────────────────────────
+
+# Permission hierarchy: admin can do everything; viewer can only read
+_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "admin": {"read", "write", "exec"},
+    "viewer": {"read"},
+}
+
+
+def check_tool_permission(user_role: str, tool_level: str) -> bool:
+    """Check if a user role has permission to use a tool at a given level."""
+    allowed = _ROLE_PERMISSIONS.get(user_role, {"read"})
+    return tool_level in allowed
+
+
+def record_tool_call(
+    session: Session,
+    conv_id: str,
+    user: str,
+    tool_name: str,
+    tool_level: str,
+    tool_input: str,
+    tool_result: str,
+    confirmed: bool = False,
+    confirmed_by: str | None = None,
+):
+    """Record a tool call in the audit log."""
+    from .models import AgentToolCall
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    call = AgentToolCall(
+        conversation_id=conv_id,
+        user=user,
+        tool_name=tool_name,
+        tool_level=tool_level,
+        tool_input=tool_input,
+        tool_result=tool_result,
+        confirmed=confirmed,
+        confirmed_by=confirmed_by if confirmed else None,
+        confirmed_at=now if confirmed else None,
+        created_at=now,
+    )
+    session.add(call)
+    session.commit()
 
 
 # ── Tool Definitions ────────────────────────────────────────────────────────
@@ -379,6 +427,7 @@ async def tool_get_changes(params: dict, session: Session) -> str:
         "required": ["asset_id", "command"],
     },
     requires_confirm=True,
+    level="exec",
 )
 async def tool_exec_ssh_command(params: dict, session: Session) -> str:
     """Execute a shell command on a remote host via SSH. Requires frontend confirmation."""
@@ -391,6 +440,18 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
 
     if not command or len(command) > 500:
         return "❌ 命令長度必須在 1-500 字元之間"
+
+    # Command blacklist — dangerous commands that should never be executed
+    _DANGEROUS_CMDS = [
+        "rm -rf /", "rm -rf /*", "mkfs", "dd if=", "fdisk",
+        ":(){:|:};", "curl.*|.*bash", "wget.*|.*bash",
+        "chmod -R 777", "chown -R",
+    ]
+    import re as _re
+    cmd_lower = command.lower().strip()
+    for pattern in _DANGEROUS_CMDS:
+        if _re.search(pattern, cmd_lower):
+            return f"❌ 命令包含危險操作，已被黑名單阻擋: {command[:80]}"
 
     asset = session.execute(
         select(Asset).where(
@@ -480,6 +541,7 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
         "required": ["asset_id", "process_name", "action"],
     },
     requires_confirm=True,
+    level="exec",
 )
 async def tool_supervisor_action(params: dict, session: Session) -> str:
     """Execute a supervisor action on a remote host. Requires frontend confirmation."""
@@ -588,6 +650,7 @@ def supervisor_action_impl(
         },
         "required": ["title", "content"],
     },
+    level="write",
 )
 async def tool_create_note(params: dict, session: Session) -> str:
     """Create a note. Low-risk, no confirmation needed."""
@@ -638,6 +701,7 @@ async def tool_create_note(params: dict, session: Session) -> str:
         },
         "required": ["alert_id"],
     },
+    level="write",
 )
 async def tool_acknowledge_alert(params: dict, session: Session) -> str:
     """Acknowledge an alert. Low-risk, no confirmation needed."""
@@ -1065,6 +1129,7 @@ async def chat_stream(
     session: Session,
     req: AgentChatRequest,
     user: str,
+    user_role: str = "admin",
 ) -> AsyncIterator[str]:
     """
     Handle a chat request with SSE streaming and tool calling.
@@ -1179,6 +1244,26 @@ async def chat_stream(
             # Check if tool requires confirmation
             handler = get_tool_handler(tool_name)
             requires_confirm = handler and handler.requires_confirm
+            tool_level = handler.level if handler else "read"
+
+            # Permission check
+            if not check_tool_permission(user_role, tool_level):
+                result = f"❌ 權限不足：無法使用 {tool_name}（需要 {tool_level} 權限）"
+                yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+                tool_input_json = json.dumps(tool_args, ensure_ascii=False)
+                record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
+                save_message(
+                    session, conv_id, "tool", "",
+                    tool_name=tool_name,
+                    tool_input=tool_input_json,
+                    tool_result=result,
+                )
+                llm_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", f"call_{iteration}"),
+                    "content": result,
+                })
+                continue
 
             # Emit tool_use event to frontend (with requires_confirm flag)
             yield f'data: {json.dumps({"event": "tool_use", "name": tool_name, "parameters": tool_args, "requires_confirm": requires_confirm})}\n\n'
@@ -1189,7 +1274,7 @@ async def chat_stream(
                 confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
 
                 # Emit confirm event with ID
-                yield f'data: {json.dumps({"event": "confirm", "confirm_id": confirm_id, "name": tool_name, "parameters": tool_args})}\n\n'
+                yield f'data: {json.dumps({"event": "confirm", "confirm_id": confirm_id, "name": tool_name, "parameters": tool_args, "level": tool_level})}\n\n'
 
                 # Use asyncio.Future for awaitable confirmation
                 import asyncio as _asyncio
@@ -1208,13 +1293,15 @@ async def chat_stream(
                     confirm_future.cancel()
                     _confirm_store.pop(confirm_id, None)
                     result = "⏰ 用戶未在限時內確認操作，已取消"
+                    tool_input_json = json.dumps(tool_args, ensure_ascii=False)
                     yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                     save_message(
                         session, conv_id, "tool", "",
                         tool_name=tool_name,
-                        tool_input=json.dumps(tool_args, ensure_ascii=False),
+                        tool_input=tool_input_json,
                         tool_result=result,
                     )
+                    record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
                     llm_messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get("id", f"call_{iteration}"),
@@ -1224,13 +1311,15 @@ async def chat_stream(
                 except _asyncio.CancelledError:
                     _confirm_store.pop(confirm_id, None)
                     result = "❌ 操作已取消"
+                    tool_input_json = json.dumps(tool_args, ensure_ascii=False)
                     yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                     save_message(
                         session, conv_id, "tool", "",
                         tool_name=tool_name,
-                        tool_input=json.dumps(tool_args, ensure_ascii=False),
+                        tool_input=tool_input_json,
                         tool_result=result,
                     )
+                    record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
                     llm_messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get("id", f"call_{iteration}"),
@@ -1241,13 +1330,15 @@ async def chat_stream(
                     _confirm_store.pop(confirm_id, None)
                     if not approved:
                         result = "❌ 用戶取消了操作"
+                        tool_input_json = json.dumps(tool_args, ensure_ascii=False)
                         yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                         save_message(
                             session, conv_id, "tool", "",
                             tool_name=tool_name,
-                            tool_input=json.dumps(tool_args, ensure_ascii=False),
+                            tool_input=tool_input_json,
                             tool_result=result,
                         )
+                        record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
                         llm_messages.append({
                             "role": "tool",
                             "tool_call_id": tc.get("id", f"call_{iteration}"),
@@ -1268,12 +1359,22 @@ async def chat_stream(
                 # Emit tool_result event to frontend
                 yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
 
+                tool_input_json = json.dumps(tool_args, ensure_ascii=False)
+
                 # Save tool message to DB
                 save_message(
                     session, conv_id, "tool", "",
                     tool_name=tool_name,
-                    tool_input=json.dumps(tool_args, ensure_ascii=False),
+                    tool_input=tool_input_json,
                     tool_result=result,
+                )
+
+                # Audit log
+                record_tool_call(
+                    session, conv_id, user, tool_name, tool_level,
+                    tool_input_json, result,
+                    confirmed=bool(requires_confirm),
+                    confirmed_by=user if requires_confirm else None,
                 )
 
                 # Append tool result to LLM context

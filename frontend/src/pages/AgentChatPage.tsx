@@ -13,6 +13,7 @@ type PendingConfirm = {
   confirm_id: string
   name: string
   parameters: Record<string, any>
+  level?: string
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -396,6 +397,7 @@ export function AgentChatPage() {
                     confirm_id: parsed.confirm_id,
                     name: parsed.name,
                     parameters: parsed.parameters ?? {},
+                    level: parsed.level ?? "exec",
                   })
                 }
               } catch {
@@ -523,6 +525,11 @@ export function AgentChatPage() {
                 <div className="agent-confirm-params">
                   <strong>參數:</strong>
                   <pre>{JSON.stringify(pendingConfirm.parameters, null, 2)}</pre>
+                </div>
+                <div className={`agent-confirm-risk agent-confirm-risk-${pendingConfirm.level ?? "exec"}`}>
+                  {pendingConfirm.level === "exec" && "🔴 高風險 — 執行類操作"}
+                  {pendingConfirm.level === "write" && "🟡 中風險 — 寫入類操作"}
+                  {pendingConfirm.level === "read" && "🟢 低風險 — 讀取類操作"}
                 </div>
                 <div className="agent-confirm-warning">
                   ⚡ 此操作可能影響系統運行，請確認後繼續
