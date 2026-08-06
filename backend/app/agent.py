@@ -1244,9 +1244,9 @@ async def chat_stream(
         # Check for tool calls
         tool_calls = assistant_msg.get("tool_calls", [])
 
-        # Intent detection: if user asked to execute a command but LLM refused without calling tools,
-        # auto-invoke exec_ssh_command so the backend blacklist handles it properly.
-        if not tool_calls:
+        # Intent detection: ONLY on first iteration — if user asked to execute a command
+        # but LLM refused without calling tools, auto-invoke so backend blacklist handles it.
+        if not tool_calls and iteration == 0:
             content = assistant_msg.get("content", "") or ""
 
             # Find the last user message in conversation history
@@ -1258,23 +1258,24 @@ async def chat_stream(
 
             auto_tool = None
 
-            if any(kw in user_msg for kw in ["執行", "執行命令"]):
-                m_cmd = re.search(r"執行\s+(.+)$", user_msg)
-                m_asset = re.search(r"在\s+(.+?)\s+上", user_msg)
-                if m_cmd and m_asset:
-                    auto_tool = {
-                        "function": {
-                            "name": "exec_ssh_command",
-                            "arguments": json.dumps({
-                                "asset_id": m_asset.group(1).strip(),
-                                "command": m_cmd.group(1).strip(),
-                            }, ensure_ascii=False),
-                        }
+            # Strict pattern: must match BOTH asset and command
+            m_cmd = re.search(r"執行\s+(.+)$", user_msg)
+            m_asset = re.search(r"在\s+(.+?)\s+上", user_msg)
+            if m_cmd and m_asset:
+                auto_tool = {
+                    "function": {
+                        "name": "exec_ssh_command",
+                        "arguments": json.dumps({
+                            "asset_id": m_asset.group(1).strip(),
+                            "command": m_cmd.group(1).strip(),
+                        }, ensure_ascii=False),
                     }
-            elif any(kw in user_msg for kw in ["重啟", "停止", "啟動"]):
+                }
+
+            if not auto_tool:
                 m_svc = re.search(r"(.+?)\s+服務", user_msg)
                 m_asset2 = re.search(r"在\s+(.+?)\s+上", user_msg)
-                if m_svc and m_asset2:
+                if m_svc and m_asset2 and any(kw in user_msg for kw in ["重啟", "停止", "啟動"]):
                     auto_tool = {
                         "function": {
                             "name": "supervisor_action",
@@ -1295,6 +1296,14 @@ async def chat_stream(
                     yield f'data: {json.dumps({"event": "token", "token": chunk})}\n\n'
                 save_message(session, conv_id, "assistant", content)
                 break
+        elif not tool_calls:
+            # Subsequent iterations with no tool calls — just stream and stop
+            content = assistant_msg.get("content", "") or ""
+            for i in range(0, len(content), 4):
+                chunk = content[i:i+4]
+                yield f'data: {json.dumps({"event": "token", "token": chunk})}\n\n'
+            save_message(session, conv_id, "assistant", content)
+            break
 
         # Execute tool calls
         for tc in tool_calls:
