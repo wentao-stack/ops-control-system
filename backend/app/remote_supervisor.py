@@ -122,7 +122,7 @@ def _parse_status_output(stdout: str) -> list[SupervisorProcess]:
 # Root users on Arch/Alpine use system paths; regular users use ~/.local/.
 _USER_SUP: dict[str, tuple[str, str]] = {
     "root": ("supervisorctl", ""),
-    "wentao": ("/home/wentao/.local/bin/supervisorctl", "-c /home/wentao/.supervisor/supervisord.conf"),
+    "wentao": ("/home/wentao/project/ops-control-system/backend/.venv/bin/supervisorctl", "-c /home/wentao/project/ops-control-system/supervisor/supervisord.conf"),
 }
 
 
@@ -256,8 +256,8 @@ def _get_supervisor_paths(user: str) -> tuple[str, str]:
         return "/etc/supervisor/conf.d", "/var/log/supervisor"
     # For non-root users, try the standard XDG/home directory locations
     home = f"/home/{user}"
-    user_conf = f"{home}/.supervisor/conf.d"
-    user_log = f"{home}/.supervisor/log"
+    user_conf = f"{home}/project/ops-control-system/supervisor/conf.d"
+    user_log = f"{home}/project/ops-control-system/supervisor/log"
     # Fall back to system paths if user-specific paths don't apply
     if user in _USER_SUP:
         return user_conf, user_log
