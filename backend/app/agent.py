@@ -270,9 +270,9 @@ async def tool_check_services(params: dict, session: Session) -> str:
             timeout=60,
         )
         lines = [f"📊 {asset.name} ({asset.ssh_host})"]
-        if result.services:
-            for s in result.services[:15]:  # limit display
-                lines.append(f"  ● {s.name} ({s.type}) — {s.description or '無描述'}")
+        if result:
+            for s in result[:15]:  # limit display
+                lines.append(f"  ● {s.name} ({s.service_type}) — {s.description or '無描述'}")
         else:
             lines.append("  沒有偵測到服務")
         return "\n".join(lines)
