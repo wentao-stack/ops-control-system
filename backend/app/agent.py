@@ -265,6 +265,8 @@ async def tool_check_services(params: dict, session: Session) -> str:
             host=asset.ssh_host,
             port=asset.ssh_port or 22,
             user=asset.ssh_user,
+            asset_id=asset.id,
+            name=asset.name,
             timeout=60,
         )
         lines = [f"📊 {asset.name} ({asset.ssh_host})"]
