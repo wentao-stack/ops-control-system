@@ -5186,6 +5186,17 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 0;
 }
 
+/* usage badge on assistant messages */
+.agent-msg-usage {
+  margin-top: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  display: inline-block;
+}
+
 /* input area */
 .agent-input-area {
   padding: 16px;

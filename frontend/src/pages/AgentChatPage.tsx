@@ -155,6 +155,12 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
         className="agent-msg-bubble"
         dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
       />
+      {msg.role === "assistant" && msg.usage && (
+        <div className="agent-msg-usage">
+          📊 {msg.usage.total_tokens.toLocaleString()} tokens
+          {msg.usage.tool_calls > 0 && ` · ${msg.usage.tool_calls} tools`}
+        </div>
+      )}
     </div>
   )
 }
@@ -400,6 +406,17 @@ export function AgentChatPage() {
                     parameters: parsed.parameters ?? {},
                     level: parsed.level ?? "exec",
                   })
+                } else if (parsed.event === "done") {
+                  // Attach usage info to last assistant message
+                  if (parsed.usage) {
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === assistantId
+                          ? { ...m, usage: parsed.usage }
+                          : m
+                      )
+                    )
+                  }
                 }
               } catch {
                 // non-JSON data line, treat as token

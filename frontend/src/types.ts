@@ -147,6 +147,7 @@ export type AgentMessage = {
   tool_name: string | null
   tool_input: string | null
   tool_result: string | null
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number; tool_calls: number }
   created_at: string
 }
 

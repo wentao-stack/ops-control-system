@@ -1515,4 +1515,4 @@ async def chat_stream(
             pass
 
     # Done signal
-    yield 'data: {"event": "done"}\n\n'
+    yield f'data: {{"event": "done", "usage": {{"prompt_tokens": {total_prompt_tokens}, "completion_tokens": {total_completion_tokens}, "total_tokens": {total_tokens}, "tool_calls": {tool_calls_count}}}}}\n\n'
