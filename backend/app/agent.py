@@ -1210,6 +1210,12 @@ async def chat_stream(
                 "content": m.tool_result or "",
             })
         elif m.role in ("user", "assistant"):
+            # Filter out assistant messages that are safety refusals —
+            # these pollute the context and cause the LLM to keep refusing.
+            if m.role == "assistant" and m.content:
+                refusal_kws = ["禁止執行", "極高的破壞性", "拒絕執行", "高風險破壞性命令"]
+                if any(kw in m.content for kw in refusal_kws):
+                    continue
             llm_messages.append({"role": m.role, "content": m.content})
 
     # Tool calling loop (max 5 iterations)
@@ -1228,10 +1234,17 @@ async def chat_stream(
         # auto-invoke exec_ssh_command so the backend blacklist handles it properly.
         if not tool_calls:
             content = assistant_msg.get("content", "") or ""
-            user_msg = llm_messages[-2].get("content", "") if len(llm_messages) >= 2 else ""
+
+            # Find the last user message in conversation history
+            user_msg = ""
+            for msg in reversed(llm_messages):
+                if msg.get("role") == "user":
+                    user_msg = msg.get("content", "")
+                    break
+
             auto_tool = None
 
-            if any(kw in user_msg for kw in ["執行", "run ", "run ", "執行命令"]):
+            if any(kw in user_msg for kw in ["執行", "執行命令"]):
                 m_cmd = re.search(r"執行\s+(.+)$", user_msg)
                 m_asset = re.search(r"在\s+(.+?)\s+上", user_msg)
                 if m_cmd and m_asset:
@@ -1244,7 +1257,7 @@ async def chat_stream(
                             }, ensure_ascii=False),
                         }
                     }
-            elif any(kw in user_msg for kw in ["重啟", "停止", "啟動", "restart", "stop ", "start "]):
+            elif any(kw in user_msg for kw in ["重啟", "停止", "啟動"]):
                 m_svc = re.search(r"(.+?)\s+服務", user_msg)
                 m_asset2 = re.search(r"在\s+(.+?)\s+上", user_msg)
                 if m_svc and m_asset2:
@@ -1254,7 +1267,7 @@ async def chat_stream(
                             "arguments": json.dumps({
                                 "asset_id": m_asset2.group(1).strip(),
                                 "process_name": m_svc.group(1).strip(),
-                                "action": "restart" if "重啟" in user_msg or "restart" in user_msg else "stop",
+                                "action": "restart" if "重啟" in user_msg else "stop",
                             }, ensure_ascii=False),
                         }
                     }
