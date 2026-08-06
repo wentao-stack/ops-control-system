@@ -397,14 +397,16 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
             (Asset.id == asset_id) | (Asset.name == asset_id)
         )
     ).scalar_one_or_none()
-    if not asset or not asset.ssh_host:
+    if not asset:
         # Show available assets with SSH to help LLM retry
         ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
         if ssh_assets:
             names = ", ".join(f"{a.name}({a.ssh_host})" for a in ssh_assets)
             return f"❌ 找不到資產 '{asset_id}'。可用資產: {names}"
-        return f"❌ 找不到資產 '{asset_id}' 或該資產沒有配置 SSH"
-    if not asset.ssh_user:
+        return f"❌ 找不到資產 '{asset_id}'"
+    if not asset.local_machine and not asset.ssh_host:
+        return f"❌ 資產 {asset.name} 沒有配置 SSH"
+    if not asset.local_machine and not asset.ssh_user:
         return f"❌ 資產 {asset.name} 沒有配置 SSH 用戶"
 
     import asyncio
@@ -415,6 +417,7 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
         from .remote_supervisor import _local_exec
         result = await asyncio.to_thread(_local_exec, command, timeout=timeout)
     else:
+        assert asset.ssh_host is not None and asset.ssh_user is not None
         result = await asyncio.to_thread(
             ssh_exec,
             host=asset.ssh_host,
@@ -494,18 +497,21 @@ async def tool_supervisor_action(params: dict, session: Session) -> str:
             (Asset.id == asset_id) | (Asset.name == asset_id)
         )
     ).scalar_one_or_none()
-    if not asset or not asset.ssh_host:
+    if not asset:
         # Show available assets with SSH to help LLM retry
         ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
         if ssh_assets:
             names = ", ".join(f"{a.name}({a.ssh_host})" for a in ssh_assets)
             return f"❌ 找不到資產 '{asset_id}'。可用資產: {names}"
-        return f"❌ 找不到資產 '{asset_id}' 或該資產沒有配置 SSH"
-    if not asset.ssh_user:
+        return f"❌ 找不到資產 '{asset_id}'"
+    if not asset.local_machine and not asset.ssh_host:
+        return f"❌ 資產 {asset.name} 沒有配置 SSH"
+    if not asset.local_machine and not asset.ssh_user:
         return f"❌ 資產 {asset.name} 沒有配置 SSH 用戶"
 
     import asyncio
 
+    assert asset.ssh_host is not None and asset.ssh_user is not None
     result = await asyncio.to_thread(
         supervisor_action_impl,
         host=asset.ssh_host,
