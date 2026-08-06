@@ -39,11 +39,12 @@ DEFAULT_MODEL = os.getenv("AGENT_DEFAULT_MODEL", "qwen36-27b-no-think-v1")
 class ToolDef:
     """A single tool definition with name, description, JSON schema params, and handler."""
 
-    def __init__(self, name: str, description: str, params_schema: dict[str, Any], handler):
+    def __init__(self, name: str, description: str, params_schema: dict[str, Any], handler, requires_confirm: bool = False):
         self.name = name
         self.description = description
         self.params_schema = params_schema  # JSON Schema object for the tool
         self.handler = handler  # async callable(params: dict, session: Session) -> str
+        self.requires_confirm = requires_confirm
 
     def to_openai(self) -> dict:
         return {
@@ -60,10 +61,10 @@ class ToolDef:
 _tools: list[ToolDef] = []
 
 
-def register_tool(name: str, description: str, params_schema: dict[str, Any]):
+def register_tool(name: str, description: str, params_schema: dict[str, Any], requires_confirm: bool = False):
     """Decorator to register a tool."""
     def wrapper(fn):
-        _tools.append(ToolDef(name, description, params_schema, fn))
+        _tools.append(ToolDef(name, description, params_schema, fn, requires_confirm))
         return fn
     return wrapper
 
@@ -349,6 +350,341 @@ async def tool_get_changes(params: dict, session: Session) -> str:
     lines = [f"📋 共 {len(changes)} 筆變更記錄"]
     for c in changes:
         lines.append(f"  [{c.change_type}] {c.description} — {c.status} — {c.created_at.strftime('%Y-%m-%d %H:%M')}")
+    return "\n".join(lines)
+
+
+# ── Phase 1: Write/Execute Tools ────────────────────────────────────────────
+
+
+@register_tool(
+    name="exec_ssh_command",
+    description="在遠端主機上執行 Shell 命令。需要用戶確認。當用戶要求執行命令、安裝軟體、重啟服務等寫入操作時使用。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {
+                "type": "string",
+                "description": "資產 ID（必填）",
+            },
+            "command": {
+                "type": "string",
+                "description": "要執行的 Shell 命令（限 500 字元）",
+            },
+            "timeout": {
+                "type": "integer",
+                "description": "超時秒數（預設 60）",
+                "default": 60,
+            },
+        },
+        "required": ["asset_id", "command"],
+    },
+    requires_confirm=True,
+)
+async def tool_exec_ssh_command(params: dict, session: Session) -> str:
+    """Execute a shell command on a remote host via SSH. Requires frontend confirmation."""
+    from .remote import ssh_exec
+    from .models import Asset, ExecLog
+
+    asset_id = params.get("asset_id", "")
+    command = params.get("command", "")
+    timeout = params.get("timeout", 60)
+
+    if not command or len(command) > 500:
+        return "❌ 命令長度必須在 1-500 字元之間"
+
+    asset = session.get(Asset, asset_id)
+    if not asset or not asset.ssh_host:
+        return f"❌ 找不到資產 {asset_id} 或該資產沒有配置 SSH"
+    if not asset.ssh_user:
+        return f"❌ 資產 {asset_id} 沒有配置 SSH 用戶"
+
+    import asyncio
+    import time as _time
+
+    start = _time.monotonic()
+    if asset.local_machine:
+        from .remote_supervisor import _local_exec
+        result = await asyncio.to_thread(_local_exec, command, timeout=timeout)
+    else:
+        result = await asyncio.to_thread(
+            ssh_exec,
+            host=asset.ssh_host,
+            port=asset.ssh_port or 22,
+            user=asset.ssh_user,
+            command=command,
+            timeout=timeout,
+        )
+    duration = round(_time.monotonic() - start, 2)
+
+    # Record to exec_log
+    now = datetime.now(UTC).replace(microsecond=0)
+    log = ExecLog(
+        asset_id=asset_id,
+        command=command,
+        stdout=result.get("stdout", "")[:5000],
+        stderr=result.get("stderr", "")[:5000],
+        exit_code=result.get("exit_code", -1),
+        duration=duration,
+        user="agent",
+        created_at=now,
+    )
+    session.add(log)
+    session.commit()
+
+    exit_icon = "✅" if result.get("exit_code") == 0 else "❌"
+    lines = [f"{exit_icon} 在 {asset.name} 上執行命令"]
+    lines.append(f"  命令: {command}")
+    lines.append(f"  退出碼: {result.get('exit_code')}")
+    lines.append(f"  耗時: {duration}s")
+    stdout = result.get("stdout", "").strip()
+    stderr = result.get("stderr", "").strip()
+    if stdout:
+        lines.append(f"  輸出: {stdout[:500]}")
+    if stderr:
+        lines.append(f"  錯誤: {stderr[:500]}")
+    return "\n".join(lines)
+
+
+@register_tool(
+    name="supervisor_action",
+    description="管理遠端主機的 Supervisor 程序（start/stop/restart）。需要用戶確認。當用戶要求重啟程序、停止服務等 Supervisor 操作時使用。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {
+                "type": "string",
+                "description": "資產 ID（必填）",
+            },
+            "process_name": {
+                "type": "string",
+                "description": "Supervisor 程序名稱（必填）",
+            },
+            "action": {
+                "type": "string",
+                "enum": ["start", "stop", "restart"],
+                "description": "操作類型（必填）",
+            },
+        },
+        "required": ["asset_id", "process_name", "action"],
+    },
+    requires_confirm=True,
+)
+async def tool_supervisor_action(params: dict, session: Session) -> str:
+    """Execute a supervisor action on a remote host. Requires frontend confirmation."""
+    from .models import Asset, Change
+
+    asset_id = params.get("asset_id", "")
+    process_name = params.get("process_name", "")
+    action = params.get("action", "")
+
+    if action not in ("start", "stop", "restart"):
+        return "❌ 操作必須是 start、stop 或 restart"
+
+    asset = session.get(Asset, asset_id)
+    if not asset or not asset.ssh_host:
+        return f"❌ 找不到資產 {asset_id} 或該資產沒有配置 SSH"
+    if not asset.ssh_user:
+        return f"❌ 資產 {asset_id} 沒有配置 SSH 用戶"
+
+    import asyncio
+
+    result = await asyncio.to_thread(
+        supervisor_action_impl,
+        host=asset.ssh_host,
+        port=asset.ssh_port or 22,
+        user=asset.ssh_user,
+        action=action,
+        process=process_name,
+        local_machine=asset.local_machine,
+        timeout=30,
+    )
+
+    # Record to changes
+    now = datetime.now(UTC).replace(microsecond=0)
+    change = Change(
+        title=f"Agent: {action} {process_name} on {asset.name}",
+        change_type="config",
+        status="completed" if result.success else "rolled_back",
+        author="agent",
+        description=f"Supervisor {action} {process_name} — {result.message or '成功'}",
+        affected_assets=asset.name,
+        created_at=now,
+        completed_at=now,
+    )
+    session.add(change)
+    session.commit()
+
+    icon = "✅" if result.success else "❌"
+    lines = [f"{icon} Supervisor {action} on {asset.name}"]
+    lines.append(f"  程序: {process_name}")
+    lines.append(f"  操作: {action}")
+    if result.message:
+        lines.append(f"  結果: {result.message[:300]}")
+    return "\n".join(lines)
+
+
+def supervisor_action_impl(
+    host: str,
+    port: int,
+    user: str,
+    action: str,
+    process: str,
+    local_machine: bool,
+    timeout: int,
+):
+    """Sync wrapper for supervisor_action (runs in thread pool)."""
+    from .remote_supervisor import supervisor_action as _sa
+    return _sa(host, port, user, action, process, local_machine=local_machine, timeout=timeout)
+
+
+@register_tool(
+    name="create_note",
+    description="創建筆記。當用戶要求記錄信息、創建筆記、保存知識時使用。低風險操作，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "筆記標題（必填）",
+            },
+            "content": {
+                "type": "string",
+                "description": "筆記內容，支援 Markdown（必填）",
+            },
+            "category": {
+                "type": "string",
+                "description": "分類（預設「知識」）",
+                "default": "知識",
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "標籤列表（可選）",
+            },
+        },
+        "required": ["title", "content"],
+    },
+)
+async def tool_create_note(params: dict, session: Session) -> str:
+    """Create a note. Low-risk, no confirmation needed."""
+    from .models import Note
+    import uuid
+
+    title = params.get("title", "").strip()
+    content = params.get("content", "").strip()
+    category = params.get("category", "知識")
+    tags = params.get("tags", [])
+
+    if not title:
+        return "❌ 標題不能為空"
+    if not content:
+        return "❌ 內容不能為空"
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    note_id = f"note-{uuid.uuid4().hex[:12]}"
+    note = Note(
+        id=note_id,
+        title=title,
+        content=content,
+        category=category,
+        tags=json.dumps(tags, ensure_ascii=False) if tags else "[]",
+        author="agent",
+        pinned=False,
+        published=True,
+        version=1,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(note)
+    session.commit()
+
+    return f"✅ 筆記已創建\n  標題: {title}\n  分類: {category}\n  ID: {note_id}\n  連結: /notes/{note_id}"
+
+
+@register_tool(
+    name="acknowledge_alert",
+    description="確認/核銷系統告警。當用戶要求確認告警、標記告警已處理時使用。低風險操作，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "alert_id": {
+                "type": "integer",
+                "description": "告警 ID（必填）",
+            },
+        },
+        "required": ["alert_id"],
+    },
+)
+async def tool_acknowledge_alert(params: dict, session: Session) -> str:
+    """Acknowledge an alert. Low-risk, no confirmation needed."""
+    from .models import Alert
+
+    alert_id = params.get("alert_id")
+    if not alert_id:
+        return "❌ 請提供告警 ID"
+
+    alert = session.get(Alert, alert_id)
+    if not alert:
+        return f"❌ 找不到告警 ID {alert_id}"
+
+    if alert.acknowledged:
+        return f"⚠️ 告警 {alert_id} 已被確認過（由 {alert.acknowledged_by} 於 {alert.acknowledged_at}）"
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    alert.acknowledged = True
+    alert.acknowledged_by = "agent"
+    alert.acknowledged_at = now
+    session.commit()
+
+    return f"✅ 告警 {alert_id} 已確認\n  內容: [{alert.severity}] {alert.message[:100]}"
+
+
+@register_tool(
+    name="search_runbooks",
+    description="搜索 Runbook（標準作業程序）。當用戶詢問故障排除步驟、操作手冊、標準流程時使用。純讀取，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "搜索關鍵字（可選）",
+            },
+            "category": {
+                "type": "string",
+                "description": "分類篩選（可選）",
+            },
+        },
+        "required": [],
+    },
+)
+async def tool_search_runbooks(params: dict, session: Session) -> str:
+    """Search runbooks. Read-only, no confirmation needed."""
+    from .models import Runbook
+
+    q = select(Runbook).order_by(Runbook.updated_at.desc())
+    query = params.get("query", "")
+    category = params.get("category", "")
+
+    if query:
+        q = q.where(
+            Runbook.title.ilike(f"%{query}%")
+            | Runbook.description.ilike(f"%{query}%")
+            | Runbook.steps.ilike(f"%{query}%")
+        )
+    if category:
+        q = q.where(Runbook.category == category)
+
+    runbooks = session.scalars(q.limit(20)).all()
+    if not runbooks:
+        return "沒有找到 Runbook"
+
+    lines = [f"📖 找到 {len(runbooks)} 筆 Runbook"]
+    for rb in runbooks:
+        lines.append(f"  📘 [{rb.category}] {rb.title}")
+        preview = rb.description[:100].replace("\n", " ")
+        if len(rb.description) > 100:
+            preview += "..."
+        lines.append(f"      {preview}")
     return "\n".join(lines)
 
 
@@ -816,36 +1152,112 @@ async def chat_stream(
             except json.JSONDecodeError:
                 tool_args = {}
 
-            # Emit tool_use event to frontend
-            yield f'data: {json.dumps({"event": "tool_use", "name": tool_name, "parameters": tool_args})}\n\n'
-
-            # Execute the tool
+            # Check if tool requires confirmation
             handler = get_tool_handler(tool_name)
-            if handler:
+            requires_confirm = handler and handler.requires_confirm
+
+            # Emit tool_use event to frontend (with requires_confirm flag)
+            yield f'data: {json.dumps({"event": "tool_use", "name": tool_name, "parameters": tool_args, "requires_confirm": requires_confirm})}\n\n'
+
+            # If requires confirmation, wait for frontend response
+            if requires_confirm:
+                import uuid as _uuid
+                confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
+
+                # Emit confirm event with ID
+                yield f'data: {json.dumps({"event": "confirm", "confirm_id": confirm_id, "name": tool_name, "parameters": tool_args})}\n\n'
+
+                # Use asyncio.Future for awaitable confirmation
+                import asyncio as _asyncio
+                loop = _asyncio.get_running_loop()
+                confirm_future: _asyncio.Future[bool] = loop.create_future()
+                confirm_result: dict = {"approved": False}
+
+                # Register in global store (imported from main)
+                from .main import _confirm_store
+                _confirm_store[confirm_id] = (confirm_future, confirm_result)
+
+                # Wait for confirmation with timeout (5 minutes)
                 try:
-                    result = await handler.handler(tool_args, session)
-                except Exception as e:
-                    result = f"工具執行錯誤: {str(e)[:200]}"
-            else:
-                result = f"未知工具: {tool_name}"
+                    approved = await _asyncio.wait_for(confirm_future, timeout=300)
+                except _asyncio.TimeoutError:
+                    confirm_future.cancel()
+                    _confirm_store.pop(confirm_id, None)
+                    result = "⏰ 用戶未在限時內確認操作，已取消"
+                    yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+                    save_message(
+                        session, conv_id, "tool", "",
+                        tool_name=tool_name,
+                        tool_input=json.dumps(tool_args, ensure_ascii=False),
+                        tool_result=result,
+                    )
+                    llm_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call_{iteration}"),
+                        "content": result,
+                    })
+                    continue
+                except _asyncio.CancelledError:
+                    _confirm_store.pop(confirm_id, None)
+                    result = "❌ 操作已取消"
+                    yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+                    save_message(
+                        session, conv_id, "tool", "",
+                        tool_name=tool_name,
+                        tool_input=json.dumps(tool_args, ensure_ascii=False),
+                        tool_result=result,
+                    )
+                    llm_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call_{iteration}"),
+                        "content": result,
+                    })
+                    continue
+                else:
+                    _confirm_store.pop(confirm_id, None)
+                    if not approved:
+                        result = "❌ 用戶取消了操作"
+                        yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+                        save_message(
+                            session, conv_id, "tool", "",
+                            tool_name=tool_name,
+                            tool_input=json.dumps(tool_args, ensure_ascii=False),
+                            tool_result=result,
+                        )
+                        llm_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", f"call_{iteration}"),
+                            "content": result,
+                        })
+                        continue
 
-            # Emit tool_result event to frontend
-            yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+            # Execute the tool (either no confirm needed or confirmed)
+            if not requires_confirm or confirm_result.get("approved"):
+                if handler:
+                    try:
+                        result = await handler.handler(tool_args, session)
+                    except Exception as e:
+                        result = f"工具執行錯誤: {str(e)[:200]}"
+                else:
+                    result = f"未知工具: {tool_name}"
 
-            # Save tool message to DB
-            save_message(
-                session, conv_id, "tool", "",
-                tool_name=tool_name,
-                tool_input=json.dumps(tool_args, ensure_ascii=False),
-                tool_result=result,
-            )
+                # Emit tool_result event to frontend
+                yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\\n\\n'
 
-            # Append tool result to LLM context
-            llm_messages.append({
-                "role": "tool",
-                "tool_call_id": tc.get("id", f"call_{iteration}"),
-                "content": result,
-            })
+                # Save tool message to DB
+                save_message(
+                    session, conv_id, "tool", "",
+                    tool_name=tool_name,
+                    tool_input=json.dumps(tool_args, ensure_ascii=False),
+                    tool_result=result,
+                )
+
+                # Append tool result to LLM context
+                llm_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", f"call_{iteration}"),
+                    "content": result,
+                })
 
     else:
         # Safety: exceeded max iterations

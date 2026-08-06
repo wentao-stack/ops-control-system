@@ -9,6 +9,12 @@ const SUGGESTIONS = [
   "列出所有資產",
 ]
 
+type PendingConfirm = {
+  confirm_id: string
+  name: string
+  parameters: Record<string, any>
+}
+
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
 function groupConversations(convs: AgentConversation[]): Map<string, AgentConversation[]> {
@@ -162,6 +168,8 @@ export function AgentChatPage() {
   const [streaming, setStreaming] = useState(false)
   const [llmReady, setLlmReady] = useState(true)
   const [creatingConv, setCreatingConv] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -382,6 +390,13 @@ export function AgentChatPage() {
                         : m
                     )
                   )
+                } else if (parsed.event === "confirm") {
+                  // Show confirmation dialog for dangerous tools
+                  setPendingConfirm({
+                    confirm_id: parsed.confirm_id,
+                    name: parsed.name,
+                    parameters: parsed.parameters ?? {},
+                  })
                 }
               } catch {
                 // non-JSON data line, treat as token
@@ -419,6 +434,27 @@ export function AgentChatPage() {
   /* stop streaming */
   const handleStop = () => {
     abortRef.current?.abort()
+  }
+
+  /* confirm/reject tool execution */
+  const handleConfirmTool = async (approved: boolean) => {
+    if (!pendingConfirm || confirming) return
+    setConfirming(true)
+    try {
+      await api(`/api/v1/agent/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm_id: pendingConfirm.confirm_id,
+          approved,
+        }),
+      })
+    } catch {
+      // ignore — backend may have already processed
+    } finally {
+      setPendingConfirm(null)
+      setConfirming(false)
+    }
   }
 
   /* handle keyboard */
@@ -471,6 +507,46 @@ export function AgentChatPage() {
 
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Confirmation card */}
+        {pendingConfirm && (
+          <div className="agent-confirm-overlay">
+            <div className="agent-confirm-card">
+              <div className="agent-confirm-header">
+                <span className="agent-confirm-icon">⚠️</span>
+                <span className="agent-confirm-title">需要確認操作</span>
+              </div>
+              <div className="agent-confirm-body">
+                <div className="agent-confirm-tool">
+                  <strong>工具:</strong> {pendingConfirm.name}
+                </div>
+                <div className="agent-confirm-params">
+                  <strong>參數:</strong>
+                  <pre>{JSON.stringify(pendingConfirm.parameters, null, 2)}</pre>
+                </div>
+                <div className="agent-confirm-warning">
+                  ⚡ 此操作可能影響系統運行，請確認後繼續
+                </div>
+              </div>
+              <div className="agent-confirm-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleConfirmTool(false)}
+                  disabled={confirming}
+                >
+                  ✕ 取消
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => handleConfirmTool(true)}
+                  disabled={confirming}
+                >
+                  ✓ {confirming ? "執行中..." : "確認執行"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input area */}
         <div className="agent-input-area">

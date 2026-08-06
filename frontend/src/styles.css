@@ -5856,3 +5856,119 @@ tbody tr:last-child td { border-bottom: none; }
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── Agent Confirm Card ─────────────────────────────────────────────────── */
+
+.agent-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn .15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.agent-confirm-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+  width: 90%;
+  max-width: 520px;
+  max-height: 80vh;
+  overflow: auto;
+  animation: slideUp .2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.agent-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: #fff7ed;
+  border-radius: 12px 12px 0 0;
+}
+
+.agent-confirm-icon { font-size: 22px; }
+
+.agent-confirm-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.agent-confirm-body { padding: 20px 24px; }
+
+.agent-confirm-tool {
+  font-size: 13px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.agent-confirm-tool strong { color: var(--text-secondary); margin-right: 4px; }
+
+.agent-confirm-params { font-size: 12px; margin-bottom: 14px; }
+.agent-confirm-params strong { color: var(--text-secondary); margin-right: 4px; }
+.agent-confirm-params pre {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.agent-confirm-warning {
+  font-size: 12px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 6px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+.agent-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: #f8fafc;
+  border-radius: 0 0 12px 12px;
+}
+
+.agent-confirm-actions .btn { min-width: 100px; justify-content: center; }
+
+.agent-confirm-actions .btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.agent-confirm-actions .btn-danger:hover { background: #dc2626; border-color: #dc2626; }
+.agent-confirm-actions .btn-danger:disabled { opacity: .5; cursor: not-allowed; }
+
+.agent-confirm-actions .btn-secondary {
+  background: #f1f5f9;
+  color: var(--text);
+  border-color: var(--border);
+}
+.agent-confirm-actions .btn-secondary:hover { background: #e2e8f0; }
+.agent-confirm-actions .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }

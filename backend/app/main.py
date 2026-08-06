@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
@@ -1135,6 +1135,24 @@ async def agent_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Agent tool confirmation ──────────────────────────────────────────────────
+
+# In-memory store for pending confirmations: key = confirm_id, value = asyncio.Future[bool] + result dict
+_confirm_store: dict[str, tuple[Any, dict]] = {}
+
+
+@app.post("/api/v1/agent/confirm")
+async def agent_confirm(confirm_id: str = Body(..., embed=True), approved: bool = Body(True, embed=True)):
+    """Frontend confirms or rejects a tool execution request."""
+    entry = _confirm_store.pop(confirm_id, None)
+    if entry:
+        future, result_dict = entry
+        result_dict["approved"] = approved
+        if not future.done():
+            future.set_result(approved)
+    return {"status": "ok"}
 
 
 # ── Code browser ──────────────────────────────────────────────────────────────
