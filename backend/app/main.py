@@ -1203,7 +1203,7 @@ def get_agent_usage(
 
     # Per-user breakdown (for admin)
     user_breakdown = {}
-    if current_user.get("role") == "admin":
+    if current_user.role == "admin":
         user_agg = session.execute(
             select(
                 AgentUsage.user,
