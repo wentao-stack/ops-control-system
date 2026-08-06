@@ -592,3 +592,48 @@ INFO:     118.3.227.75:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
 INFO:     127.0.0.1:33262 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53306 - "GET /api/v1/supervisor/status HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-Czui-Ng7.js HTTP/1.1" 304 Not Modified
+INFO:     118.3.227.75:0 - "GET /assets/index-DQgn2MeQ.css HTTP/1.1" 304 Not Modified
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-20d581b6eefe/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-20d581b6eefe/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-1edd8c79119f HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-989b3088d82d HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-52cc5b100c8f/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-52cc5b100c8f HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-808f4e7825c3 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-5cb9f282873f HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-8569e6e57b7f/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-8569e6e57b7f HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-76cc1b413048/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-76cc1b413048 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-34ae81bf9b9f/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-34ae81bf9b9f HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-7f60ad823858 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-192a9189d5c4 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-20d581b6eefe/messages HTTP/1.1" 200 OK

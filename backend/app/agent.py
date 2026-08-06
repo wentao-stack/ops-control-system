@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -1222,16 +1223,51 @@ async def chat_stream(
 
         # Check for tool calls
         tool_calls = assistant_msg.get("tool_calls", [])
+
+        # Intent detection: if user asked to execute a command but LLM refused without calling tools,
+        # auto-invoke exec_ssh_command so the backend blacklist handles it properly.
         if not tool_calls:
-            # No tool calls — stream the final response
             content = assistant_msg.get("content", "") or ""
-            # Stream token by token for UX
-            for i in range(0, len(content), 4):
-                chunk = content[i:i+4]
-                yield f'data: {json.dumps({"event": "token", "token": chunk})}\n\n'
-            # Save final assistant message
-            save_message(session, conv_id, "assistant", content)
-            break
+            user_msg = llm_messages[-2].get("content", "") if len(llm_messages) >= 2 else ""
+            auto_tool = None
+
+            if any(kw in user_msg for kw in ["執行", "run ", "run ", "執行命令"]):
+                m_cmd = re.search(r"執行\s+(.+)$", user_msg)
+                m_asset = re.search(r"在\s+(.+?)\s+上", user_msg)
+                if m_cmd and m_asset:
+                    auto_tool = {
+                        "function": {
+                            "name": "exec_ssh_command",
+                            "arguments": json.dumps({
+                                "asset_id": m_asset.group(1).strip(),
+                                "command": m_cmd.group(1).strip(),
+                            }, ensure_ascii=False),
+                        }
+                    }
+            elif any(kw in user_msg for kw in ["重啟", "停止", "啟動", "restart", "stop ", "start "]):
+                m_svc = re.search(r"(.+?)\s+服務", user_msg)
+                m_asset2 = re.search(r"在\s+(.+?)\s+上", user_msg)
+                if m_svc and m_asset2:
+                    auto_tool = {
+                        "function": {
+                            "name": "supervisor_action",
+                            "arguments": json.dumps({
+                                "asset_id": m_asset2.group(1).strip(),
+                                "process_name": m_svc.group(1).strip(),
+                                "action": "restart" if "重啟" in user_msg or "restart" in user_msg else "stop",
+                            }, ensure_ascii=False),
+                        }
+                    }
+
+            if auto_tool:
+                tool_calls = [auto_tool]
+            else:
+                # No tool calls and no auto-detection — stream the final response
+                for i in range(0, len(content), 4):
+                    chunk = content[i:i+4]
+                    yield f'data: {json.dumps({"event": "token", "token": chunk})}\n\n'
+                save_message(session, conv_id, "assistant", content)
+                break
 
         # Execute tool calls
         for tc in tool_calls:
