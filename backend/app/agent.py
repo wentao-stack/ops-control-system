@@ -364,7 +364,7 @@ async def tool_get_changes(params: dict, session: Session) -> str:
         "properties": {
             "asset_id": {
                 "type": "string",
-                "description": "資產 ID（必填）",
+                "description": "資產 ID 或名稱（如 archlinux、vultr）",
             },
             "command": {
                 "type": "string",
@@ -392,11 +392,20 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
     if not command or len(command) > 500:
         return "❌ 命令長度必須在 1-500 字元之間"
 
-    asset = session.get(Asset, asset_id)
+    asset = session.execute(
+        select(Asset).where(
+            (Asset.id == asset_id) | (Asset.name == asset_id)
+        )
+    ).scalar_one_or_none()
     if not asset or not asset.ssh_host:
-        return f"❌ 找不到資產 {asset_id} 或該資產沒有配置 SSH"
+        # Show available assets with SSH to help LLM retry
+        ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+        if ssh_assets:
+            names = ", ".join(f"{a.name}({a.ssh_host})" for a in ssh_assets)
+            return f"❌ 找不到資產 '{asset_id}'。可用資產: {names}"
+        return f"❌ 找不到資產 '{asset_id}' 或該資產沒有配置 SSH"
     if not asset.ssh_user:
-        return f"❌ 資產 {asset_id} 沒有配置 SSH 用戶"
+        return f"❌ 資產 {asset.name} 沒有配置 SSH 用戶"
 
     import asyncio
     import time as _time
@@ -453,7 +462,7 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
         "properties": {
             "asset_id": {
                 "type": "string",
-                "description": "資產 ID（必填）",
+                "description": "資產 ID 或名稱（如 archlinux、vultr）",
             },
             "process_name": {
                 "type": "string",
@@ -480,11 +489,20 @@ async def tool_supervisor_action(params: dict, session: Session) -> str:
     if action not in ("start", "stop", "restart"):
         return "❌ 操作必須是 start、stop 或 restart"
 
-    asset = session.get(Asset, asset_id)
+    asset = session.execute(
+        select(Asset).where(
+            (Asset.id == asset_id) | (Asset.name == asset_id)
+        )
+    ).scalar_one_or_none()
     if not asset or not asset.ssh_host:
-        return f"❌ 找不到資產 {asset_id} 或該資產沒有配置 SSH"
+        # Show available assets with SSH to help LLM retry
+        ssh_assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+        if ssh_assets:
+            names = ", ".join(f"{a.name}({a.ssh_host})" for a in ssh_assets)
+            return f"❌ 找不到資產 '{asset_id}'。可用資產: {names}"
+        return f"❌ 找不到資產 '{asset_id}' 或該資產沒有配置 SSH"
     if not asset.ssh_user:
-        return f"❌ 資產 {asset_id} 沒有配置 SSH 用戶"
+        return f"❌ 資產 {asset.name} 沒有配置 SSH 用戶"
 
     import asyncio
 
