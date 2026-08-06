@@ -1260,7 +1260,7 @@ async def chat_stream(
                     result = f"未知工具: {tool_name}"
 
                 # Emit tool_result event to frontend
-                yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\\n\\n'
+                yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
 
                 # Save tool message to DB
                 save_message(
