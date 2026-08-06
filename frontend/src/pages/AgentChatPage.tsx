@@ -162,6 +162,7 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
 /* ── main page ───────────────────────────────────────────────────────────── */
 
 export function AgentChatPage() {
+  const [tab, setTab] = useState<"chat" | "usage">("chat")
   const [conversations, setConversations] = useState<AgentConversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<AgentMessage[]>([])
@@ -471,6 +472,14 @@ export function AgentChatPage() {
 
   return (
     <div className="agent-chat">
+      {/* Tab switcher */}
+      <div className="agent-tabs">
+        <button className={`agent-tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>💬 聊天</button>
+        <button className={`agent-tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")}>📊 用量統計</button>
+      </div>
+
+      {tab === "chat" ? (
+      <div className="agent-chat-inner">
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -584,6 +593,179 @@ export function AgentChatPage() {
           </div>
         </div>
       </div>
+      </div>
+      ) : (
+      <AgentUsagePanel />
+      )}
+    </div>
+  )
+}
+
+/* ── Usage stats panel ─────────────────────────────────────────────────────── */
+
+interface UsageData {
+  period: string
+  total_prompt_tokens: number
+  total_completion_tokens: number
+  total_tokens: number
+  total_tool_calls: number
+  total_requests: number
+  user_breakdown: Record<string, { total_tokens: number; tool_calls: number; requests: number }>
+  daily: { date: string; total_tokens: number; requests: number; tool_calls: number }[]
+  records: {
+    id: number
+    user: string
+    conversation_id: string
+    model: string
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+    tool_calls_count: number
+    created_at: string
+  }[]
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M"
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K"
+  return n.toString()
+}
+
+function AgentUsagePanel() {
+  const [data, setData] = useState<UsageData | null>(null)
+  const [period, setPeriod] = useState("month")
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback((p: string) => {
+    setLoading(true)
+    api<UsageData>(`/api/v1/agent/usage?period=${p}`)
+      .then(r => setData(r))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load(period) }, [period, load])
+
+  if (!data && !loading) return <div className="usage-empty">載入失敗，請稍後再試</div>
+  if (loading) return <div className="usage-empty">載入中...</div>
+  if (!data) return <div className="usage-empty">暫無用量數據</div>
+
+  const maxTokens = Math.max(...data.daily.map(d => d.total_tokens), 1)
+
+  return (
+    <div className="usage-panel">
+      <div className="usage-header">
+        <h3>📊 Token 用量統計</h3>
+        <div className="usage-period">
+          {(["today", "week", "month", "all"] as const).map(p => (
+            <button
+              key={p}
+              className={`usage-period-btn ${period === p ? "active" : ""}`}
+              onClick={() => setPeriod(p)}
+            >
+              {p === "today" ? "今天" : p === "week" ? "近7天" : p === "month" ? "本月" : "全部"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="usage-cards">
+        <div className="usage-card">
+          <div className="usage-card-value">{fmtTokens(data.total_tokens)}</div>
+          <div className="usage-card-label">總 Token 數</div>
+        </div>
+        <div className="usage-card">
+          <div className="usage-card-value">{fmtTokens(data.total_prompt_tokens)}</div>
+          <div className="usage-card-label">Prompt Token</div>
+        </div>
+        <div className="usage-card">
+          <div className="usage-card-value">{fmtTokens(data.total_completion_tokens)}</div>
+          <div className="usage-card-label">Completion Token</div>
+        </div>
+        <div className="usage-card">
+          <div className="usage-card-value">{data.total_requests}</div>
+          <div className="usage-card-label">請求次數</div>
+        </div>
+        <div className="usage-card">
+          <div className="usage-card-value">{data.total_tool_calls}</div>
+          <div className="usage-card-label">工具調用次數</div>
+        </div>
+      </div>
+
+      {/* Daily chart */}
+      {data.daily.length > 0 && (
+        <div className="usage-chart">
+          <h4>每日用量</h4>
+          <div className="usage-bars">
+            {[...data.daily].reverse().map(d => (
+              <div key={d.date} className="usage-bar-group" title={`${d.date}: ${d.total_tokens} tokens, ${d.requests} requests`}>
+                <div
+                  className="usage-bar"
+                  style={{ height: `${Math.max((d.total_tokens / maxTokens) * 100, 4)}%` }}
+                />
+                <div className="usage-bar-label">{d.date.slice(5)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* User breakdown (admin only) */}
+      {Object.keys(data.user_breakdown).length > 0 && (
+        <div className="usage-user-breakdown">
+          <h4>用戶明細</h4>
+          <table className="usage-table">
+            <thead>
+              <tr>
+                <th>用戶</th>
+                <th>Token 數</th>
+                <th>請求次數</th>
+                <th>工具調用</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(data.user_breakdown).map(([user, info]) => (
+                <tr key={user}>
+                  <td>{user}</td>
+                  <td>{fmtTokens(info.total_tokens)}</td>
+                  <td>{info.requests}</td>
+                  <td>{info.tool_calls}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Recent records */}
+      {data.records.length > 0 && (
+        <div className="usage-records">
+          <h4>最近記錄</h4>
+          <table className="usage-table">
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>用戶</th>
+                <th>模型</th>
+                <th>Token</th>
+                <th>工具調用</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.records.slice(0, 20).map(r => (
+                <tr key={r.id}>
+                  <td>{new Date(r.created_at).toLocaleString("zh-TW")}</td>
+                  <td>{r.user}</td>
+                  <td>{r.model}</td>
+                  <td>{fmtTokens(r.total_tokens)}</td>
+                  <td>{r.tool_calls_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

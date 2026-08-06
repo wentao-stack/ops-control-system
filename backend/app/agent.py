@@ -873,7 +873,7 @@ async def _llm_chat_with_tools(
     messages: list[dict],
     tools: list[dict],
 ) -> dict:
-    """Non-streaming LLM call with tools — returns the full assistant message including tool_calls."""
+    """Non-streaming LLM call with tools — returns the full assistant message including tool_calls and usage."""
     if not LLM_API_KEY:
         return {"content": "[LLM API key not configured]"}
 
@@ -893,7 +893,11 @@ async def _llm_chat_with_tools(
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["choices"][0]["message"]
+        msg = data["choices"][0]["message"]
+        # Attach usage info for token tracking
+        if "usage" in data:
+            msg["_usage"] = data["usage"]
+        return msg
 
 
 async def _llm_complete(
@@ -1236,9 +1240,20 @@ async def chat_stream(
 
     # Tool calling loop (max 5 iterations)
     max_iterations = 5
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_tokens = 0
+    tool_calls_count = 0
     for iteration in range(max_iterations):
         # Call LLM with tools
         assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_openai)
+
+        # Accumulate token usage
+        usage = assistant_msg.pop("_usage", None)
+        if usage:
+            total_prompt_tokens += usage.get("prompt_tokens", 0)
+            total_completion_tokens += usage.get("completion_tokens", 0)
+            total_tokens += usage.get("total_tokens", 0)
 
         # Append assistant message to LLM context
         llm_messages.append(assistant_msg)
@@ -1309,6 +1324,7 @@ async def chat_stream(
 
         # Execute tool calls
         for tc in tool_calls:
+            tool_calls_count += 1
             func = tc.get("function", {})
             tool_name = func.get("name", "")
             tool_args_str = func.get("arguments", "{}")
@@ -1476,6 +1492,25 @@ async def chat_stream(
             if conv_obj and conv_obj.title == "新對話":
                 conv_obj.title = title
                 session.commit()
+        except Exception:
+            pass
+
+    # Record token usage
+    if total_tokens > 0:
+        try:
+            from .models import AgentUsage
+            usage_record = AgentUsage(
+                user=user,
+                conversation_id=conv_id,
+                model=model,
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=total_completion_tokens,
+                total_tokens=total_tokens,
+                tool_calls_count=tool_calls_count,
+                created_at=datetime.now(UTC),
+            )
+            session.add(usage_record)
+            session.commit()
         except Exception:
             pass
 

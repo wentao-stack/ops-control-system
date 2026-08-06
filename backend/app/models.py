@@ -158,3 +158,21 @@ class AgentToolCall(Base):
         Index("idx_agent_tool_calls_conv", "conversation_id", "created_at"),
         Index("idx_agent_tool_calls_user", "user", "created_at"),
     )
+
+
+class AgentUsage(Base):
+    __tablename__ = "agent_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    conversation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tool_calls_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_agent_usage_user_time", "user", "created_at"),
+    )

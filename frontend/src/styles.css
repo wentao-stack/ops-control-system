@@ -5996,3 +5996,208 @@ tbody tr:last-child td { border-bottom: none; }
   color: #22c55e;
   border: 1px solid rgba(34, 197, 94, 0.2);
 }
+
+/* ── Agent tabs ─────────────────────────────────────────────────────────────── */
+
+.agent-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.agent-tab {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.agent-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.agent-tab.active {
+  background: var(--primary);
+  color: white;
+}
+
+.agent-chat-inner {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Usage panel ────────────────────────────────────────────────────────────── */
+
+.usage-panel {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.usage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.usage-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.usage-period {
+  display: flex;
+  gap: 4px;
+}
+
+.usage-period-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.usage-period-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.usage-period-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.usage-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.usage-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.usage-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.usage-card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.usage-chart {
+  margin-bottom: 24px;
+}
+
+.usage-chart h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.usage-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.usage-bar {
+  width: 100%;
+  max-width: 32px;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  transition: height 0.3s;
+}
+
+.usage-bar-label {
+  font-size: 9px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.usage-user-breakdown,
+.usage-records {
+  margin-bottom: 24px;
+}
+
+.usage-user-breakdown h4,
+.usage-records h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.usage-table th,
+.usage-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.usage-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.usage-table td {
+  color: var(--text-primary);
+}
+
+.usage-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}

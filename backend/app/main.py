@@ -1155,6 +1155,108 @@ async def agent_confirm(confirm_id: str = Body(..., embed=True), approved: bool 
     return {"status": "ok"}
 
 
+# ── Agent usage tracking ─────────────────────────────────────────────────────
+
+@app.get("/api/v1/agent/usage")
+def get_agent_usage(
+    period: str = "month",
+    user: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get agent token usage statistics.
+
+    period: today | week | month | all
+    user: optional filter (admin can view all users)
+    """
+    from sqlalchemy import func
+    from .models import AgentUsage
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "week":
+        start = now - timedelta(days=7)
+    elif period == "month":
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start = None  # all time
+
+    query = select(AgentUsage)
+    if start:
+        query = query.where(AgentUsage.created_at >= start)
+
+    # Non-admin can only see their own usage
+    if current_user.get("role") != "admin":
+        query = query.where(AgentUsage.user == current_user["username"])
+    elif user:
+        query = query.where(AgentUsage.user == user)
+
+    records = session.scalars(query.order_by(AgentUsage.created_at.desc())).all()
+
+    # Aggregate stats
+    total_prompt = sum(r.prompt_tokens for r in records)
+    total_completion = sum(r.completion_tokens for r in records)
+    total_all = sum(r.total_tokens for r in records)
+    total_tools = sum(r.tool_calls_count for r in records)
+
+    # Per-user breakdown (for admin)
+    user_breakdown = {}
+    if current_user.get("role") == "admin":
+        user_agg = session.execute(
+            select(
+                AgentUsage.user,
+                func.sum(AgentUsage.total_tokens).label("tokens"),
+                func.sum(AgentUsage.tool_calls_count).label("tools"),
+                func.count().label("requests"),
+            ).where(
+                AgentUsage.created_at >= start if start else AgentUsage.created_at >= datetime(2000, 1, 1)
+            ).group_by(AgentUsage.user)
+        ).all()
+        for row in user_agg:
+            user_breakdown[row.user] = {
+                "total_tokens": row.tokens or 0,
+                "tool_calls": row.tools or 0,
+                "requests": row.requests,
+            }
+
+    # Per-day breakdown
+    daily = {}
+    for r in records:
+        day = r.created_at.strftime("%Y-%m-%d")
+        if day not in daily:
+            daily[day] = {"date": day, "total_tokens": 0, "requests": 0, "tool_calls": 0}
+        daily[day]["total_tokens"] += r.total_tokens
+        daily[day]["requests"] += 1
+        daily[day]["tool_calls"] += r.tool_calls_count
+
+    return {
+        "period": period,
+        "total_prompt_tokens": total_prompt,
+        "total_completion_tokens": total_completion,
+        "total_tokens": total_all,
+        "total_tool_calls": total_tools,
+        "total_requests": len(records),
+        "user_breakdown": user_breakdown,
+        "daily": list(daily.values()),
+        "records": [
+            {
+                "id": r.id,
+                "user": r.user,
+                "conversation_id": r.conversation_id,
+                "model": r.model,
+                "prompt_tokens": r.prompt_tokens,
+                "completion_tokens": r.completion_tokens,
+                "total_tokens": r.total_tokens,
+                "tool_calls_count": r.tool_calls_count,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records[:100]  # limit to last 100
+        ],
+    }
+
+
 # ── Code browser ──────────────────────────────────────────────────────────────
 # 程式碼瀏覽器功能：讓使用者在 OPS 控制系統中直接瀏覽專案原始碼
 # 提供兩個 API：
