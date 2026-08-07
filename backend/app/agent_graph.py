@@ -586,8 +586,9 @@ async def run_agent_graph(
     # Each node appends its SSE events to state["sse_events"], which we yield
     # after each node completes.
     #
-    # To get per-node events, we use graph.stream() with stream_mode="values"
+    # To get per-node events, we use graph.astream() with stream_mode="values"
     # which yields the state after each node execution.
+    # async because our nodes are async def.
 
     total_prompt_tokens = 0
     total_completion_tokens = 0
@@ -595,7 +596,7 @@ async def run_agent_graph(
     tool_calls_count = 0
 
     try:
-        for stream_chunk in graph.stream(initial_state):
+        async for stream_chunk in graph.astream(initial_state):
             # stream_chunk is {node_name: partial_state} in langgraph 1.x
             for _node_name, partial_state in stream_chunk.items():
                 # Yield SSE events accumulated by this node
