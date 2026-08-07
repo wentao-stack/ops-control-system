@@ -218,6 +218,7 @@ export function AgentChatPage() {
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
   const [confirming, setConfirming] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const toolCardsRef = useRef<ToolCardState[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -267,6 +268,9 @@ export function AgentChatPage() {
     const timer = setTimeout(() => setToasts(prev => prev.slice(1)), 5000)
     return () => clearTimeout(timer)
   }, [toasts])
+
+  /* sync toolCards ref for done handler */
+  useEffect(() => { toolCardsRef.current = toolCards }, [toolCards])
 
   /* create new conversation */
   const handleNew = async () => {
@@ -494,6 +498,27 @@ export function AgentChatPage() {
 
                   case "done":
                     setThinking(false)
+                    // Persist tool cards as messages
+                    const cards = toolCardsRef.current
+                    setMessages(prev => {
+                      let updated = [...prev]
+                      cards.forEach(card => {
+                        if (card.status === "done" && card.result) {
+                          updated.push({
+                            id: Date.now() + Math.random(),
+                            conversation_id: convId ?? "",
+                            role: "tool",
+                            content: "",
+                            tool_name: card.name,
+                            tool_input: JSON.stringify(card.params),
+                            tool_result: card.result,
+                            created_at: new Date().toISOString(),
+                          } as AgentMessage)
+                        }
+                      })
+                      return updated
+                    })
+                    setToolCards([])
                     break
                 }
               } catch {
@@ -525,6 +550,7 @@ export function AgentChatPage() {
       setStreaming(false)
       setThinking(false)
       setToolCards([])
+      toolCardsRef.current = []
       abortRef.current = null
       // reload conversations so sidebar reflects the updated state
       loadConversations()
