@@ -1195,3 +1195,4 @@ INFO:     118.3.227.75:0 - "GET /api/v1/clouds/conoha/instances HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/billing-history HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/account HTTP/1.1" 502 Bad Gateway
 INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/instances HTTP/1.1" 200 OK
+INFO:     59.132.70.210:0 - "GET / HTTP/1.1" 200 OK

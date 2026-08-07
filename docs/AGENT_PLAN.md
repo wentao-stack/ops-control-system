@@ -2,7 +2,7 @@
 
 > 專案: OPS Control System
 > 最後更新: 2026-08-07
-> 狀態: Phase 1-4 已完成核心功能，Phase 3 部分完成
+> 狀態: Phase 1-3 已完成，Phase 4 記憶系統已完善
 
 ---
 
@@ -20,7 +20,7 @@
 | Tool Calling Loop | ✅ | 最多 5 次迭代，工具執行 → 結果回傳 LLM |
 | 工作流引擎 | ✅ | 5 種步驟 (llm/api/shell/note_api/note_create) |
 
-### 現有 11 個工具（6 讀取 + 5 寫入/執行）
+### 現有 13 個工具（7 讀取 + 5 寫入/執行 + 1 記憶）
 
 | # | 工具名 | 功能 | 類型 | 權限 |
 |---|--------|------|------|------|
@@ -30,11 +30,13 @@
 | 4 | `get_alerts` | 告警列表，支援嚴重程度篩選 | 讀取 | read |
 | 5 | `search_notes` | 筆記搜索，支援關鍵字/分類 | 讀取 | read |
 | 6 | `get_changes` | 變更記錄，支援類型篩選 | 讀取 | read |
-| 7 | `exec_ssh_command` | SSH 遠端命令執行 | 執行 | exec + confirm |
-| 8 | `supervisor_action` | Supervisor 程序管理 | 執行 | exec + confirm |
-| 9 | `create_note` | 創建筆記 | 寫入 | write |
-| 10 | `acknowledge_alert` | 確認告警 | 寫入 | write |
-| 11 | `search_runbooks` | 搜索 Runbook | 讀取 | read |
+| 7 | `search_runbooks` | 搜索 Runbook | 讀取 | read |
+| 8 | `exec_ssh_command` | SSH 遠端命令執行 | 執行 | exec + confirm |
+| 9 | `supervisor_action` | Supervisor 程序管理 | 執行 | exec + confirm |
+| 10 | `create_note` | 創建筆記 | 寫入 | write |
+| 11 | `acknowledge_alert` | 確認告警 | 寫入 | write |
+| 12 | `save_memory` | 保存事實到持久記憶 | 記憶 | write |
+| 13 | `get_memories` | 檢索已保存的記憶 | 記憶 | read |
 
 ### 缺失
 
@@ -315,11 +317,15 @@ frontend/src/
 - [x] 用量統計 API + 前端展示
 - [ ] 主動監控端點
 
-### Phase 4 — 記憶與知識 🔄 部分完成
+### Phase 4 — 記憶與知識 ✅ 已完成
 - [x] AgentMemory 記憶模型
-- [x] save_memory 工具
-- [x] get_memories 工具 + 記憶注入 system prompt
+- [x] save_memory 工具（@register_tool 註冊）
+- [x] get_memories 工具（@register_tool 註冊）
+- [x] 記憶注入 system prompt（相關性過濾）
 - [x] 記憶管理 API + 前端記憶面板
+- [x] 自動記憶提取（用戶訊息模式匹配）
+- [x] 記憶搜索 API（?q= 關鍵字搜索）
+- [x] 前端記憶搜索與分類篩選
 - [ ] 自定義工具管理
 - [ ] 向量搜索（可選）
 
