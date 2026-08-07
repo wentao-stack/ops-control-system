@@ -2,7 +2,7 @@
 
 > 專案: OPS Control System
 > 最後更新: 2026-08-07
-> 狀態: Phase 1-3 已完成，Phase 4 記憶系統已完善
+> 狀態: Phase 1-4 已完成，Phase 3 主動監控已實作
 
 ---
 
@@ -44,8 +44,8 @@
 - [x] 權限控制（Phase 2 已完成 — read/write/exec 三級 + 前端 confirm）
 - [x] Token 用量追蹤（Phase 3 已完成 — AgentUsage 模型 + API + 前端面板）
 - [x] Agent 記憶系統（Phase 4 已完成 — AgentMemory 模型 + save_memory/get_memories 工具）
-- [ ] 圖片上傳 + Vision API（Phase 3 待完成）
-- [ ] Agent 主動監控端點（Phase 3 待完成）
+- [ ] 圖片上傳 + Vision API（Phase 3 跳過）
+- [x] Agent 主動監控端點（Phase 3 已完成 — POST /api/v1/agent/inspect）
 - [ ] 自定義工具管理（Phase 4 待完成）
 - [ ] SettingsPage 實作（目前空殼）
 

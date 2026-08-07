@@ -469,3 +469,11 @@
 2026-08-07 11:12:26,723 WARN stopped: ocs-backend (terminated by SIGTERM)
 2026-08-07 11:12:26,724 INFO spawned: 'ocs-backend' with pid 19494
 2026-08-07 11:12:30,235 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-07 11:37:57,885 INFO waiting for ocs-backend to stop
+2026-08-07 11:37:58,049 WARN stopped: ocs-backend (terminated by SIGTERM)
+2026-08-07 11:37:58,050 INFO waiting for ocs-frontend to stop
+2026-08-07 11:37:58,058 WARN stopped: ocs-frontend (exit status 143)
+2026-08-07 11:37:58,059 INFO spawned: 'ocs-backend' with pid 28707
+2026-08-07 11:38:01,582 INFO success: ocs-backend entered RUNNING state, process has stayed up for > than 3 seconds (startsecs)
+2026-08-07 11:38:01,584 INFO spawned: 'ocs-frontend' with pid 28729
+2026-08-07 11:38:06,722 INFO success: ocs-frontend entered RUNNING state, process has stayed up for > than 5 seconds (startsecs)
