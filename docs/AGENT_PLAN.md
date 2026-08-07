@@ -2,7 +2,7 @@
 
 > 專案: OPS Control System
 > 最後更新: 2026-08-07
-> 狀態: Phase 1-5 已完成，Phase 3 主動監控已實作，LangGraph 狀態流已上線
+> 狀態: Phase 1-6 已完成，SSE 事件總線上線，Agent 核心功能完整
 
 ---
 
@@ -15,8 +15,8 @@
 | LLM 適配層 | ✅ | OpenAI 兼容 API，串流 + 非串流，`qwen36-27b-no-think-v1` |
 | Tool Registry | ✅ | 裝飾器註冊 + OpenAI function calling 格式 |
 | 對話管理 | ✅ | 創建/列出/刪除/持久化，自動標題生成 |
-| SSE 串流聊天 | ✅ | `conv_id` / `token` / `tool_use` / `tool_result` / `done` 事件 |
-| 前端聊天 UI | ✅ | 側邊欄對話列表 + 聊天區 + Markdown 渲染 + 工具卡片 |
+| SSE 串流聊天 | ✅ | 12 種 SSE 事件總線（conv_id/token/tool_call/tool_progress/tool_result/confirm/confirm_result/error/warning/usage/done/thinking） |
+| 前端聊天 UI | ✅ | 側邊欄對話列表 + 聊天區 + Markdown 渲染 + 工具卡片 + Toast 通知 + Thinking 指示器 |
 | Tool Calling Loop | ✅ | 最多 5 次迭代，工具執行 → 結果回傳 LLM |
 | 工作流引擎 | ✅ | 5 種步驟 (llm/api/shell/note_api/note_create) |
 
@@ -255,8 +255,9 @@
 
 ```
 backend/app/
-├── agent.py              # 核心: LLM 適配 + Tool Registry + Chat Stream
-├── agent_models.py       # ORM: AgentConversation, AgentMessage, AgentToolCall, AgentUsage
+├── agent.py              # 核心: LLM 適配 + Tool Registry + Chat Stream (1666 行)
+├── agent_graph.py        # SSE 事件總線引擎: 12 種事件 + Agent 循環 (507 行)
+├── agent_models.py       # ORM: AgentConversation, AgentMessage, AgentToolCall, AgentUsage, AgentMemory
 ├── agent_schemas.py      # Pydantic: 所有 request/response schemas
 ├── agent_tools/          # 工具模組化（Phase 2+）
 │   ├── __init__.py
@@ -265,16 +266,34 @@ backend/app/
 │   └── exec_tools.py     # Phase 1 執行工具（需確認）
 ```
 
-### 前端文件結構（目標）
+### 前端文件結構（當前）
 
 ```
 frontend/src/
 ├── pages/
-│   └── AgentChatPage.tsx     # 聊天主頁面
+│   └── AgentChatPage.tsx     # 聊天主頁面 (1249 行，事件驅動 UI)
 ├── components/
-│   ├── AgentConfirmCard.tsx  # Phase 2: 工具確認卡片
-│   ├── AgentImageUpload.tsx  # Phase 3: 圖片上傳
-│   └── AgentUsageStats.tsx   # Phase 3: 用量統計
+│   ├── AgentConfirmCard.tsx  # 工具確認卡片（內聯在 AgentChatPage）
+│   ├── AgentImageUpload.tsx  # Phase 3: 圖片上傳（待實作）
+│   └── AgentUsageStats.tsx   # Phase 3: 用量統計（內聯在 AgentChatPage）
+```
+
+### SSE 事件總線協議
+
+```
+後端 → 前端 (12 種事件):
+  conv_id        — 對話建立
+  thinking       — LLM 思考中（顯示動畫）
+  token          — 文字 token（逐字串流）
+  tool_call      — 工具呼叫開始（顯示卡片）
+  tool_progress  — 工具執行進度（進度條）
+  tool_result    — 工具執行完成（結果 + 耗時）
+  confirm        — 需要用戶確認（彈出對話框）
+  confirm_result — 確認結果
+  error          — 錯誤（Toast 通知）
+  warning        — 警告（Toast 通知）
+  usage          — Token 用量（訊息底部標籤）
+  done           — 串流完成（工具卡片轉持久訊息）
 ```
 
 ---
@@ -329,15 +348,29 @@ frontend/src/
 - [ ] 自定義工具管理
 - [ ] 向量搜索（可選）
 
-### Phase 5 — LangGraph 狀態流重構 ✅ 已完成
+### Phase 5 — LangGraph 狀態流重構 ✅ 已完成 → Phase 6 SSE 事件總線 ✅ 已完成
+
+Phase 5 原始 LangGraph StateGraph 方案因節點緩衝導致 SSE 延遲，已重構為直接事件驅動架構。
+
 - [x] 安裝 langgraph 1.2 + langchain-openai 1.4
-- [x] 定義 AgentState (TypedDict) — messages, tool_results, confirm_status, iteration_count, total_tokens
-- [x] 4 個 Node：chatbot → invoke_tools → await_confirm → finalize
-- [x] 條件邊：route_after_chatbot / route_after_tools / route_after_confirm
-- [x] SSE 串流保留 — graph.stream() 逐節點 yield 事件
+- [x] agent_graph.py 獨立模組（507 行）— SSE 事件總線引擎
+- [x] 12 種 SSE 事件類型定義與協議文件
+- [x] `sse()` 統一格式化函數 — 每個 yield 就是一次即時推送
 - [x] 意圖檢測、權限檢查、審計日誌、Token 用量追蹤完整保留
-- [x] agent.py 瘦身 401 行（2069 → 1668），核心邏輯移至 agent_graph.py
+- [x] agent.py 瘦身（2069 → 1666 行），核心邏輯移至 agent_graph.py
 - [x] 後端重啟成功，無 import 錯誤
+
+### Phase 6 — SSE 事件總線前端 ✅ 已完成
+
+- [x] 12 種 SSE 事件 TypeScript 類型定義（SSEEvent union type）
+- [x] switch 事件處理器 — 取代 if/else 鏈
+- [x] ToolCardState — 工具卡片即時狀態管理（calling/progress/done/error）
+- [x] 工具執行卡片 UI — icon + 名稱 + level 標籤 + 進度條 + 結果 + 耗時
+- [x] Toast 通知 — error/warning 右下角彈出，5 秒自動消失
+- [x] Thinking 指示器 — 跳動圓點動畫，亮色主題配色
+- [x] done 事件將工具卡片轉為持久化 AgentMessage
+- [x] toolCardsRef 解決 React closure 問題
+- [x] AgentChatPage.tsx 1249 行，完整事件驅動 UI
 
 ---
 
