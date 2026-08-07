@@ -978,7 +978,11 @@ function AgentInspectPanel() {
   const runInspect = useCallback(() => {
     setLoading(true)
     setError("")
-    api<InspectReport>("/api/v1/agent/inspect", { method: "POST", body: JSON.stringify({}) })
+    api<InspectReport>("/api/v1/agent/inspect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
       .then(r => { setReport(r); setError("") })
       .catch(e => { setError(typeof e === 'string' ? e : '檢查失敗') })
       .finally(() => setLoading(false))
