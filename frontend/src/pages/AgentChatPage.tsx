@@ -176,6 +176,7 @@ export function AgentChatPage() {
   const [messages, setMessages] = useState<AgentMessage[]>([])
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
+  const [thinking, setThinking] = useState(false)
   const [llmReady, setLlmReady] = useState(true)
   const [creatingConv, setCreatingConv] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
@@ -370,7 +371,12 @@ export function AgentChatPage() {
                   if (!convId) {
                     setActiveId(parsed.conv_id)
                   }
+                } else if (parsed.event === "thinking") {
+                  // LLM is thinking — show loading indicator
+                  setThinking(true)
                 } else if (parsed.event === "token") {
+                  // First token — hide thinking indicator
+                  setThinking(false)
                   // append streaming token
                   setMessages(prev =>
                     prev.map(m =>
@@ -447,6 +453,7 @@ export function AgentChatPage() {
       }
     } finally {
       setStreaming(false)
+      setThinking(false)
       abortRef.current = null
       // reload conversations so sidebar reflects the updated state
       loadConversations()
@@ -535,6 +542,16 @@ export function AgentChatPage() {
           {messages.map(msg => (
             <MessageBubble key={msg.id} msg={msg} />
           ))}
+
+          {/* Thinking indicator */}
+          {thinking && (
+            <div className="agent-thinking">
+              <div className="agent-thinking-dots">
+                <span>.</span><span>.</span><span>.</span>
+              </div>
+              <span className="agent-thinking-text">正在思考</span>
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
