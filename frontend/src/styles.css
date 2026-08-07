@@ -6436,3 +6436,157 @@ tbody tr:last-child td { border-bottom: none; }
     opacity: 1;
   }
 }
+
+/* ── Tool Execution Cards (SSE Event Bus) ─────────────────────────────── */
+
+.agent-tool-exec {
+  margin: 4px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #1a1a2e);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.agent-tool-exec-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-tool-exec-icon {
+  font-size: 14px;
+}
+
+.agent-tool-exec-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--mono);
+}
+
+.agent-tool-exec-level {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.agent-level-read {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.agent-level-write {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.agent-level-exec {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.agent-tool-exec-duration {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+}
+
+.agent-tool-exec-progress {
+  padding: 8px 12px;
+}
+
+.agent-tool-exec-progress-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.agent-tool-exec-progress-fill {
+  height: 100%;
+  background: var(--accent, #6366f1);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  animation: agent-progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes agent-progress-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.agent-tool-exec-progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.agent-tool-exec-result {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ── Toast Notifications (SSE Event Bus) ─────────────────────────────── */
+
+.agent-toast {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 1000;
+  animation: agent-toast-in 0.3s ease;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.agent-toast-error {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+}
+
+.agent-toast-warning {
+  background: rgba(251, 191, 36, 0.9);
+  color: #1a1a2e;
+}
+
+.agent-toast-info {
+  background: rgba(99, 102, 241, 0.9);
+  color: white;
+}
+
+.agent-toast-icon {
+  font-size: 14px;
+}
+
+.agent-toast-message {
+  flex: 1;
+}
+
+@keyframes agent-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

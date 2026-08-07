@@ -16,6 +16,40 @@ type PendingConfirm = {
   level?: string
 }
 
+/* ── SSE Event Bus Types ─────────────────────────────────────────────────── */
+
+type SSEEvent =
+  | { event: "conv_id"; conv_id: string }
+  | { event: "thinking"; text: string }
+  | { event: "token"; token: string }
+  | { event: "tool_call"; id: string; name: string; params: Record<string, any>; level: string }
+  | { event: "tool_progress"; id: string; message: string; percent: number }
+  | { event: "tool_result"; id: string; name: string; result: string; duration_ms: number }
+  | { event: "confirm"; id: string; name: string; params: Record<string, any>; level: string; message: string }
+  | { event: "confirm_result"; id: string; approved: boolean }
+  | { event: "error"; message: string; code: string }
+  | { event: "warning"; message: string }
+  | { event: "usage"; prompt_tokens: number; completion_tokens: number; total_tokens: number; tool_calls: number }
+  | { event: "done" }
+
+type ToolCardState = {
+  id: string
+  name: string
+  params: Record<string, any>
+  level: string
+  status: "calling" | "progress" | "done" | "error"
+  progress_msg?: string
+  progress_pct?: number
+  result?: string
+  duration_ms?: number
+}
+
+type ToastState = {
+  id: string
+  type: "error" | "warning" | "info"
+  message: string
+}
+
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
 function groupConversations(convs: AgentConversation[]): Map<string, AgentConversation[]> {
@@ -177,6 +211,8 @@ export function AgentChatPage() {
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [thinking, setThinking] = useState(false)
+  const [toolCards, setToolCards] = useState<ToolCardState[]>([])
+  const [toasts, setToasts] = useState<ToastState[]>([])
   const [llmReady, setLlmReady] = useState(true)
   const [creatingConv, setCreatingConv] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
@@ -224,6 +260,13 @@ export function AgentChatPage() {
       el.style.height = Math.min(el.scrollHeight, 120) + "px"
     }
   }, [input])
+
+  /* toast auto-dismiss */
+  useEffect(() => {
+    if (toasts.length === 0) return
+    const timer = setTimeout(() => setToasts(prev => prev.slice(1)), 5000)
+    return () => clearTimeout(timer)
+  }, [toasts])
 
   /* create new conversation */
   const handleNew = async () => {
@@ -365,66 +408,93 @@ export function AgentChatPage() {
               if (data === "[DONE]") continue
 
               try {
-                const parsed = JSON.parse(data)
-                if (parsed.event === "conv_id") {
-                  // Backend auto-created a conversation — update activeId
-                  if (!convId) {
-                    setActiveId(parsed.conv_id)
-                  }
-                } else if (parsed.event === "thinking") {
-                  // LLM is thinking — show loading indicator
-                  setThinking(true)
-                } else if (parsed.event === "token") {
-                  // First token — hide thinking indicator
-                  setThinking(false)
-                  // append streaming token
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === assistantId
-                        ? { ...m, content: m.content + (parsed.token ?? parsed.data ?? "") }
-                        : m
-                    )
-                  )
-                } else if (parsed.event === "tool_use") {
-                  // add tool message
-                  const toolMsg: AgentMessage = {
-                    id: Date.now() + Math.random(),
-                    conversation_id: convId ?? "",
-                    role: "tool",
-                    content: "",
-                    tool_name: parsed.name,
-                    tool_input: JSON.stringify(parsed.parameters ?? {}),
-                    tool_result: null,
-                    created_at: new Date().toISOString(),
-                  }
-                  setMessages(prev => [...prev, toolMsg])
-                } else if (parsed.event === "tool_result") {
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.role === "tool" && m.tool_name === parsed.name
-                        ? { ...m, tool_result: parsed.result }
-                        : m
-                    )
-                  )
-                } else if (parsed.event === "confirm") {
-                  // Show confirmation dialog for dangerous tools
-                  setPendingConfirm({
-                    confirm_id: parsed.confirm_id,
-                    name: parsed.name,
-                    parameters: parsed.parameters ?? {},
-                    level: parsed.level ?? "exec",
-                  })
-                } else if (parsed.event === "done") {
-                  // Attach usage info to last assistant message
-                  if (parsed.usage) {
+                const parsed = JSON.parse(data) as SSEEvent
+                switch (parsed.event) {
+                  case "conv_id":
+                    if (!convId) setActiveId(parsed.conv_id)
+                    break
+
+                  case "thinking":
+                    setThinking(true)
+                    break
+
+                  case "token":
+                    setThinking(false)
                     setMessages(prev =>
                       prev.map(m =>
                         m.id === assistantId
-                          ? { ...m, usage: parsed.usage }
+                          ? { ...m, content: m.content + (parsed.token ?? "") }
                           : m
                       )
                     )
+                    break
+
+                  case "tool_call": {
+                    const card: ToolCardState = {
+                      id: parsed.id,
+                      name: parsed.name,
+                      params: parsed.params,
+                      level: parsed.level,
+                      status: "calling",
+                    }
+                    setToolCards(prev => [...prev, card])
+                    break
                   }
+
+                  case "tool_progress":
+                    setToolCards(prev =>
+                      prev.map(c =>
+                        c.id === parsed.id
+                          ? { ...c, status: "progress", progress_msg: parsed.message, progress_pct: parsed.percent }
+                          : c
+                      )
+                    )
+                    break
+
+                  case "tool_result":
+                    setToolCards(prev =>
+                      prev.map(c =>
+                        c.id === parsed.id
+                          ? { ...c, status: "done", result: parsed.result, duration_ms: parsed.duration_ms }
+                          : c
+                      )
+                    )
+                    break
+
+                  case "confirm":
+                    setPendingConfirm({
+                      confirm_id: parsed.id,
+                      name: parsed.name,
+                      parameters: parsed.params,
+                      level: parsed.level,
+                    })
+                    break
+
+                  case "confirm_result":
+                    // Update tool card status after confirmation
+                    break
+
+                  case "error":
+                    setToasts(prev => [...prev, { id: `t-${Date.now()}`, type: "error", message: parsed.message }])
+                    break
+
+                  case "warning":
+                    setToasts(prev => [...prev, { id: `t-${Date.now()}`, type: "warning", message: parsed.message }])
+                    break
+
+                  case "usage":
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === assistantId
+                          ? { ...m, usage: parsed }
+                          : m
+                      )
+                    )
+                    break
+
+                  case "done":
+                    setThinking(false)
+                    break
                 }
               } catch {
                 // non-JSON data line, treat as token
@@ -454,6 +524,7 @@ export function AgentChatPage() {
     } finally {
       setStreaming(false)
       setThinking(false)
+      setToolCards([])
       abortRef.current = null
       // reload conversations so sidebar reflects the updated state
       loadConversations()
@@ -543,6 +614,36 @@ export function AgentChatPage() {
             <MessageBubble key={msg.id} msg={msg} />
           ))}
 
+          {/* Tool execution cards (SSE event bus) */}
+          {toolCards.map(card => (
+            <div key={card.id} className={`agent-tool-exec agent-tool-exec-${card.status}`}>
+              <div className="agent-tool-exec-header">
+                <span className="agent-tool-exec-icon">
+                  {card.status === "calling" && "⚡"}
+                  {card.status === "progress" && "⏳"}
+                  {card.status === "done" && "✅"}
+                  {card.status === "error" && "❌"}
+                </span>
+                <span className="agent-tool-exec-name">{card.name}</span>
+                <span className={`agent-tool-exec-level agent-level-${card.level}`}>{card.level}</span>
+                {card.duration_ms !== undefined && card.status === "done" && (
+                  <span className="agent-tool-exec-duration">{card.duration_ms}ms</span>
+                )}
+              </div>
+              {card.status === "progress" && card.progress_msg && (
+                <div className="agent-tool-exec-progress">
+                  <div className="agent-tool-exec-progress-bar">
+                    <div className="agent-tool-exec-progress-fill" style={{ width: `${card.progress_pct}%` }} />
+                  </div>
+                  <span className="agent-tool-exec-progress-text">{card.progress_msg}</span>
+                </div>
+              )}
+              {card.status === "done" && card.result && (
+                <div className="agent-tool-exec-result">{card.result}</div>
+              )}
+            </div>
+          ))}
+
           {/* Thinking indicator */}
           {thinking && (
             <div className="agent-thinking">
@@ -600,6 +701,18 @@ export function AgentChatPage() {
             </div>
           </div>
         )}
+
+        {/* Toast notifications (SSE event bus) */}
+        {toasts.map(toast => (
+          <div key={toast.id} className={`agent-toast agent-toast-${toast.type}`}>
+            <span className="agent-toast-icon">
+              {toast.type === "error" && "❌"}
+              {toast.type === "warning" && "⚠️"}
+              {toast.type === "info" && "ℹ️"}
+            </span>
+            <span className="agent-toast-message">{toast.message}</span>
+          </div>
+        ))}
 
         {/* Input area */}
         <div className="agent-input-area">

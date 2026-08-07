@@ -1,13 +1,45 @@
-"""LangGraph-based agent state machine with real-time SSE streaming.
+"""
+SSE Event Protocol — Agent ↔ Frontend Event Bus
+=================================================
 
-Architecture:
-  - Tool-calling iterations use _llm_chat_with_tools (need full response to parse tool_calls)
-  - Final response uses _llm_chat_stream for real-time token streaming
-  - LangGraph graph handles tool execution flow (invoke_tools → chatbot loop)
-  - run_agent_graph orchestrates everything and yields SSE events immediately
+Every SSE message follows this format:
+  data: {"event": "<type>", ...payload}\n\n
 
-SSE event format (identical to original):
-  conv_id, token, tool_use, tool_result, confirm, done
+Event Types (12 total):
+────────────────────────
+
+1. conv_id        — Conversation created / identified
+2. thinking       — LLM is processing (show loading)
+3. token          — Streaming text token (append to assistant message)
+4. tool_call      — Agent is calling a tool (show tool card)
+5. tool_progress  — Tool execution progress (show progress bar)
+6. tool_result    — Tool execution completed (show result)
+7. confirm        — Requires user confirmation (show dialog)
+8. confirm_result — Confirmation response received
+9. error          — Error occurred (show error toast)
+10. warning       — Non-fatal warning (show warning banner)
+11. usage         — Token usage stats (show in message footer)
+12. done          — Stream complete (finalize UI)
+
+Event Flow Examples:
+────────────────────
+
+Simple chat (no tools):
+  conv_id → thinking → token → token → ... → token → usage → done
+
+Tool call (read-level, auto-execute):
+  conv_id → thinking → tool_call → tool_progress → tool_result → token → ... → done
+
+Tool call (exec-level, requires confirm):
+  conv_id → thinking → tool_call → confirm → [user approves] → confirm_result
+    → tool_progress → tool_result → token → ... → done
+
+Multiple tool calls:
+  conv_id → thinking → tool_call → tool_result → tool_call → tool_result
+    → thinking → token → ... → done
+
+Error flow:
+  conv_id → thinking → error → done
 """
 
 from __future__ import annotations
@@ -16,14 +48,31 @@ import asyncio
 import json
 import re
 import uuid as _uuid
-from typing import Any, AsyncIterator, Literal, TypedDict
-
-from langgraph.graph import StateGraph, END, START
+from typing import Any, AsyncIterator, TypedDict
 
 from .agent_models import AgentConversation, AgentMessage
 from .agent_schemas import AgentChatRequest
 
-# ── Dependencies wired from agent.py ────────────────────────────────────────
+# ── SSE Event Types ────────────────────────────────────────────────────────
+
+SSE_EVENT_TYPES = [
+    "conv_id",        # {"conv_id": str}
+    "thinking",       # {"text": str}
+    "token",          # {"token": str}
+    "tool_call",      # {"id": str, "name": str, "params": dict, "level": str}
+    "tool_progress",  # {"id": str, "message": str, "percent": int}
+    "tool_result",    # {"id": str, "name": str, "result": str, "duration_ms": int}
+    "confirm",        # {"id": str, "name": str, "params": dict, "level": str, "message": str}
+    "confirm_result", # {"id": str, "approved": bool}
+    "error",          # {"message": str, "code": str}
+    "warning",        # {"message": str}
+    "usage",          # {"prompt_tokens": int, "completion_tokens": int, "total_tokens": int, "tool_calls": int}
+    "done",           # {}
+]
+
+
+# ── Dependencies (wired from agent.py) ─────────────────────────────────────
+
 _llm_chat_with_tools: Any = None
 _llm_chat_stream: Any = None
 _get_tools_openai: Any = None
@@ -80,100 +129,19 @@ def init_graph_deps(
     _confirm_store = _confirm_store_dict
 
 
-# ── Tool execution state (LangGraph) ────────────────────────────────────────
+# ── SSE Helper ─────────────────────────────────────────────────────────────
 
-class ToolState(TypedDict):
-    """Minimal state for tool execution graph."""
-    messages: list[Any]
-    tool_calls: list[dict]
-    tool_results: list[str]  # SSE events to yield
-
-
-async def execute_tools_node(state: ToolState) -> dict:
-    """Execute tool calls, handle permissions, emit SSE events, wait for confirm."""
-    tool_calls = state["tool_calls"]
-    messages = state["messages"]
-    sse_events: list[str] = []
-
-    for tc in tool_calls:
-        func = tc.get("function", {})
-        tool_name = func.get("name", "")
-        tool_args_str = func.get("arguments", "{}")
-
-        try:
-            tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-        except json.JSONDecodeError:
-            tool_args = {}
-
-        handler = _get_tool_handler(tool_name)
-        requires_confirm = handler and handler.requires_confirm
-        tool_level = handler.level if handler else "read"
-
-        # Permission check
-        if not _check_tool_permission("admin", tool_level):
-            result = f"❌ 權限不足：無法使用 {tool_name}（需要 {tool_level} 權限）"
-            sse_events.append(json.dumps({"event": "tool_result", "name": tool_name, "result": result}))
-            _save_message(None, "", "tool", "", tool_name=tool_name, tool_input=json.dumps(tool_args), tool_result=result)
-            messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
-            continue
-
-        # Emit tool_use event
-        sse_events.append(json.dumps({"event": "tool_use", "name": tool_name, "parameters": tool_args, "requires_confirm": requires_confirm}))
-
-        # Confirmation flow
-        if requires_confirm:
-            confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
-            sse_events.append(json.dumps({"event": "confirm", "confirm_id": confirm_id, "name": tool_name, "parameters": tool_args, "level": tool_level}))
-
-            loop = asyncio.get_running_loop()
-            confirm_future: asyncio.Future[bool] = loop.create_future()
-            confirm_result: dict = {"approved": False}
-            _confirm_store[confirm_id] = (confirm_future, confirm_result)
-
-            try:
-                approved = await asyncio.wait_for(confirm_future, timeout=300)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                confirm_future.cancel()
-                _confirm_store.pop(confirm_id, None)
-                result = "⏰ 用戶未在限時內確認操作，已取消"
-                sse_events.append(json.dumps({"event": "tool_result", "name": tool_name, "result": result}))
-                messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
-                continue
-            else:
-                _confirm_store.pop(confirm_id, None)
-                if not approved:
-                    result = "❌ 用戶取消了操作"
-                    sse_events.append(json.dumps({"event": "tool_result", "name": tool_name, "result": result}))
-                    messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
-                    continue
-
-        # Execute tool
-        if handler:
-            try:
-                result = await handler.handler(tool_args, None)
-            except Exception as e:
-                result = f"工具執行錯誤: {str(e)[:200]}"
-        else:
-            result = f"未知工具: {tool_name}"
-
-        sse_events.append(json.dumps({"event": "tool_result", "name": tool_name, "result": result}))
-        messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
-
-    return {"messages": messages, "tool_results": sse_events}
+def sse(event: str, **kwargs) -> str:
+    """Format an SSE event line."""
+    payload = {"event": event}
+    payload.update(kwargs)
+    return f'data: {json.dumps(payload, ensure_ascii=False)}\n\n'
 
 
-# Build tool execution graph
-_tool_builder = StateGraph(ToolState)
-_tool_builder.add_node("execute_tools", execute_tools_node)
-_tool_builder.add_edge(START, "execute_tools")
-_tool_builder.add_edge("execute_tools", END)
-tool_graph = _tool_builder.compile()
-
-
-# ── Intent detection ────────────────────────────────────────────────────────
+# ── Intent Detection ──────────────────────────────────────────────────────
 
 def detect_intent(user_message: str) -> dict | None:
-    """Auto-detect tool call intent from user message when LLM refuses."""
+    """Auto-detect tool call intent when LLM refuses to call tools."""
     m_cmd = re.search(r"執行\s+(.+)$", user_message)
     m_asset = re.search(r"在\s+(.+?)\s+上", user_message)
     if m_cmd and m_asset:
@@ -203,51 +171,12 @@ def detect_intent(user_message: str) -> dict | None:
     return None
 
 
-# ── Main entry point ────────────────────────────────────────────────────────
+# ── Build LLM Messages from History ────────────────────────────────────────
 
-async def run_agent_graph(
-    session: Any,
-    req: AgentChatRequest,
-    user: str,
-    user_role: str = "admin",
-) -> AsyncIterator[str]:
-    """
-    Run the agent chat loop with real-time SSE streaming.
-
-    Strategy:
-    1. Use _llm_chat_with_tools for tool-calling iterations (need full response)
-       - Emit 'thinking' status event so frontend shows loading indicator
-    2. Use _llm_chat_stream for the final response (real-time tokens)
-    3. Tool execution uses LangGraph graph for structured flow
-    """
+def build_llm_messages(session, conv_id, memories_text):
+    """Build LLM message list from conversation history."""
     from datetime import UTC, datetime
 
-    model = req.model or _DEFAULT_MODEL
-    conv_id = req.conversation_id
-
-    # Auto-create conversation
-    is_new = False
-    if not conv_id:
-        new_conv = _create_conversation(session, user, model)
-        conv_id = new_conv.id
-        is_new = True
-
-    yield f'data: {json.dumps({"event": "conv_id", "conv_id": conv_id})}\n\n'
-
-    # Verify conversation
-    conv = (
-        session.query(AgentConversation)
-        .filter(AgentConversation.id == conv_id, AgentConversation.user == user)
-        .first()
-    )
-    if conv is None:
-        yield f'data: {json.dumps({"event": "error", "message": "Conversation not found"})}\n\n'
-        return
-
-    # Save user message
-    _save_message(session, conv_id, "user", req.message)
-
-    # Build message history
     history = (
         session.query(AgentMessage)
         .filter(AgentMessage.conversation_id == conv_id)
@@ -256,44 +185,6 @@ async def run_agent_graph(
         .all()
     )
 
-    # Load memories
-    from .models import AgentMemory
-    all_memories = (
-        session.query(AgentMemory)
-        .filter(AgentMemory.user == user)
-        .order_by(AgentMemory.updated_at.desc())
-        .all()
-    )
-    user_lower = req.message.lower()
-    scored = []
-    for m in all_memories:
-        score = 0
-        if m.key.lower() in user_lower:
-            score += 10
-        if any(word in user_lower for word in m.value.lower().split() if len(word) >= 2):
-            score += 5
-        if m.category == "preference" and any(kw in user_lower for kw in ["偏好", "喜歡", "習慣"]):
-            score += 3
-        if m.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
-            score += 3
-        if m.updated_at:
-            ua = m.updated_at.replace(tzinfo=UTC) if m.updated_at.tzinfo is None else m.updated_at
-            if (datetime.now(UTC) - ua).days < 30:
-                score += 2
-        scored.append((score, m))
-
-    scored.sort(key=lambda x: (-x[0], x[1].updated_at or datetime.min.replace(tzinfo=UTC)))
-    memories = [m for _, m in scored[:20]]
-
-    memories_text = ""
-    if memories:
-        groups: dict[str, list] = {}
-        for m in memories:
-            groups.setdefault(m.category, []).append(f"- {m.key}: {m.value}")
-        for cat, items in groups.items():
-            memories_text += f"[{cat}]\n" + "\n".join(items) + "\n"
-
-    # Build LLM messages
     llm_messages: list[dict] = [{"role": "system", "content": _build_system_prompt(memories_text)}]
     for m in history:
         if m.role == "tool" and m.tool_name:
@@ -326,23 +217,115 @@ async def run_agent_graph(
                     continue
             llm_messages.append({"role": m.role, "content": m.content})
 
+    return llm_messages
+
+
+def load_memories(session, user, user_message):
+    """Load relevant memories with scoring."""
+    from datetime import UTC, datetime
+    from .models import AgentMemory
+
+    all_memories = (
+        session.query(AgentMemory)
+        .filter(AgentMemory.user == user)
+        .order_by(AgentMemory.updated_at.desc())
+        .all()
+    )
+
+    user_lower = user_message.lower()
+    scored = []
+    for m in all_memories:
+        score = 0
+        if m.key.lower() in user_lower:
+            score += 10
+        if any(word in user_lower for word in m.value.lower().split() if len(word) >= 2):
+            score += 5
+        if m.category == "preference" and any(kw in user_lower for kw in ["偏好", "喜歡", "習慣"]):
+            score += 3
+        if m.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
+            score += 3
+        if m.updated_at:
+            ua = m.updated_at.replace(tzinfo=UTC) if m.updated_at.tzinfo is None else m.updated_at
+            if (datetime.now(UTC) - ua).days < 30:
+                score += 2
+        scored.append((score, m))
+
+    scored.sort(key=lambda x: (-x[0], x[1].updated_at or datetime.min.replace(tzinfo=UTC)))
+    memories = [m for _, m in scored[:20]]
+
+    memories_text = ""
+    if memories:
+        groups: dict[str, list] = {}
+        for m in memories:
+            groups.setdefault(m.category, []).append(f"- {m.key}: {m.value}")
+        for cat, items in groups.items():
+            memories_text += f"[{cat}]\n" + "\n".join(items) + "\n"
+
+    return memories_text
+
+
+# ── Main Agent Loop (Event Bus) ────────────────────────────────────────────
+
+async def run_agent_graph(
+    session: Any,
+    req: AgentChatRequest,
+    user: str,
+    user_role: str = "admin",
+) -> AsyncIterator[str]:
+    """
+    Agent execution engine — SSE event bus.
+
+    Each yield is an SSE event pushed to the frontend in real-time.
+    The frontend treats these as a command stream and updates the UI accordingly.
+    """
+    from datetime import UTC, datetime
+
+    model = req.model or _DEFAULT_MODEL
+    conv_id = req.conversation_id
+
+    # ── Phase 1: Conversation setup ──────────────────────────────────────
+    is_new = False
+    if not conv_id:
+        new_conv = _create_conversation(session, user, model)
+        conv_id = new_conv.id
+        is_new = True
+
+    yield sse("conv_id", conv_id=conv_id)
+
+    conv = (
+        session.query(AgentConversation)
+        .filter(AgentConversation.id == conv_id, AgentConversation.user == user)
+        .first()
+    )
+    if conv is None:
+        yield sse("error", message="Conversation not found", code="NOT_FOUND")
+        yield sse("done")
+        return
+
+    # Save user message
+    _save_message(session, conv_id, "user", req.message)
+
+    # ── Phase 2: Build context ───────────────────────────────────────────
+    memories_text = load_memories(session, user, req.message)
+    llm_messages = build_llm_messages(session, conv_id, memories_text)
     tools_openai = _get_tools_openai()
 
-    # ── Tool calling loop with streaming ─────────────────────────────────
+    # ── Phase 3: Agent loop ──────────────────────────────────────────────
     max_iterations = 5
     total_prompt_tokens = 0
     total_completion_tokens = 0
     total_tokens = 0
     tool_calls_count = 0
+    final_content = ""
 
     for iteration in range(max_iterations):
-        # Emit thinking status so frontend shows loading
-        yield f'data: {json.dumps({"event": "thinking", "text": "正在思考..."})}\n\n'
+        # Signal: LLM is thinking
+        yield sse("thinking", text="正在分析...")
 
-        # Call LLM with tools (need full response to check tool_calls)
+        # Call LLM (need full response to check tool_calls)
         assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_openai)
 
-        # Token usage
+        # Token tracking
         usage = assistant_msg.pop("_usage", None)
         if usage:
             total_prompt_tokens += usage.get("prompt_tokens", 0)
@@ -352,28 +335,24 @@ async def run_agent_graph(
         llm_messages.append(assistant_msg)
         tool_calls = assistant_msg.get("tool_calls", [])
 
-        # Intent detection on first iteration
+        # Intent detection on first iteration if LLM didn't call tools
         if not tool_calls and iteration == 0:
             auto_tool = detect_intent(req.message)
             if auto_tool:
                 tool_calls = [auto_tool]
 
+        # ── No tool calls = final response ──────────────────────────────
         if not tool_calls:
-            # No tool calls — stream final response in real-time
-            # Remove thinking event and stream tokens
-            content = assistant_msg.get("content", "") or ""
+            final_content = assistant_msg.get("content", "") or ""
+            # Stream tokens to frontend
+            for i in range(0, len(final_content), 2):
+                chunk = final_content[i:i + 2]
+                yield sse("token", token=chunk)
 
-            # Re-stream the content using _llm_chat_stream for real-time feel
-            # Actually the content is already fully generated, so we chunk it
-            # But for better UX, let's stream it in small chunks with delays
-            for i in range(0, len(content), 2):
-                chunk = content[i:i + 2]
-                yield f'data: {json.dumps({"event": "token", "token": chunk})}\n\n'
-
-            _save_message(session, conv_id, "assistant", content)
+            _save_message(session, conv_id, "assistant", final_content)
             break
 
-        # Execute tool calls
+        # ── Execute tool calls ──────────────────────────────────────────
         for tc in tool_calls:
             tool_calls_count += 1
             func = tc.get("function", {})
@@ -388,24 +367,26 @@ async def run_agent_graph(
             handler = _get_tool_handler(tool_name)
             requires_confirm = handler and handler.requires_confirm
             tool_level = handler.level if handler else "read"
+            tool_call_id = f"tc-{_uuid.uuid4().hex[:8]}"
+
+            # Signal: tool_call event
+            yield sse("tool_call", id=tool_call_id, name=tool_name, params=tool_args, level=tool_level)
 
             # Permission check
             if not _check_tool_permission(user_role, tool_level):
                 result = f"❌ 權限不足：無法使用 {tool_name}（需要 {tool_level} 權限）"
-                yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+                yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
                 tool_input_json = json.dumps(tool_args, ensure_ascii=False)
-                _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
                 _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
-                llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", f"call_{iteration}"), "content": result})
+                llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
                 continue
 
-            # Emit tool_use event
-            yield f'data: {json.dumps({"event": "tool_use", "name": tool_name, "parameters": tool_args, "requires_confirm": requires_confirm})}\n\n'
-
-            # Confirmation
+            # Confirmation (exec-level tools)
             if requires_confirm:
                 confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
-                yield f'data: {json.dumps({"event": "confirm", "confirm_id": confirm_id, "name": tool_name, "parameters": tool_args, "level": tool_level})}\n\n'
+                confirm_message = f"確認執行 {tool_name}？\n\n參數: {json.dumps(tool_args, ensure_ascii=False)}"
+
+                yield sse("confirm", id=confirm_id, name=tool_name, params=tool_args, level=tool_level, message=confirm_message)
 
                 loop = asyncio.get_running_loop()
                 confirm_future: asyncio.Future[bool] = loop.create_future()
@@ -418,58 +399,71 @@ async def run_agent_graph(
                     confirm_future.cancel()
                     _confirm_store.pop(confirm_id, None)
                     result = "⏰ 用戶未在限時內確認操作，已取消"
+                    yield sse("confirm_result", id=confirm_id, approved=False)
+                    yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
                     tool_input_json = json.dumps(tool_args, ensure_ascii=False)
-                    yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                     _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
                     _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
-                    llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", f"call_{iteration}"), "content": result})
+                    llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
                     continue
                 except asyncio.CancelledError:
                     _confirm_store.pop(confirm_id, None)
                     result = "❌ 操作已取消"
+                    yield sse("confirm_result", id=confirm_id, approved=False)
+                    yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
                     tool_input_json = json.dumps(tool_args, ensure_ascii=False)
-                    yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                     _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
                     _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
-                    llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", f"call_{iteration}"), "content": result})
+                    llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
                     continue
                 else:
                     _confirm_store.pop(confirm_id, None)
                     if not approved:
                         result = "❌ 用戶取消了操作"
+                        yield sse("confirm_result", id=confirm_id, approved=False)
+                        yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
                         tool_input_json = json.dumps(tool_args, ensure_ascii=False)
-                        yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
                         _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
                         _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
-                        llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", f"call_{iteration}"), "content": result})
+                        llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
                         continue
+                    else:
+                        yield sse("confirm_result", id=confirm_id, approved=True)
 
-            # Execute tool
+            # Execute tool with progress
+            import time as _time
+            start = _time.monotonic()
+
+            yield sse("tool_progress", id=tool_call_id, message=f"正在執行 {tool_name}...", percent=50)
+
             if handler:
                 try:
                     result = await handler.handler(tool_args, session)
                 except Exception as e:
                     result = f"工具執行錯誤: {str(e)[:200]}"
+                    yield sse("error", message=f"工具 {tool_name} 執行失敗: {str(e)[:100]}", code="TOOL_ERROR")
             else:
                 result = f"未知工具: {tool_name}"
 
-            yield f'data: {json.dumps({"event": "tool_result", "name": tool_name, "result": result})}\n\n'
+            duration_ms = int((_time.monotonic() - start) * 1000)
+
+            yield sse("tool_progress", id=tool_call_id, message=f"{tool_name} 完成", percent=100)
+            yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=duration_ms)
 
             tool_input_json = json.dumps(tool_args, ensure_ascii=False)
             _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
             _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=bool(requires_confirm), confirmed_by=user if requires_confirm else None)
-            llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", f"call_{iteration}"), "content": result})
+            llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
         else:
-            continue  # only if for-loop wasn't continued/broken
+            continue
 
-        # Loop back for next iteration
     else:
         # Max iterations exceeded
-        error_text = "\n\n⚠ 達到最大迭代次數，停止處理"
-        yield f'data: {json.dumps({"event": "token", "token": error_text})}\n\n'
+        yield sse("warning", message="達到最大迭代次數，停止處理")
+        yield sse("token", token="\n\n⚠ 達到最大迭代次數，停止處理")
         _save_message(session, conv_id, "assistant", "達到最大迭代次數，停止處理")
 
-    # ── Post-processing ──────────────────────────────────────────────────
+    # ── Phase 4: Post-processing ─────────────────────────────────────────
 
     # Generate title
     if is_new:
@@ -482,8 +476,10 @@ async def run_agent_graph(
         except Exception:
             pass
 
-    # Record token usage
+    # Token usage event
     if total_tokens > 0:
+        yield sse("usage", prompt_tokens=total_prompt_tokens, completion_tokens=total_completion_tokens, total_tokens=total_tokens, tool_calls=tool_calls_count)
+
         try:
             from .models import AgentUsage
             usage_record = AgentUsage(
@@ -508,4 +504,4 @@ async def run_agent_graph(
         pass
 
     # Done
-    yield f'data: {json.dumps({"event": "done", "usage": {"prompt_tokens": total_prompt_tokens, "completion_tokens": total_completion_tokens, "total_tokens": total_tokens, "tool_calls": tool_calls_count}})}\n\n'
+    yield sse("done")
