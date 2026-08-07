@@ -1260,16 +1260,22 @@ def get_agent_usage(
 @app.get("/api/v1/agent/memories")
 def get_agent_memories(
     category: str | None = None,
+    q: str | None = None,
     session: Session = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get agent memories for current user."""
+    """Get agent memories for current user, optionally filtered by category or search query."""
     from .models import AgentMemory
 
-    q = select(AgentMemory).where(AgentMemory.user == current_user.username)
+    sq = select(AgentMemory).where(AgentMemory.user == current_user.username)
     if category:
-        q = q.where(AgentMemory.category == category)
-    memories = session.scalars(q.order_by(AgentMemory.updated_at.desc())).all()
+        sq = sq.where(AgentMemory.category == category)
+    if q:
+        sq = sq.where(
+            (AgentMemory.key.ilike(f"%{q}%")) |
+            (AgentMemory.value.ilike(f"%{q}%"))
+        )
+    memories = session.scalars(sq.order_by(AgentMemory.updated_at.desc())).all()
     return {
         "memories": [
             {

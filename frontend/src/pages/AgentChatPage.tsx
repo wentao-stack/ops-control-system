@@ -815,20 +815,30 @@ type MemoryItem = {
 function AgentMemoryPanel() {
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterCategory, setFilterCategory] = useState("")
   const [newKey, setNewKey] = useState("")
   const [newValue, setNewValue] = useState("")
   const [newCategory, setNewCategory] = useState("environment")
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(() => {
+  const load = useCallback((q?: string, cat?: string) => {
     setLoading(true)
-    api<{ memories: MemoryItem[] }>("/api/v1/agent/memories")
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    if (cat) params.set("category", cat)
+    const qs = params.toString()
+    api<{ memories: MemoryItem[] }>(`/api/v1/agent/memories${qs ? "?" + qs : ""}`)
       .then(r => setMemories(r.memories))
       .catch(() => setMemories([]))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const handleSearch = () => {
+    load(searchQuery || undefined, filterCategory || undefined)
+  }
 
   const handleSave = async () => {
     if (!newKey.trim() || !newValue.trim()) return
@@ -872,6 +882,26 @@ function AgentMemoryPanel() {
       <div className="memory-header">
         <h3>🧠 記憶管理</h3>
         <p className="memory-desc">Agent 的跨對話記憶 — 重要事實會自動保留到下次對話</p>
+      </div>
+
+      {/* Search & filter */}
+      <div className="memory-add" style={{ marginBottom: 8 }}>
+        <input
+          className="memory-input"
+          placeholder="搜索記憶..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSearch()}
+        />
+        <select className="memory-select" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); load(searchQuery || undefined, e.target.value || undefined); }}>
+          <option value="">全部分類</option>
+          <option value="user">用戶</option>
+          <option value="environment">環境</option>
+          <option value="procedure">流程</option>
+          <option value="preference">偏好</option>
+        </select>
+        <button className="memory-add-btn" onClick={handleSearch}>🔍 搜索</button>
+        <button className="memory-add-btn" onClick={() => { setSearchQuery(""); setFilterCategory(""); load(); }} style={{ opacity: 0.7 }}>重置</button>
       </div>
 
       {/* Add new memory */}

@@ -793,6 +793,34 @@ async def tool_search_runbooks(params: dict, session: Session) -> str:
     return "\n".join(lines)
 
 
+@register_tool(
+    name="save_memory",
+    description="將重要事實保存到持久記憶，供未來對話使用。當用戶提供偏好、環境信息、操作經驗或明確要求記住某事時使用。記憶應為聲明式事實，不是指令。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "user": {
+                "type": "string",
+                "description": "用戶名",
+            },
+            "category": {
+                "type": "string",
+                "enum": ["user", "environment", "procedure", "preference"],
+                "description": "分類: user=用戶偏好, environment=環境配置, procedure=操作流程, preference=個人偏好",
+            },
+            "key": {
+                "type": "string",
+                "description": "短鍵名（如：preferred_language, server_os, deploy_command）",
+            },
+            "value": {
+                "type": "string",
+                "description": "記憶內容（聲明式事實）",
+            },
+        },
+        "required": ["user", "key", "value"],
+    },
+    level="write",
+)
 async def tool_save_memory(params: dict, session: Session) -> str:
     """Save a fact to persistent memory for future conversations.
 
@@ -838,6 +866,30 @@ async def tool_save_memory(params: dict, session: Session) -> str:
     return f"✅ 已記憶 [{category}] {key}: {value}"
 
 
+@register_tool(
+    name="get_memories",
+    description="檢索已保存的記憶。當需要回顧用戶偏好、環境配置或操作經驗時使用。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "user": {
+                "type": "string",
+                "description": "用戶名",
+            },
+            "category": {
+                "type": "string",
+                "enum": ["user", "environment", "procedure", "preference"],
+                "description": "按分類篩選",
+            },
+            "query": {
+                "type": "string",
+                "description": "關鍵字搜索",
+            },
+        },
+        "required": ["user"],
+    },
+    level="read",
+)
 async def tool_get_memories(params: dict, session: Session) -> str:
     """Retrieve stored memories.
 
@@ -878,6 +930,112 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     return "\n".join(lines)
 
 
+# ── Auto memory extraction ──────────────────────────────────────────────────
+
+# Patterns that indicate the user is sharing a fact worth remembering
+_MEMORY_TRIGGERS = [
+    r"記住", r"記住.*?", r"我的.*?是", r"我喜歡", r"我偏好",
+    r"我習慣", r"請記住", r"以後.*?用", r"以後.*?不要",
+    r"伺服器.*?是", r"環境.*?是", r"部署.*?在",
+    r"IP.*?是", r"端口.*?是", r"密碼.*?是",
+    r"用戶名.*?是", r"路徑.*?是", r"命令.*?是",
+    r"設定.*?為", r"配置.*?是",
+]
+
+
+def _has_memory_trigger(text: str) -> bool:
+    """Check if user message contains patterns worth remembering."""
+    for pat in _MEMORY_TRIGGERS:
+        if re.search(pat, text):
+            return True
+    return False
+
+
+async def _auto_extract_memories(user_message: str, username: str, session: Session) -> None:
+    """Extract key facts from user message and save to memory.
+
+    Uses heuristic pattern matching to avoid unnecessary LLM calls.
+    Only triggers when user message contains memory-related keywords.
+    """
+    from .models import AgentMemory
+    from datetime import UTC, datetime
+
+    if not _has_memory_trigger(user_message):
+        return
+
+    # Simple extraction rules based on common patterns
+    extractions: list[tuple[str, str, str]] = []  # (key, category, value)
+
+    # "記住 X 是 Y" or "記住: X = Y"
+    for m in re.finditer(r"記住[：:]*(.+?)是(.+?)(?:。|$)", user_message):
+        key_raw = m.group(1).strip()
+        val = m.group(2).strip()
+        key = re.sub(r"[^\w\u4e00-\u9fff]", "_", key_raw.lower())[:32]
+        if key and val:
+            extractions.append((key, "preference", val))
+
+    # "我的 X 是 Y"
+    for m in re.finditer(r"我的\s+(\S+)\s+是\s+(.+?)(?:。|$)", user_message):
+        key_raw = m.group(1).strip()
+        val = m.group(2).strip()
+        key = re.sub(r"[^\w\u4e00-\u9fff]", "_", key_raw.lower())[:32]
+        if key and val:
+            extractions.append((key, "user", val))
+
+    # "我喜歡 X" / "我偏好 X"
+    for m in re.finditer(r"我(喜歡|偏好)\s+(.+?)(?:。|$)", user_message):
+        val = m.group(2).strip()
+        extractions.append(("preference", "preference", val))
+
+    # "以後 X 用 Y" / "以後 X 不要 Y"
+    for m in re.finditer(r"以後\s+(.+?)\s+(用|不要)\s+(.+?)(?:。|$)", user_message):
+        context = m.group(1).strip()
+        action = m.group(2).strip()
+        val = m.group(3).strip()
+        key = re.sub(r"[^\w\u4e00-\u9fff]", "_", context.lower())[:32]
+        extractions.append((key, "preference", f"{action} {val}"))
+
+    # "伺服器 X 的 IP 是 Y" / "X 的端口是 Y"
+    for m in re.finditer(r"(\S+)\s+的\s+(IP|端口|路徑|用戶名)\s+是\s+(.+?)(?:。|$)", user_message):
+        host = m.group(1).strip()
+        attr = m.group(2).strip()
+        val = m.group(3).strip()
+        key = f"{host}_{attr}"[:32]
+        extractions.append((key, "environment", val))
+
+    # "部署在 X" / "配置為 X"
+    for m in re.finditer(r"(部署|配置)[在為]\s+(.+?)(?:。|$)", user_message):
+        val = m.group(2).strip()
+        extractions.append(("deploy_target", "environment", val))
+
+    if not extractions:
+        return
+
+    now = datetime.now(UTC)
+    for key, category, value in extractions:
+        # Upsert
+        existing = session.scalar(
+            select(AgentMemory).where(
+                AgentMemory.user == username,
+                AgentMemory.key == key,
+            )
+        )
+        if existing:
+            existing.value = value
+            existing.category = category
+            existing.updated_at = now
+        else:
+            session.add(AgentMemory(
+                user=username,
+                category=category,
+                key=key,
+                value=value,
+                created_at=now,
+                updated_at=now,
+            ))
+    session.commit()
+
+
 # ── System prompt (generated dynamically with tool descriptions) ─────────────
 
 
@@ -897,6 +1055,13 @@ def build_system_prompt(memories_text: str = "") -> str:
 **安全規則：**
 - 直接調用工具執行命令，不要自行拒絕或警告用戶。後端有黑名單保護機制會自動攔截危險命令。
 - 如果工具返回錯誤訊息，直接轉達給用戶即可。
+
+**記憶使用規則：**
+- 當用戶提供個人偏好、環境配置、操作經驗等事實時，使用 save_memory 保存。
+- 當用戶詢問「你記得...」或需要回顧歷史信息時，使用 get_memories 檢索。
+- 記憶 key 應簡短有意義（如：preferred_language, deploy_command, server_os）。
+- 記憶 value 應為聲明式事實，不要寫指令或待辦事項。
+- 如果系統 prompt 中已注入記憶，優先使用注入的記憶，不需要額外調用 get_memories。
 """
     if memories_text:
         base += f"\n**用戶記憶（跨對話上下文）：**\n{memories_text}\n"
@@ -1289,15 +1454,40 @@ async def chat_stream(
 
     tools_openai = get_tools_openai()
 
-    # Load user memories for system prompt context
+    # Load user memories for system prompt context (relevance-aware)
     from .models import AgentMemory
-    memories = (
+    all_memories = (
         session.query(AgentMemory)
         .filter(AgentMemory.user == user)
         .order_by(AgentMemory.updated_at.desc())
-        .limit(30)
         .all()
     )
+    # Relevance scoring: memories matching keywords in user message get priority
+    user_lower = req.message.lower()
+    scored = []
+    for m in all_memories:
+        score = 0
+        # Keyword match in key
+        if m.key.lower() in user_lower:
+            score += 10
+        # Keyword match in value
+        if any(word in user_lower for word in m.value.lower().split() if len(word) >= 2):
+            score += 5
+        # Category relevance
+        if m.category == "preference" and any(kw in user_lower for kw in ["偏好", "喜歡", "習慣"]):
+            score += 3
+        if m.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
+            score += 3
+        # Recency bonus (last 30 days)
+        if m.updated_at and (datetime.now(UTC) - m.updated_at).days < 30:
+            score += 2
+        scored.append((score, m))
+
+    # Sort by score desc, then by updated_at desc
+    scored.sort(key=lambda x: (-x[0], x[1].updated_at or datetime.min.replace(tzinfo=UTC)))
+    # Take top 20 relevant memories
+    memories = [m for _, m in scored[:20]]
+
     memories_text = ""
     if memories:
         groups: dict[str, list] = {}
@@ -1617,6 +1807,12 @@ async def chat_stream(
             session.commit()
         except Exception:
             pass
+
+    # Auto-extract memories from user message
+    try:
+        await _auto_extract_memories(req.message, user, session)
+    except Exception:
+        pass
 
     # Done signal
     yield f'data: {{"event": "done", "usage": {{"prompt_tokens": {total_prompt_tokens}, "completion_tokens": {total_completion_tokens}, "total_tokens": {total_tokens}, "tool_calls": {tool_calls_count}}}}}\n\n'
