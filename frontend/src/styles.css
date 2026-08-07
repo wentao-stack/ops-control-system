@@ -6392,6 +6392,10 @@ tbody tr:last-child td { border-bottom: none; }
   gap: 8px;
   padding: 12px 16px;
   margin: 8px 0;
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  width: fit-content;
 }
 
 .agent-thinking-text {

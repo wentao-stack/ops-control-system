@@ -1489,3 +1489,30 @@ INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
 INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-DC9kjuhu.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-C98BMJEv.css HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-aeb460b0f9a3 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-01c3f7388f73 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/confirm HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=week HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/memories HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/inspect HTTP/1.1" 200 OK
