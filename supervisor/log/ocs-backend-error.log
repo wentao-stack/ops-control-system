@@ -2775,3 +2775,21 @@ INFO:     Started server process [54652]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API IP whitelist blocked — add server IP to Vultr whitelist
+Vultr API IP whitelist blocked — add server IP to Vultr whitelist
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [54652]
+INFO:     Started server process [89527]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)

@@ -932,6 +932,70 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     return "\n".join(lines)
 
 
+# ── RAG Search Tool ─────────────────────────────────────────────────────
+
+@register_tool(
+    name="rag_search",
+    description="語義搜索知識庫（Runbook/筆記/變更記錄/記憶）。當用戶詢問具體問題、故障排查步驟、SOP 或需要參考歷史經驗時使用。一般知識性問題（如 'CPU 是什麼'）不需要調用此工具。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "搜索查詢（自然語言，如 'payment 服務超時怎麼處理'）",
+            },
+            "source": {
+                "type": "string",
+                "enum": ["all", "runbooks", "notes", "changes", "memories"],
+                "description": "搜索範圍: all=全部, runbooks=標準流程, notes=經驗筆記, changes=變更記錄, memories=Agent記憶",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "返回結果數量 (1-10)",
+            },
+        },
+        "required": ["query"],
+    },
+    level="read",
+)
+async def tool_rag_search(params: dict, session: Session) -> str:
+    """Semantic search across runbooks, notes, changes, and agent memories.
+
+    Args:
+        query: natural language query
+        source: filter by source type (default: all)
+        limit: max results (default: 5)
+    """
+    from .agent_rag import rag_search as _rag_search
+
+    query = params.get("query", "")
+    source = params.get("source", "all")
+    limit = params.get("limit", 5)
+
+    if not query:
+        return "❌ 需要 query 參數"
+
+    result = _rag_search(query=query, source=source, limit=limit)
+
+    if result.get("error"):
+        return f"❌ RAG 搜索失敗: {result['error']}"
+
+    hits = result.get("results", [])
+    if not hits:
+        return f"🔍 在知識庫中未找到與「{query}」相關的內容"
+
+    lines = [f"🔍 找到 {len(hits)} 筆相關結果（查詢: {query}）"]
+    for i, h in enumerate(hits, 1):
+        src_icon = {"runbook": "📕", "note": "📝", "change": "🔄", "memory": "🧠"}.get(h["source"], "📄")
+        lines.append(f"\n  {i}. {src_icon} [{h['source']}] {h['title']} (相似度: {h['score']:.2f})")
+        content_preview = h["content"][:300]
+        if len(h["content"]) > 300:
+            content_preview += "..."
+        lines.append(f"     {content_preview.replace(chr(10), ' ')}")
+
+    return "\n".join(lines)
+
+
 # ── Auto memory extraction ──────────────────────────────────────────────────
 
 # Patterns that indicate the user is sharing a fact worth remembering

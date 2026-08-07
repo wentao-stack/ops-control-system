@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time as _time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -109,6 +110,16 @@ async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as session:
         seed_development_data(session)
+
+    # Build RAG index on startup
+    try:
+        from .agent_rag import build_full_index, get_index_stats
+        with SessionLocal() as session:
+            stats = build_full_index(session)
+        print(f"[RAG] 索引啟動完成: {get_index_stats()}")
+    except Exception as e:
+        print(f"[RAG] 索引啟動失敗（不影響服務）: {e}")
+
     yield
 
 
@@ -1675,6 +1686,30 @@ async def conoha_instances():
         instances=[VultrInstanceResponse(**i) for i in instances],
         fetched_at=datetime.now().isoformat(),
     )
+
+
+# ── RAG Stats ──────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/agent/rag/stats")
+def get_rag_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get RAG index statistics."""
+    from .agent_rag import get_index_stats
+    return get_index_stats()
+
+
+@app.post("/api/v1/agent/rag/reindex")
+def reindex_rag(
+    session: Session = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Rebuild RAG index (admin only)."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要 admin 權限")
+    from .agent_rag import build_full_index, get_index_stats
+    stats = build_full_index(session)
+    return {"status": "ok", "index_stats": get_index_stats(), "build_stats": stats}
 
 
 # ── SPA Fallback ──────────────────────────────────────────────────────────────
