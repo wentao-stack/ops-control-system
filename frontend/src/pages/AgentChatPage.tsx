@@ -653,7 +653,7 @@ function fmtTokens(n: number): string {
 }
 
 function AgentUsagePanel() {
-  const [subTab, setSubTab] = useState<"usage" | "memories">("usage")
+  const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
   const [loading, setLoading] = useState(false)
@@ -680,6 +680,7 @@ function AgentUsagePanel() {
       <div className="usage-sub-tabs">
         <button className={`usage-sub-tab ${subTab === "usage" ? "active" : ""}`} onClick={() => setSubTab("usage")}>📊 用量統計</button>
         <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>🧠 記憶管理</button>
+        <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>🔍 系統檢查</button>
       </div>
 
       {subTab === "usage" ? (
@@ -796,7 +797,7 @@ function AgentUsagePanel() {
           </table>
         </div>
       )}
-      </div>) : (<AgentMemoryPanel />)}
+      </div>) : (subTab === "memories" ? <AgentMemoryPanel /> : <AgentInspectPanel />)}
     </div>
   )
 }
@@ -949,6 +950,140 @@ function AgentMemoryPanel() {
             </div>
           </div>
         ))
+      )}
+    </div>
+  )
+}
+
+/* ── Inspect Panel ─────────────────────────────────────────────────────────── */
+
+type InspectHost = { asset_id: string; name: string; cpu_percent: number | null; mem_percent: number | null; disk_percent: number | null }
+type InspectService = { asset_id: string; name: string; services: { name: string; type: string; status: string }[] }
+type InspectAlert = { id: number; severity: string; message: string; created_at: string }
+type InspectReport = {
+  timestamp: string
+  hosts: InspectHost[]
+  services: InspectService[]
+  alerts: InspectAlert[]
+  issues: string[]
+  summary: string
+  notes_created: string[]
+}
+
+function AgentInspectPanel() {
+  const [report, setReport] = useState<InspectReport | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const runInspect = useCallback(() => {
+    setLoading(true)
+    setError("")
+    api<InspectReport>("/api/v1/agent/inspect", { method: "POST", body: JSON.stringify({}) })
+      .then(r => { setReport(r); setError("") })
+      .catch(e => { setError(typeof e === 'string' ? e : '檢查失敗') })
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { runInspect() }, [runInspect])
+
+  const pctColor = (v: number | null) => {
+    if (v === null) return "#888"
+    if (v > 90) return "#ef4444"
+    if (v > 75) return "#f59e0b"
+    return "#22c55e"
+  }
+
+  const severityColor = (s: string) => {
+    if (s === "critical") return "#ef4444"
+    if (s === "high") return "#f97316"
+    if (s === "medium") return "#f59e0b"
+    return "#888"
+  }
+
+  return (
+    <div className="usage-content">
+      <div className="usage-header">
+        <h3>🔍 系統健康檢查</h3>
+        <button className="btn btn-secondary" onClick={runInspect} disabled={loading}>
+          {loading ? "檢查中..." : "🔄 重新檢查"}
+        </button>
+      </div>
+
+      {error && <div style={{ padding: "12px", background: "#fef2f2", color: "#dc2626", borderRadius: "6px", marginBottom: "12px" }}>⚠ {error}</div>}
+
+      {loading && !report && <div className="usage-empty">系統檢查中...</div>}
+
+      {report && (
+        <>
+          {/* Summary */}
+          <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "6px", marginBottom: "12px" }}>
+            <strong>📋 總結</strong>
+            <p style={{ margin: "8px 0 0" }}>{report.summary || "檢查完成"}</p>
+            {report.notes_created.length > 0 && (
+              <p style={{ margin: "4px 0 0", color: "#dc2626" }}>📝 自動創建了 {report.notes_created.length} 筆筆記</p>
+            )}
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#888" }}>檢查時間: {new Date(report.timestamp).toLocaleString('zh-TW')}</p>
+          </div>
+
+          {/* Hosts */}
+          <div style={{ marginBottom: "12px" }}>
+            <h4 style={{ margin: "0 0 8px" }}>🖥️ 主機監控 ({report.hosts.length})</h4>
+            {report.hosts.map(h => (
+              <div key={h.asset_id} style={{ padding: "8px", background: "#f9fafb", borderRadius: "6px", marginBottom: "4px" }}>
+                <strong>{h.name}</strong>
+                <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
+                  <span style={{ color: pctColor(h.cpu_percent) }}>CPU {h.cpu_percent ?? '?'}%</span>
+                  <span style={{ color: pctColor(h.mem_percent) }}>記憶體 {h.mem_percent ?? '?'}%</span>
+                  <span style={{ color: pctColor(h.disk_percent) }}>磁碟 {h.disk_percent ?? '?'}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Services */}
+          <div style={{ marginBottom: "12px" }}>
+            <h4 style={{ margin: "0 0 8px" }}>⚙️ 服務 ({report.services.length} 台主機)</h4>
+            {report.services.map(s => (
+              <div key={s.asset_id} style={{ padding: "8px", background: "#f9fafb", borderRadius: "6px", marginBottom: "4px" }}>
+                <strong>{s.name}</strong>
+                {s.services.length > 0 && (
+                  <div style={{ marginTop: "4px" }}>
+                    {s.services.map((svc, i) => (
+                      <div key={i} style={{ fontSize: "13px" }}>
+                        <span>✅ {svc.name} ({svc.type})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Alerts */}
+          {report.alerts.length > 0 && (
+            <div style={{ marginBottom: "12px" }}>
+              <h4 style={{ margin: "0 0 8px" }}>🚨 未確認告警 ({report.alerts.length})</h4>
+              {report.alerts.map(a => (
+                <div key={a.id} style={{ padding: "8px", background: "#fef2f2", borderRadius: "6px", marginBottom: "4px", borderLeft: `3px solid ${severityColor(a.severity)}` }}>
+                  <span style={{ fontWeight: "bold", color: severityColor(a.severity) }}>[{a.severity}]</span> {a.message}
+                  <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>{new Date(a.created_at).toLocaleString('zh-TW')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Issues */}
+          {report.issues.length > 0 && (
+            <div>
+              <h4 style={{ margin: "0 0 8px" }}>⚠️ LLM 發現問題 ({report.issues.length})</h4>
+              {report.issues.map((issue, i) => (
+                <div key={i} style={{ padding: "8px", background: "#fef3c7", borderRadius: "6px", marginBottom: "4px" }}>
+                  ⚠️ {issue}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

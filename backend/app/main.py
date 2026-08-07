@@ -73,6 +73,7 @@ from .agent_schemas import (
     AgentConversationListResponse,
     AgentConversationResponse,
     AgentHealthResponse,
+    AgentInspectRequest,
     AgentMessagesListResponse,
 )
 from . import clouds as clouds_service
@@ -1135,6 +1136,22 @@ async def agent_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Agent proactive inspection ──────────────────────────────────────────────
+
+
+@app.post("/api/v1/agent/inspect")
+async def agent_inspect(
+    req: AgentInspectRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Proactive system health inspection. Collects data, analyzes with LLM, returns report."""
+    from .agent_schemas import AgentInspectRequest
+    from .agent import inspect_system
+
+    report = await inspect_system(req.model)
+    return report
 
 
 # ── Agent tool confirmation ──────────────────────────────────────────────────

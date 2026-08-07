@@ -65,3 +65,21 @@ class AgentHealthResponse(BaseModel):
     status: str  # "ok" | "error"
     model: str
     message: str = ""
+
+
+# ── Inspect (proactive monitoring) schemas ───────────────────────────────────
+
+class AgentInspectRequest(BaseModel):
+    """Request for proactive system inspection."""
+    model: str | None = None
+
+
+class AgentInspectReport(BaseModel):
+    """Health inspection report returned by /inspect."""
+    timestamp: str
+    hosts: list[dict]  # per-host metrics summary
+    services: list[dict]  # per-host service summary
+    alerts: list[dict]  # recent unacknowledged alerts
+    issues: list[str]  # LLM-analyzed issues
+    summary: str  # LLM-generated summary
+    notes_created: list[str]  # note IDs auto-created for issues

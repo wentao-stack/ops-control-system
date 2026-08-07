@@ -1234,6 +1234,226 @@ async def check_llm_health() -> AgentHealthResponse:
         )
 
 
+# ── Proactive system inspection ─────────────────────────────────────────────
+
+
+async def inspect_system(model: str | None = None) -> dict:
+    """
+    Proactive system health inspection.
+    Collects metrics, services, alerts → LLM analyzes → returns report.
+    Auto-creates notes for critical issues found.
+    """
+    from uuid import uuid4
+    from .models import Asset, Alert, Note
+    from .remote_monitor import collect_remote_metrics
+    from .remote_service import detect_remote_services
+    from .database import SessionLocal
+    import asyncio
+
+    model = model or DEFAULT_MODEL
+    notes_created = []
+
+    async def _run_inspect():
+        session = SessionLocal()
+        try:
+            # 1. Collect host metrics
+            assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+            host_metrics = []
+            if assets:
+                async def _collect(asset: Asset) -> dict:
+                    raw = await asyncio.to_thread(
+                        collect_remote_metrics,
+                        host=asset.ssh_host,
+                        port=asset.ssh_port or 22,
+                        user=asset.ssh_user,
+                        asset_id=asset.id,
+                        name=asset.name,
+                        timeout=60,
+                    )
+                    return {
+                        "asset_id": raw.asset_id,
+                        "name": raw.name,
+                        "cpu_percent": getattr(raw, "cpu_percent", None),
+                        "mem_percent": getattr(raw, "mem_percent", None),
+                        "disk_percent": getattr(raw, "disk_percent", None),
+                    }
+
+                results = await asyncio.gather(*[_collect(a) for a in assets], return_exceptions=True)
+                for r in results:
+                    if isinstance(r, dict):
+                        host_metrics.append(r)
+
+            # 2. Collect service status
+            service_results = []
+            if assets:
+                async def _detect(asset: Asset) -> dict:
+                    result = await asyncio.to_thread(
+                        detect_remote_services,
+                        host=asset.ssh_host,
+                        port=asset.ssh_port or 22,
+                        user=asset.ssh_user,
+                        asset_id=asset.id,
+                        name=asset.name,
+                        timeout=60,
+                    )
+                    svcs = []
+                    if result:
+                        for s in result[:15]:
+                            svcs.append({
+                                "name": s.name,
+                                "type": s.service_type,
+                                "status": "running",
+                            })
+                    return {"asset_id": asset.id, "name": asset.name, "services": svcs}
+
+                svc_results = await asyncio.gather(*[_detect(a) for a in assets], return_exceptions=True)
+                for r in svc_results:
+                    if isinstance(r, dict):
+                        service_results.append(r)
+
+            # 3. Get unacknowledged alerts (last 24h)
+            from datetime import timedelta
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
+            alerts = (
+                session.query(Alert)
+                .filter(Alert.acknowledged == False, Alert.created_at >= cutoff)
+                .order_by(Alert.created_at.desc())
+                .all()
+            )
+            alert_list = [
+                {
+                    "id": a.id,
+                    "severity": a.severity,
+                    "message": a.message,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in alerts
+            ]
+
+            # 4. Build report data for LLM
+            report_data = {
+                "hosts": host_metrics,
+                "services": service_results,
+                "alerts": alert_list,
+            }
+
+            # 5. LLM analysis
+            issues = []
+            summary = ""
+            if LLM_API_KEY:
+                report_text = _format_inspect_text(report_data)
+                analysis = await _llm_inspect_analysis(model, report_text)
+                summary = analysis.get("summary", "分析完成")
+                issues = analysis.get("issues", [])
+
+                # 6. Auto-create notes for critical issues
+                for issue in issues:
+                    if issue.get("severity") in ("critical", "high"):
+                        note_id = f"note-{uuid4().hex[:12]}"
+                        note = Note(
+                            id=note_id,
+                            title=f"🔴 系統檢查: {issue.get('title', '異常')}",
+                            content=issue.get("detail", issue.get("title", "")),
+                            category="知識",
+                            tags=json.dumps(["自動檢查", "告警"], ensure_ascii=False),
+                            author="agent",
+                            pinned=True,
+                            published=True,
+                            version=1,
+                            created_at=datetime.now(UTC).replace(microsecond=0),
+                            updated_at=datetime.now(UTC).replace(microsecond=0),
+                        )
+                        session.add(note)
+                        notes_created.append(note_id)
+
+            session.commit()
+
+            return {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "hosts": host_metrics,
+                "services": service_results,
+                "alerts": alert_list,
+                "issues": [i.get("title", "") for i in issues] if isinstance(issues, list) else issues,
+                "summary": summary,
+                "notes_created": notes_created,
+            }
+        finally:
+            session.close()
+
+    return await _run_inspect()
+
+
+def _format_inspect_text(data: dict) -> str:
+    """Format inspection data into text for LLM analysis."""
+    lines = []
+    lines.append("## 系統健康檢查數據\n")
+
+    # Hosts
+    lines.append("### 主機監控")
+    for h in data.get("hosts", []):
+        cpu = h.get("cpu_percent", "?")
+        mem = h.get("mem_percent", "?")
+        disk = h.get("disk_percent", "?")
+        lines.append(f"- {h.get('name', h.get('asset_id'))}: CPU {cpu}% | 記憶體 {mem}% | 磁碟 {disk}%")
+    lines.append("")
+
+    # Services
+    lines.append("### 服務狀態")
+    for s in data.get("services", []):
+        svcs = s.get("services", [])
+        if svcs:
+            lines.append(f"- {s.get('name', s.get('asset_id'))}: {len(svcs)} 個服務")
+            for svc in svcs[:10]:  # limit
+                status = "✅" if svc.get("status") == "running" else "❌"
+                lines.append(f"  {status} {svc.get('name', '?')}")
+    lines.append("")
+
+    # Alerts
+    alerts = data.get("alerts", [])
+    lines.append(f"### 未確認告警 ({len(alerts)} 個)")
+    for a in alerts:
+        lines.append(f"- [{a.get('severity', '?')}] {a.get('message', '?')} ({a.get('created_at', '?')})")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+async def _llm_inspect_analysis(model: str, report_text: str) -> dict:
+    """Ask LLM to analyze system data and return structured issues."""
+    prompt = f"""你是運維系統的健康檢查助手。請分析以下系統數據，找出問題並生成簡短報告。
+
+{report_text}
+
+請以 JSON 格式回覆，格式如下：
+{{
+  "summary": "一句話總結系統健康狀況",
+  "issues": [
+    {{"title": "問題標題", "severity": "critical|high|medium|low", "detail": "詳細說明和建議"}}
+  ]
+}}
+
+規則：
+- CPU > 90% 或 記憶體 > 90% 或 磁碟 > 85% 為 critical
+- 有未確認告警需列出
+- 服務停止需列出
+- 如果一切正常，issues 為空陣列
+- 只返回 JSON，不要其他內容
+"""
+    try:
+        result = await _llm_complete(model, [
+            {"role": "system", "content": "你是運維專家，擅長分析系統健康數據。"},
+            {"role": "user", "content": prompt},
+        ])
+        # Parse JSON from response
+        import re
+        json_match = re.search(r'\{.*\}', result, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        return {"summary": result[:200], "issues": []}
+    except Exception as e:
+        return {"summary": f"LLM 分析失敗: {e}", "issues": []}
+
+
 # ── Conversation management ─────────────────────────────────────────────────
 
 

@@ -2470,3 +2470,11 @@ Traceback (most recent call last):
     if m.updated_at and (datetime.now(UTC) - m.updated_at).days < 30:
                          ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~
 TypeError: can't subtract offset-naive and offset-aware datetimes
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [12265]
+INFO:     Started server process [19494]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
