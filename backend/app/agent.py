@@ -1479,8 +1479,10 @@ async def chat_stream(
         if m.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
             score += 3
         # Recency bonus (last 30 days)
-        if m.updated_at and (datetime.now(UTC) - m.updated_at).days < 30:
-            score += 2
+        if m.updated_at:
+            ua = m.updated_at.replace(tzinfo=UTC) if m.updated_at.tzinfo is None else m.updated_at
+            if (datetime.now(UTC) - ua).days < 30:
+                score += 2
         scored.append((score, m))
 
     # Sort by score desc, then by updated_at desc

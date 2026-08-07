@@ -1196,3 +1196,64 @@ INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/billing-history HTTP/1.1" 2
 INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/account HTTP/1.1" 502 Bad Gateway
 INFO:     118.3.227.75:0 - "GET /api/v1/clouds/vultr/instances HTTP/1.1" 200 OK
 INFO:     59.132.70.210:0 - "GET / HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes/AIOps-Agent-12-%E9%80%B1%E5%AF%A6%E4%BD%9C%E8%A8%88%E5%8A%8324496501 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/notes?page=1&page_size=10&category=%E7%9F%A5%E8%AD%98 HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-CFbdpFGt.js HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-80d8c1ff6a33/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-80d8c1ff6a33 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-0895a95814ba HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=week HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=today HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=week HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=week HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "DELETE /api/v1/agent/conversations/conv-2100882ff025 HTTP/1.1" 204 No Content
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/memories HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/usage?period=month HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/memories HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /assets/index-CFbdpFGt.js HTTP/1.1" 304 Not Modified
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-fa4dae2f5b3e/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /agent HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/health HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations/conv-fa4dae2f5b3e/messages HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "POST /api/v1/agent/chat HTTP/1.1" 200 OK
+INFO:     118.3.227.75:0 - "GET /api/v1/agent/conversations HTTP/1.1" 200 OK
