@@ -176,3 +176,16 @@ Port 5173 is in use, trying another one...
   VITE v8.1.5  ready in 109 ms
 
   ➜  Local:   http://127.0.0.1:5174/
+Port 5173 is in use, trying another one...
+
+  VITE v8.1.5  ready in 110 ms
+
+  ➜  Local:   http://127.0.0.1:5174/
+
+  VITE v8.1.5  ready in 197 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+
+  VITE v8.1.5  ready in 134 ms
+
+  ➜  Local:   http://127.0.0.1:5173/

@@ -1974,3 +1974,121 @@ INFO:     Started server process [79678]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [79678]
+INFO:     Started server process [82392]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=142&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NjA2NTc0OX0.O77FYjrD5l7nGfq6Lgt4I8fgFzTk6Dyj_lwB7zeMbyI" [accepted]
+INFO:     connection open
+2026-08-06 18:31:16,191 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-08-06 18:31:16,414 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 136, in _handle_remote
+    ssh_conn = await asyncio.wait_for(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/asyncssh/connection.py", line 9250, in connect
+    return await asyncio.wait_for(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/asyncssh/connection.py", line 532, in _connect
+    _, session = await loop.create_connection(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+Vultr API error: 401 — {"error":"Unauthorized IP address: 2001:268:7385:313e:31f8:cf78:355b:ec0c","status":401}
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API error: 401 — {"error":"Unauthorized IP address: 2001:268:7385:313e:31f8:cf78:355b:ec0c","status":401}
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API error: 401 — {"error":"Unauthorized IP address: 2001:268:7385:313e:31f8:cf78:355b:ec0c","status":401}
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API error: 401 — {"error":"Unauthorized IP address: 2001:268:7385:313e:31f8:cf78:355b:ec0c","status":401}
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API error: 401 — {"error":"Unauthorized IP address: 59.132.66.4","status":401}
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+INFO:     Started server process [1632]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1632]
+INFO:     Started server process [3189]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     118.3.227.75:0 - "WebSocket /ws/ssh/asset-prod-vps-sanbunto?cols=142&rows=24&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc4NjE1MjQ4NH0.m0GorDc7r1V_-nXueVlWwrptFgA4Skdhhp2p4ZI6nog" [accepted]
+INFO:     connection open
+2026-08-07 10:28:59,598 INFO WebSSH session: root@163.44.124.142:22 (archlinux (163.44.124.142))
+2026-08-07 10:29:00,042 INFO SSH connected: root@163.44.124.142:22
+2026-08-07 10:29:00,187 INFO Remote PTY created
+2026-08-07 10:29:02,062 WARNING ws_to_ssh error: (<CloseCode.NO_STATUS_RCVD: 1005>, '')
+2026-08-07 10:29:02,063 INFO SSH session ended: exit_code=0
+2026-08-07 10:29:02,063 ERROR Remote WebSSH error
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 440, in send
+    self.conn.send_text(text_data.encode())
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/websockets/protocol.py", line 337, in send_text
+    raise InvalidState(f"connection is {self.state.name.lower()}")
+websockets.exceptions.InvalidState: connection is closing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 459, in send
+    raise ClientDisconnected()
+uvicorn.protocols.utils.ClientDisconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/wentao/project/ops-control-system/backend/app/webssh.py", line 179, in _handle_remote
+    await ws.send_text(json.dumps({"type": "exit", "code": exit_code}))
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 166, in send_text
+    await self.send({"type": "websocket.send", "text": data})
+  File "/home/wentao/project/ops-control-system/backend/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 89, in send
+    raise WebSocketDisconnect(code=1006)
+starlette.websockets.WebSocketDisconnect
+Vultr instances API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/instances'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+Vultr API error: 401 — {"error":"Unauthorized IP address: 2001:268:7380:faac:144f:c40c:9a42:3e","status":401}
+Vultr billing history API error: Client error '401 Unauthorized' for url 'https://api.vultr.com/v2/billing/history'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3189]
+INFO:     Started server process [4534]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+Vultr API IP whitelist blocked — add server IP to Vultr whitelist

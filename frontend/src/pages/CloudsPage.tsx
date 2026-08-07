@@ -272,15 +272,15 @@ export function CloudsPage() {
       try {
         const [account, instances, billing] = await Promise.all([
           api<VultrAccount>("/api/v1/clouds/vultr/account").catch((e: Error) => {
-            if (!cancelled) setError(`Vultr API: ${e.message}`)
+            if (!cancelled) setError(e.message.includes("白名單") ? e.message : `Vultr API: ${e.message}`)
             return null
           }),
           api<VultrInstancesData>("/api/v1/clouds/vultr/instances").catch((e: Error) => {
-            if (!cancelled) setError(`Vultr API: ${e.message}`)
+            if (!cancelled) setError(e.message.includes("白名單") ? e.message : `Vultr API: ${e.message}`)
             return null
           }),
           api<VultrBillingHistoryData>("/api/v1/clouds/vultr/billing-history").catch((e: Error) => {
-            if (!cancelled) setError(`Vultr API: ${e.message}`)
+            if (!cancelled) setError(e.message.includes("白名單") ? e.message : `Vultr API: ${e.message}`)
             return null
           }),
         ])

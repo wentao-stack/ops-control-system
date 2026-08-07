@@ -42,6 +42,15 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
       clearToken()
       window.location.reload()
     }
+    // Try to extract detail from JSON body for 5xx errors
+    if (response.status >= 500) {
+      try {
+        const body = await response.json()
+        if (body?.detail) throw new Error(body.detail)
+      } catch (e: any) {
+        if (e?.message && !e.message.includes("Request failed")) throw e
+      }
+    }
     throw new Error(`Request failed: ${response.status}`)
   }
   // Handle streaming responses (SSE)

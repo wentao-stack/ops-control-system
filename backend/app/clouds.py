@@ -31,11 +31,19 @@ async def fetch_vultr_account() -> dict:
             )
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
-            logger.error("Vultr API error: %s — %s", e.response.status_code, e.response.text)
+            body = e.response.text[:200]
+            if e.response.status_code == 401 and "Unauthorized IP" in body:
+                logger.warning("Vultr API IP whitelist blocked — add server IP to Vultr whitelist")
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=502,
+                    detail="Vultr API IP 白名單限制 — 請在 Vultr 後台將伺服器 IP 加入白名單",
+                )
+            logger.error("Vultr API error: %s — %s", e.response.status_code, body)
             from fastapi import HTTPException
             raise HTTPException(
                 status_code=502,
-                detail=f"Vultr API {e.response.status_code}: {e.response.text[:200]}",
+                detail=f"Vultr API {e.response.status_code}: {body}",
             )
         except httpx.RequestError as e:
             logger.error("Vultr API request failed: %s", e)
