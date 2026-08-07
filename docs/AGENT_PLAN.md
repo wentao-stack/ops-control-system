@@ -2,7 +2,7 @@
 
 > 專案: OPS Control System
 > 最後更新: 2026-08-07
-> 狀態: Phase 1-4 已完成，Phase 3 主動監控已實作
+> 狀態: Phase 1-5 已完成，Phase 3 主動監控已實作，LangGraph 狀態流已上線
 
 ---
 
@@ -328,6 +328,16 @@ frontend/src/
 - [x] 前端記憶搜索與分類篩選
 - [ ] 自定義工具管理
 - [ ] 向量搜索（可選）
+
+### Phase 5 — LangGraph 狀態流重構 ✅ 已完成
+- [x] 安裝 langgraph 1.2 + langchain-openai 1.4
+- [x] 定義 AgentState (TypedDict) — messages, tool_results, confirm_status, iteration_count, total_tokens
+- [x] 4 個 Node：chatbot → invoke_tools → await_confirm → finalize
+- [x] 條件邊：route_after_chatbot / route_after_tools / route_after_confirm
+- [x] SSE 串流保留 — graph.stream() 逐節點 yield 事件
+- [x] 意圖檢測、權限檢查、審計日誌、Token 用量追蹤完整保留
+- [x] agent.py 瘦身 401 行（2069 → 1668），核心邏輯移至 agent_graph.py
+- [x] 後端重啟成功，無 import 錯誤
 
 ---
 
