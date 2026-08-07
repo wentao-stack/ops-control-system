@@ -418,6 +418,142 @@ async def hosts_metrics(
     return result
 
 
+# ── Metrics history ──────────────────────────────────────────────────────────
+
+
+@app.get("/api/v1/metrics/history")
+async def metrics_history_get(
+    asset_id: str | None = Query(None, description="Filter by asset ID"),
+    start: str | None = Query(None, description="ISO start time"),
+    end: str | None = Query(None, description="ISO end time"),
+    limit: int = Query(200, ge=1, le=2000, description="Max records"),
+    session: Session = Depends(get_session),
+):
+    """Query metrics history with optional filters."""
+    from .models import MetricsHistory, MetricsHistoryGPU
+    from sqlalchemy import func
+
+    q = session.query(MetricsHistory)
+    if asset_id:
+        q = q.filter(MetricsHistory.asset_id == asset_id)
+    if start:
+        q = q.filter(MetricsHistory.collected_at >= start)
+    if end:
+        q = q.filter(MetricsHistory.collected_at <= end)
+    q = q.order_by(MetricsHistory.collected_at.desc()).limit(limit)
+
+    records = q.all()
+    result = []
+    for r in records:
+        gpus = session.query(MetricsHistoryGPU).filter(MetricsHistoryGPU.history_id == r.id).all()
+        result.append({
+            "id": r.id,
+            "asset_id": r.asset_id,
+            "hostname": r.hostname,
+            "cpu_percent": r.cpu_percent,
+            "cpu_count": r.cpu_count,
+            "load_avg_1": r.load_avg_1,
+            "load_avg_5": r.load_avg_5,
+            "load_avg_15": r.load_avg_15,
+            "mem_total_mb": r.mem_total_mb,
+            "mem_used_mb": r.mem_used_mb,
+            "mem_available_mb": r.mem_available_mb,
+            "mem_percent": r.mem_percent,
+            "swap_total_mb": r.swap_total_mb,
+            "swap_used_mb": r.swap_used_mb,
+            "swap_percent": r.swap_percent,
+            "disk_total_mb": r.disk_total_mb,
+            "disk_used_mb": r.disk_used_mb,
+            "disk_free_mb": r.disk_free_mb,
+            "disk_percent": r.disk_percent,
+            "gpus": [{
+                "name": g.name,
+                "temperature_c": g.temperature_c,
+                "utilization_gpu": g.utilization_gpu,
+                "memory_used_mb": g.memory_used_mb,
+                "memory_total_mb": g.memory_total_mb,
+                "power_draw_w": g.power_draw_w,
+                "fan_speed": g.fan_speed,
+            } for g in gpus],
+            "collected_at": r.collected_at.isoformat(),
+        })
+
+    # Stats
+    stats_q = session.query(
+        func.count(MetricsHistory.id).label("total"),
+        func.min(MetricsHistory.collected_at).label("earliest"),
+        func.max(MetricsHistory.collected_at).label("latest"),
+    )
+    stats = stats_q.first()
+
+    return {
+        "records": result,
+        "total": stats.total if stats else 0,
+        "earliest": stats.earliest.isoformat() if stats and stats.earliest else None,
+        "latest": stats.latest.isoformat() if stats and stats.latest else None,
+    }
+
+
+@app.delete("/api/v1/metrics/history")
+async def metrics_history_delete(
+    days: int = Query(30, ge=1, description="Delete records older than N days"),
+    session: Session = Depends(get_session),
+):
+    """Delete old metrics history records."""
+    from datetime import timedelta
+    from .models import MetricsHistory, MetricsHistoryGPU
+
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    # Delete GPUs first (foreign key)
+    gpu_ids = session.query(MetricsHistory.id).filter(MetricsHistory.collected_at < cutoff).with_entities(MetricsHistory.id).scalar_subquery()
+    deleted_gpus = session.query(MetricsHistoryGPU).filter(MetricsHistoryGPU.history_id.in_(gpu_ids)).delete(synchronize_session=False)
+    deleted = session.query(MetricsHistory).filter(MetricsHistory.collected_at < cutoff).delete(synchronize_session=False)
+    session.commit()
+    return {"deleted_history": deleted, "deleted_gpu": deleted_gpus}
+
+
+@app.get("/api/v1/metrics/history/chart")
+async def metrics_history_chart(
+    asset_id: str = Query(..., description="Asset ID"),
+    metric: str = Query("cpu", description="cpu|mem|disk|swap"),
+    hours: int = Query(24, ge=1, le=168, description="Hours to show"),
+    session: Session = Depends(get_session),
+):
+    """Get time-series data for charting."""
+    from datetime import timedelta
+    from .models import MetricsHistory
+
+    start = datetime.now(UTC) - timedelta(hours=hours)
+    records = (
+        session.query(MetricsHistory)
+        .filter(
+            MetricsHistory.asset_id == asset_id,
+            MetricsHistory.collected_at >= start,
+        )
+        .order_by(MetricsHistory.collected_at.asc())
+        .all()
+    )
+
+    data = []
+    for r in records:
+        if metric == "cpu":
+            val = r.cpu_percent
+        elif metric == "mem":
+            val = r.mem_percent
+        elif metric == "disk":
+            val = r.disk_percent
+        elif metric == "swap":
+            val = r.swap_percent
+        else:
+            val = r.cpu_percent
+        data.append({
+            "t": r.collected_at.isoformat(),
+            "v": val,
+        })
+
+    return {"asset_id": asset_id, "metric": metric, "hours": hours, "data": data}
+
+
 @app.get("/api/v1/hosts/services", response_model=RemoteAllServicesResponse)
 async def hosts_services(
     session: Session = Depends(get_session),

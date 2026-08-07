@@ -144,7 +144,7 @@ def record_tool_call(
 )
 async def tool_get_host_metrics(params: dict, session: Session) -> str:
     """Collect metrics from all remote hosts via SSH."""
-    from .remote_monitor import collect_remote_metrics
+    from .remote_monitor import collect_remote_metrics, save_metrics_to_history
     from .models import Asset
     import asyncio
 
@@ -162,6 +162,8 @@ async def tool_get_host_metrics(params: dict, session: Session) -> str:
             name=asset.name,
             timeout=60,
         )
+        # Save to history
+        await asyncio.to_thread(save_metrics_to_history, raw)
         return {
             "asset_id": raw.asset_id,
             "name": raw.name,
@@ -1245,7 +1247,7 @@ async def inspect_system(model: str | None = None) -> dict:
     """
     from uuid import uuid4
     from .models import Asset, Alert, Note
-    from .remote_monitor import collect_remote_metrics
+    from .remote_monitor import collect_remote_metrics, save_metrics_to_history
     from .remote_service import detect_remote_services
     from .database import SessionLocal
     import asyncio
@@ -1270,6 +1272,7 @@ async def inspect_system(model: str | None = None) -> dict:
                         name=asset.name,
                         timeout=60,
                     )
+                    await asyncio.to_thread(save_metrics_to_history, raw)
                     return {
                         "asset_id": raw.asset_id,
                         "name": raw.name,

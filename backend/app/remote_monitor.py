@@ -242,3 +242,62 @@ def collect_remote_metrics(host: str, port: int, user: str, asset_id: str, name:
     result.asset_id = asset_id
     result.name = name
     return result
+
+
+def save_metrics_to_history(metrics: RemoteHostMetrics) -> int | None:
+    """Save metrics snapshot to history table. Returns history id or None."""
+    from datetime import UTC, datetime
+    from .models import MetricsHistory, MetricsHistoryGPU
+    from .database import SessionLocal
+
+    if not metrics.reachable:
+        return None
+
+    session = SessionLocal()
+    try:
+        now = datetime.now(UTC).replace(microsecond=0)
+        h = MetricsHistory(
+            asset_id=metrics.asset_id,
+            hostname=metrics.hostname,
+            cpu_percent=metrics.cpu_percent,
+            cpu_count=metrics.cpu_count,
+            load_avg_1=metrics.load_avg_1,
+            load_avg_5=metrics.load_avg_5,
+            load_avg_15=metrics.load_avg_15,
+            mem_total_mb=metrics.mem_total_mb,
+            mem_used_mb=metrics.mem_used_mb,
+            mem_available_mb=metrics.mem_available_mb,
+            mem_percent=metrics.mem_percent,
+            swap_total_mb=metrics.swap_total_mb,
+            swap_used_mb=metrics.swap_used_mb,
+            swap_percent=metrics.swap_percent,
+            disk_total_mb=metrics.disk_total_mb,
+            disk_used_mb=metrics.disk_used_mb,
+            disk_free_mb=metrics.disk_free_mb,
+            disk_percent=metrics.disk_percent,
+            collected_at=now,
+        )
+        session.add(h)
+        session.flush()
+
+        # GPU
+        for gpu in metrics.gpus:
+            g = MetricsHistoryGPU(
+                history_id=h.id,
+                name=gpu.name,
+                temperature_c=gpu.temperature_c,
+                utilization_gpu=gpu.utilization_gpu,
+                memory_used_mb=gpu.memory_used_mb,
+                memory_total_mb=gpu.memory_total_mb,
+                power_draw_w=gpu.power_draw_w,
+                fan_speed=gpu.fan_speed,
+            )
+            session.add(g)
+
+        session.commit()
+        return h.id
+    except Exception:
+        session.rollback()
+        return None
+    finally:
+        session.close()

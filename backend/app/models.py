@@ -193,3 +193,46 @@ class AgentMemory(Base):
         Index("idx_agent_memories_user_key", "user", "key", unique=False),
         Index("idx_agent_memories_user_cat", "user", "category"),
     )
+
+
+class MetricsHistory(Base):
+    __tablename__ = "metrics_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    hostname: Mapped[str] = mapped_column(String(256), nullable=False)
+    cpu_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    cpu_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    load_avg_1: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    load_avg_5: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    load_avg_15: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    mem_total_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    mem_used_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    mem_available_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    mem_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    swap_total_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    swap_used_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    swap_percent: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    disk_total_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    disk_used_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    disk_free_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    disk_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (
+        Index("idx_metrics_history_asset_time", "asset_id", "collected_at"),
+    )
+
+
+class MetricsHistoryGPU(Base):
+    __tablename__ = "metrics_history_gpu"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    history_id: Mapped[int] = mapped_column(Integer, ForeignKey("metrics_history.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    temperature_c: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    utilization_gpu: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    memory_used_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    memory_total_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    power_draw_w: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    fan_speed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

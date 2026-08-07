@@ -139,7 +139,144 @@ function SkeletonCard() {
   )
 }
 
+/* ── Metrics History Panel ─────────────────────────────────────────────────── */
+
+type ChartPoint = { t: string; v: number }
+type HistoryRecord = {
+  id: number; asset_id: string; hostname: string;
+  cpu_percent: number; cpu_count: number;
+  load_avg_1: number; load_avg_5: number; load_avg_15: number;
+  mem_total_mb: number; mem_used_mb: number; mem_available_mb: number; mem_percent: number;
+  swap_total_mb: number; swap_used_mb: number; swap_percent: number;
+  disk_total_mb: number; disk_used_mb: number; disk_free_mb: number; disk_percent: number;
+  gpus: any[]; collected_at: string;
+}
+
+function MiniChart({ data, color, height = 60 }: { data: ChartPoint[]; color: string; height?: number }) {
+  if (data.length < 2) return <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", fontSize: 12 }}>資料不足</div>
+  const maxV = Math.max(...data.map(d => d.v), 100)
+  const w = 400
+  const pts = data.map((d, i) => `${(i / (data.length - 1)) * w},${height - (d.v / maxV) * (height - 4)}`).join(" ")
+  const area = `0,${height} ${pts} ${w},${height}`
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} style={{ width: "100%", height }} preserveAspectRatio="none">
+      <polygon points={area} fill={color} opacity={0.15} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} />
+    </svg>
+  )
+}
+
+function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
+  const [assetId, setAssetId] = useState(assets[0]?.asset_id || "")
+  const [metric, setMetric] = useState<"cpu" | "mem" | "disk" | "swap">("cpu")
+  const [hours, setHours] = useState(24)
+  const [chartData, setChartData] = useState<ChartPoint[]>([])
+  const [records, setRecords] = useState<HistoryRecord[]>([])
+  const [stats, setStats] = useState({ total: 0, earliest: "", latest: "" })
+  const [loading, setLoading] = useState(false)
+
+  const loadChart = useCallback(async () => {
+    if (!assetId) return
+    setLoading(true)
+    try {
+      const data = await api<any>(`/api/v1/metrics/history/chart?asset_id=${assetId}&metric=${metric}&hours=${hours}`)
+      setChartData(data.data || [])
+    } catch { /* silent */ } finally {
+      setLoading(false)
+    }
+  }, [assetId, metric, hours])
+
+  const loadRecords = useCallback(async () => {
+    if (!assetId) return
+    try {
+      const data = await api<any>(`/api/v1/metrics/history?asset_id=${assetId}&limit=20`)
+      setRecords(data.records || [])
+      setStats({ total: data.total || 0, earliest: data.earliest || "", latest: data.latest || "" })
+    } catch { /* silent */ }
+  }, [assetId])
+
+  useEffect(() => { void loadChart() }, [loadChart])
+  useEffect(() => { void loadRecords() }, [loadRecords])
+
+  const METRIC_LABELS: Record<string, string> = { cpu: "CPU", mem: "記憶體", disk: "磁碟", swap: "Swap" }
+  const CHART_COLORS: Record<string, string> = { cpu: "#3b82f6", mem: "#f59e0b", disk: "#10b981", swap: "#8b5cf6" }
+  const metricLabel = METRIC_LABELS[metric]
+  const chartColor = CHART_COLORS[metric]
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="card-header">
+        <span style={{ fontSize: 14, fontWeight: 600 }}>📈 歷史監控數據</span>
+      </div>
+      <div className="card-body">
+        {/* Controls */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={assetId} onChange={e => setAssetId(e.target.value)} style={{ ...selectStyle, minWidth: 160 }}>
+            {assets.map(a => <option key={a.asset_id} value={a.asset_id}>{a.name} ({a.hostname})</option>)}
+          </select>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["cpu", "mem", "disk", "swap"] as const).map(m => (
+              <button key={m} className="btn btn-sm" style={{ background: metric === m ? CHART_COLORS[m] : "transparent", color: metric === m ? "#fff" : "var(--text)", border: `1px solid ${metric === m ? CHART_COLORS[m] : "var(--border)"}` }} onClick={() => setMetric(m)}>{METRIC_LABELS[m]}</button>
+            ))}
+          </div>
+          <select value={hours} onChange={e => setHours(Number(e.target.value))} style={selectStyle}>
+            <option value={1}>1 小時</option>
+            <option value={6}>6 小時</option>
+            <option value={12}>12 小時</option>
+            <option value={24}>24 小時</option>
+            <option value={48}>48 小時</option>
+            <option value={168}>7 天</option>
+          </select>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+            共 {stats.total} 筆 · {stats.earliest ? new Date(stats.earliest).toLocaleDateString("zh-Hant") : "—"} ~ {stats.latest ? new Date(stats.latest).toLocaleDateString("zh-Hant") : "—"}
+          </span>
+        </div>
+
+        {/* Chart */}
+        <div style={{ marginBottom: 16, background: "var(--surface)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{metricLabel} 使用率 (%) — {hours}小時</div>
+          {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>載入中...</div> : <MiniChart data={chartData} color={chartColor} />}
+        </div>
+
+        {/* Recent records table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <th style={{ textAlign: "left", padding: "6px 8px" }}>時間</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>CPU%</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>記憶體%</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>磁碟%</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>Swap%</th>
+                <th style={{ textAlign: "left", padding: "6px 8px" }}>Load</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map(r => (
+                <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ padding: "4px 8px" }}>{new Date(r.collected_at).toLocaleString("zh-Hant")}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", color: barColor(r.cpu_percent) }}>{r.cpu_percent.toFixed(1)}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", color: barColor(r.mem_percent) }}>{r.mem_percent.toFixed(1)}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", color: barColor(r.disk_percent) }}>{r.disk_percent.toFixed(1)}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", color: barColor(r.swap_percent) }}>{r.swap_percent.toFixed(1)}</td>
+                  <td style={{ padding: "4px 8px" }}>{r.load_avg_1.toFixed(2)}</td>
+                </tr>
+              ))}
+              {records.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: "var(--text-secondary)" }}>暫無歷史數據（每次收集監控數據時自動保存）</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const selectStyle: React.CSSProperties = { padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13 }
+
 export function MonitoringPage() {
+  const [tab, setTab] = useState<"live" | "history">("live")
   const [localMetrics, setLocalMetrics] = useState<HostMetrics | null>(null)
   const [remoteData, setRemoteData] = useState<RemoteHostMetric[]>([])
   const [loading, setLoading] = useState(true)
@@ -202,11 +339,19 @@ export function MonitoringPage() {
             {collectedAt && ` · 收集於 ${collectedAt}`}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-sm" onClick={() => { void loadLocal() }} disabled={collecting}>↻ 本機</button>
-          <button className="btn btn-primary btn-sm" onClick={() => { void loadRemote(false) }} disabled={collecting}>
-            {collecting ? "⠋ 收集中..." : "↻ 收集全部"}
-          </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", background: "var(--surface)", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <button className="btn btn-sm" style={{ background: tab === "live" ? "var(--primary)" : "transparent", color: tab === "live" ? "#fff" : "var(--text)", border: "none", padding: "6px 14px" }} onClick={() => setTab("live")}>即時</button>
+            <button className="btn btn-sm" style={{ background: tab === "history" ? "var(--primary)" : "transparent", color: tab === "history" ? "#fff" : "var(--text)", border: "none", borderLeft: "1px solid var(--border)", padding: "6px 14px" }} onClick={() => setTab("history")}>歷史</button>
+          </div>
+          {tab === "live" && (
+            <>
+              <button className="btn btn-sm" onClick={() => { void loadLocal() }} disabled={collecting}>↻ 本機</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { void loadRemote(false) }} disabled={collecting}>
+                {collecting ? "⠋ 收集中..." : "↻ 收集全部"}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -295,6 +440,7 @@ export function MonitoringPage() {
           />
         ))}
       </div>
+      {tab === "history" && <MetricsHistoryPanel assets={remoteData} />}
     </>
   )
 }
