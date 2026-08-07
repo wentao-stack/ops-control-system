@@ -1,8 +1,8 @@
 # AI Agent 開發計劃
 
 > 專案: OPS Control System
-> 最後更新: 2026-08-06
-> 狀態: 規劃中
+> 最後更新: 2026-08-07
+> 狀態: Phase 1-4 已完成核心功能，Phase 3 部分完成
 
 ---
 
@@ -20,24 +20,32 @@
 | Tool Calling Loop | ✅ | 最多 5 次迭代，工具執行 → 結果回傳 LLM |
 | 工作流引擎 | ✅ | 5 種步驟 (llm/api/shell/note_api/note_create) |
 
-### 現有 6 個工具（全部讀取型）
+### 現有 11 個工具（6 讀取 + 5 寫入/執行）
 
-| # | 工具名 | 功能 | 類型 |
-|---|--------|------|------|
-| 1 | `get_host_metrics` | SSH 收集遠端主機 CPU/記憶體/磁碟/GPU | 讀取 |
-| 2 | `list_assets` | 資產列表，支援環境/健康狀態篩選 | 讀取 |
-| 3 | `check_services` | SSH 偵測遠端主機 systemd 服務 | 讀取 |
-| 4 | `get_alerts` | 告警列表，支援嚴重程度篩選 | 讀取 |
-| 5 | `search_notes` | 筆記搜索，支援關鍵字/分類 | 讀取 |
-| 6 | `get_changes` | 變更記錄，支援類型篩選 | 讀取 |
+| # | 工具名 | 功能 | 類型 | 權限 |
+|---|--------|------|------|------|
+| 1 | `get_host_metrics` | SSH 收集遠端主機 CPU/記憶體/磁碟/GPU | 讀取 | read |
+| 2 | `list_assets` | 資產列表，支援環境/健康狀態篩選 | 讀取 | read |
+| 3 | `check_services` | SSH 偵測遠端主機 systemd 服務 | 讀取 | read |
+| 4 | `get_alerts` | 告警列表，支援嚴重程度篩選 | 讀取 | read |
+| 5 | `search_notes` | 筆記搜索，支援關鍵字/分類 | 讀取 | read |
+| 6 | `get_changes` | 變更記錄，支援類型篩選 | 讀取 | read |
+| 7 | `exec_ssh_command` | SSH 遠端命令執行 | 執行 | exec + confirm |
+| 8 | `supervisor_action` | Supervisor 程序管理 | 執行 | exec + confirm |
+| 9 | `create_note` | 創建筆記 | 寫入 | write |
+| 10 | `acknowledge_alert` | 確認告警 | 寫入 | write |
+| 11 | `search_runbooks` | 搜索 Runbook | 讀取 | read |
 
 ### 缺失
 
-- 沒有寫入/執行類工具（Agent 只能看，不能做）
-- 沒有權限控制（任何登入用戶都能調用所有工具）
-- 沒有 token 用量追蹤
-- 沒有測試覆蓋
-- SettingsPage 空殼（16 行）
+- [x] 寫入/執行類工具（Phase 1 已完成）
+- [x] 權限控制（Phase 2 已完成 — read/write/exec 三級 + 前端 confirm）
+- [x] Token 用量追蹤（Phase 3 已完成 — AgentUsage 模型 + API + 前端面板）
+- [x] Agent 記憶系統（Phase 4 已完成 — AgentMemory 模型 + save_memory/get_memories 工具）
+- [ ] 圖片上傳 + Vision API（Phase 3 待完成）
+- [ ] Agent 主動監控端點（Phase 3 待完成）
+- [ ] 自定義工具管理（Phase 4 待完成）
+- [ ] SettingsPage 實作（目前空殼）
 
 ---
 
@@ -283,33 +291,35 @@ frontend/src/
 
 ## 五、檢查清單
 
-### Phase 1 — 寫入型工具
-- [ ] `exec_ssh_command` 工具（需前端確認）
-- [ ] `supervisor_action` 工具（需前端確認）
-- [ ] `create_note` 工具
-- [ ] `acknowledge_alert` 工具
-- [ ] `search_runbooks` 工具
-- [ ] 前端 confirm UI 組件
-- [ ] exec_log 自動記錄
-- [ ] 測試: 每個工具的 unit test
+### Phase 1 — 寫入型工具 ✅ 已完成
+- [x] `exec_ssh_command` 工具（需前端確認）
+- [x] `supervisor_action` 工具（需前端確認）
+- [x] `create_note` 工具
+- [x] `acknowledge_alert` 工具
+- [x] `search_runbooks` 工具
+- [x] 前端 confirm UI 組件
+- [x] exec_log 自動記錄
+- [x] 測試: 每個工具的 unit test（33 個通過）
 
-### Phase 2 — 安全與權限
-- [ ] 工具權限分級（read/write/exec）
-- [ ] 角色檢查中間件
-- [ ] AgentToolCall 審計模型
-- [ ] 前端確認流程完整實現
-- [ ] 命令白名單/黑名單
+### Phase 2 — 安全與權限 ✅ 已完成
+- [x] 工具權限分級（read/write/exec）
+- [x] 角色檢查中間件
+- [x] AgentToolCall 審計模型
+- [x] 前端確認流程完整實現
+- [x] 命令黑名單
 
-### Phase 3 — 多模態與進階
+### Phase 3 — 多模態與進階 🔄 部分完成
 - [ ] 圖片上傳組件
 - [ ] Vision API 適配
-- [ ] AgentUsage 用量追蹤模型
-- [ ] 用量統計 API + 前端展示
+- [x] AgentUsage 用量追蹤模型
+- [x] 用量統計 API + 前端展示
 - [ ] 主動監控端點
 
-### Phase 4 — 記憶與知識
-- [ ] 記憶提取系統
-- [ ] 相關記憶注入
+### Phase 4 — 記憶與知識 🔄 部分完成
+- [x] AgentMemory 記憶模型
+- [x] save_memory 工具
+- [x] get_memories 工具 + 記憶注入 system prompt
+- [x] 記憶管理 API + 前端記憶面板
 - [ ] 自定義工具管理
 - [ ] 向量搜索（可選）
 
