@@ -50,6 +50,8 @@ import re
 import uuid as _uuid
 from typing import Any, AsyncIterator, TypedDict
 
+import httpx
+
 from .agent_models import AgentConversation, AgentMessage
 from .agent_schemas import AgentChatRequest
 
@@ -323,7 +325,16 @@ async def run_agent_graph(
         yield sse("thinking", text="正在分析...")
 
         # Call LLM (need full response to check tool_calls)
-        assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_openai)
+        try:
+            assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_openai)
+        except httpx.TimeoutException as e:
+            yield sse("error", message=f"LLM 回應超時（模型可能正在載入，請稍後重試）: {type(e).__name__}")
+            yield sse("done")
+            return
+        except Exception as e:
+            yield sse("error", message=f"LLM 呼叫失敗: {type(e).__name__}: {e}")
+            yield sse("done")
+            return
 
         # Token tracking
         usage = assistant_msg.pop("_usage", None)

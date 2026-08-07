@@ -1156,7 +1156,7 @@ async def _llm_chat_stream(
     if tools:
         payload["tools"] = tools
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=600) as client:
         async with client.stream(
             "POST",
             f"{LLM_BASE_URL}/chat/completions",
@@ -1195,7 +1195,7 @@ async def _llm_chat_with_tools(
     if not LLM_API_KEY:
         return {"content": "[LLM API key not configured]"}
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=600) as client:
         resp = await client.post(
             f"{LLM_BASE_URL}/chat/completions",
             headers={
