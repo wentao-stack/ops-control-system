@@ -236,6 +236,7 @@ export type ComfyParamDef = {
   options?: string[]
   help?: string
   placeholder?: string
+  unit?: string
 }
 
 export type ComfyWorkflowTemplate = {

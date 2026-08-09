@@ -88,6 +88,9 @@ def inject_params(workflow: dict[str, Any], template: dict[str, Any], params: di
                 logger.warning("注入失敗：工作流缺少節點 %s", node_id)
                 continue
             node.setdefault("inputs", {})[input_name] = value
+            # target 級轉換（例如 秒 → 幀數 ×24）
+            if tgt.get("multiply") and isinstance(value, (int, float)):
+                node["inputs"][input_name] = value * tgt["multiply"]
     return workflow
 
 

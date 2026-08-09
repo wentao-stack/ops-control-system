@@ -20,6 +20,7 @@ class ComfyParamDef(BaseModel):
     options: list[str] | None = None
     help: str | None = None
     placeholder: str | None = None
+    unit: str | None = None  # 顯示單位（如 秒），滑桿數值旁顯示
 
 
 class ComfyWorkflowTemplate(BaseModel):

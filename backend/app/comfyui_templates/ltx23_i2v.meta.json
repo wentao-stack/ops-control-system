@@ -53,14 +53,15 @@
     },
     {
       "key": "length",
-      "label": "幀數",
+      "label": "時長",
       "type": "slider",
-      "default": 121,
-      "min": 24,
-      "max": 240,
-      "step": 4,
-      "help": "24 幀 ≈ 1 秒（24fps）",
-      "targets": [{"node": "7", "input": "length"}, {"node": "8", "input": "length"}]
+      "default": 5,
+      "min": 1,
+      "max": 10,
+      "step": 1,
+      "unit": "秒",
+      "help": "生成視頻的時長（24fps，1 秒 = 24 幀）",
+      "targets": [{"node": "7", "input": "length", "multiply": 24}, {"node": "8", "input": "length", "multiply": 24}]
     },
     {
       "key": "steps",

@@ -164,7 +164,7 @@ function ParamInput({
               disabled={disabled}
               onChange={e => onChange(Number(e.target.value))}
             />
-            <span className="comfy-slider-value">{v}</span>
+            <span className="comfy-slider-value">{v}{def.unit ?? ""}</span>
           </div>
         )
       }
