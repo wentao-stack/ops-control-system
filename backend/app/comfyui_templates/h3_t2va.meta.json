@@ -1,0 +1,72 @@
+{
+  "id": "h3_t2va",
+  "name": "文生視頻 H3 Turbo 4V4A",
+  "description": "MiniMax H3 Turbo：一句話生成帶同步音效的短視頻（4 步採樣，視頻+音頻）。",
+  "category": "video",
+  "icon": "🎬",
+  "model": "MiniMax H3 + Turbo LoRA",
+  "estimated_time": "約 1-5 分鐘",
+  "workflow": "h3_t2va.api.json",
+  "output_kind": "video",
+  "params": [
+    {
+      "key": "prompt",
+      "label": "提示詞",
+      "type": "textarea",
+      "required": true,
+      "help": "描述畫面內容與音效，例如：雨夜、金屬屋頂、同步雨聲，不要音樂。",
+      "placeholder": "描述畫面與聲音…",
+      "targets": [{"node": "6", "input": "prompt"}]
+    },
+    {
+      "key": "width",
+      "label": "寬度",
+      "type": "slider",
+      "default": 1344,
+      "min": 640,
+      "max": 1920,
+      "step": 64,
+      "targets": [{"node": "6", "input": "width"}]
+    },
+    {
+      "key": "height",
+      "label": "高度",
+      "type": "slider",
+      "default": 768,
+      "min": 384,
+      "max": 1088,
+      "step": 64,
+      "targets": [{"node": "6", "input": "height"}]
+    },
+    {
+      "key": "length",
+      "label": "幀數",
+      "type": "slider",
+      "default": 124,
+      "min": 24,
+      "max": 300,
+      "step": 4,
+      "help": "24 幀 ≈ 1 秒（24fps）",
+      "targets": [{"node": "6", "input": "length"}]
+    },
+    {
+      "key": "steps",
+      "label": "步數",
+      "type": "slider",
+      "default": 4,
+      "min": 1,
+      "max": 8,
+      "step": 1,
+      "help": "Turbo 建議 4 步",
+      "targets": [{"node": "7", "input": "steps"}]
+    },
+    {
+      "key": "seed",
+      "label": "種子",
+      "type": "seed",
+      "default": -1,
+      "help": "-1 = 每次隨機",
+      "targets": [{"node": "9", "input": "noise_seed"}]
+    }
+  ]
+}

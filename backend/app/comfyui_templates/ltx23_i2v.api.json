@@ -1,0 +1,147 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "ltx-2.3-22b-dev-fp8.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "LTXAVTextEncoderLoader",
+    "inputs": {
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": "ltx-2.3-22b-dev-fp8.safetensors",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "A five-second continuous cinematic shot. Exactly one young Chinese xianxia male cultivator, long black hair tied in a half-up topknot, elegant flowing white and blue layered robes, a sheathed jian sword on his back, calm focused expression. He stands on an ancient circular stone platform floating above the clouds at dawn. Soft golden-pink morning light, blue-gray stone pillars, distant mountain peaks, drifting mist. During the shot, he slowly raises his right hand to chest height and a small glowing blue spiritual orb forms above his palm. His robe and hair move gently in the wind. Fixed camera, smooth motion, no scene cut, no jump cut.",
+      "clip": ["2", 0]
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "low quality, blurry, deformed face, distorted hands, extra fingers, extra arms, extra characters, changing outfit, different person, modern clothes, text, subtitles, watermark, logo, bad anatomy, flickering face, unstable identity, sudden scene change, overexposed, chaotic camera movement, duplicate person, cloned character, shot change, jump cut, scene transition",
+      "clip": ["2", 0]
+    }
+  },
+  "5": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "xianxia_start_000.png"
+    }
+  },
+  "6": {
+    "class_type": "LTXVPreprocess",
+    "inputs": {
+      "image": ["5", 0],
+      "img_compression": 10
+    }
+  },
+  "7": {
+    "class_type": "LTXVImgToVideo",
+    "inputs": {
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "vae": ["1", 2],
+      "image": ["6", 0],
+      "width": 832,
+      "height": 480,
+      "length": 121,
+      "batch_size": 1,
+      "strength": 1.0
+    }
+  },
+  "8": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 832,
+      "height": 480,
+      "length": 121,
+      "batch_size": 1
+    }
+  },
+  "9": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": ["7", 0],
+      "negative": ["7", 1],
+      "frame_rate": 24
+    }
+  },
+  "10": {
+    "class_type": "LTXVCropGuides",
+    "inputs": {
+      "positive": ["9", 0],
+      "negative": ["9", 1],
+      "latent": ["8", 0]
+    }
+  },
+  "11": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["10", 0],
+      "negative": ["10", 1],
+      "cfg": 2.0
+    }
+  },
+  "12": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "13": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 1000000051
+    }
+  },
+  "14": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "steps": 25,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stretch": true,
+      "terminal": 0.1,
+      "latent": ["8", 0]
+    }
+  },
+  "15": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["13", 0],
+      "guider": ["11", 0],
+      "sampler": ["12", 0],
+      "sigmas": ["14", 0],
+      "latent_image": ["10", 2]
+    }
+  },
+  "16": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["15", 0],
+      "vae": ["1", 2]
+    }
+  },
+  "17": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": ["16", 0],
+      "fps": 24
+    }
+  },
+  "18": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": ["17", 0],
+      "filename_prefix": "ocs/ltx23_i2v",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  }
+}

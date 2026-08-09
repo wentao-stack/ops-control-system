@@ -1,0 +1,94 @@
+{
+  "id": "ltx23_i2v",
+  "name": "圖生視頻 LTX 2.3",
+  "description": "LTX-2.3 22B：上傳一張圖片，生成 5 秒電影感短片。",
+  "category": "video",
+  "icon": "🎞",
+  "model": "LTX 2.3 22B FP8",
+  "estimated_time": "約 2-8 分鐘",
+  "workflow": "ltx23_i2v.api.json",
+  "output_kind": "video",
+  "params": [
+    {
+      "key": "image",
+      "label": "起始圖片",
+      "type": "image",
+      "default": "xianxia_start_000.png",
+      "help": "上傳一張圖片作為視頻首幀（未上傳則用預設圖）",
+      "targets": [{"node": "5", "input": "image"}]
+    },
+    {
+      "key": "prompt",
+      "label": "提示詞",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "描述畫面動態…",
+      "targets": [{"node": "3", "input": "text"}]
+    },
+    {
+      "key": "negative_prompt",
+      "label": "負向提示詞",
+      "type": "textarea",
+      "targets": [{"node": "4", "input": "text"}]
+    },
+    {
+      "key": "width",
+      "label": "寬度",
+      "type": "slider",
+      "default": 832,
+      "min": 384,
+      "max": 1152,
+      "step": 64,
+      "targets": [{"node": "7", "input": "width"}, {"node": "8", "input": "width"}]
+    },
+    {
+      "key": "height",
+      "label": "高度",
+      "type": "slider",
+      "default": 480,
+      "min": 256,
+      "max": 768,
+      "step": 64,
+      "targets": [{"node": "7", "input": "height"}, {"node": "8", "input": "height"}]
+    },
+    {
+      "key": "length",
+      "label": "幀數",
+      "type": "slider",
+      "default": 121,
+      "min": 24,
+      "max": 240,
+      "step": 4,
+      "help": "24 幀 ≈ 1 秒（24fps）",
+      "targets": [{"node": "7", "input": "length"}, {"node": "8", "input": "length"}]
+    },
+    {
+      "key": "steps",
+      "label": "步數",
+      "type": "slider",
+      "default": 25,
+      "min": 8,
+      "max": 40,
+      "step": 1,
+      "targets": [{"node": "14", "input": "steps"}]
+    },
+    {
+      "key": "strength",
+      "label": "運動強度",
+      "type": "slider",
+      "default": 1.0,
+      "min": 0.2,
+      "max": 1.0,
+      "step": 0.05,
+      "targets": [{"node": "7", "input": "strength"}]
+    },
+    {
+      "key": "seed",
+      "label": "種子",
+      "type": "seed",
+      "default": -1,
+      "help": "-1 = 每次隨機",
+      "targets": [{"node": "13", "input": "noise_seed"}]
+    }
+  ]
+}

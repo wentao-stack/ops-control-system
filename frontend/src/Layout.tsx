@@ -12,6 +12,7 @@ const NAV = [
   { to: "/notes", label: "筆記", icon: "📝" },
   { to: "/workflow", label: "流程", icon: "🔄" },
   { to: "/agent", label: "助手", icon: "🤖" },
+  { to: "/comfyui", label: "生成", icon: "🎨" },
   { to: "/code", label: "代碼", icon: "📂" },
   { to: "/settings", label: "設定", icon: "⚙" },
 ]
@@ -26,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/notes": "筆記管理",
   "/workflow": "流程管理",
   "/agent": "AI 助手",
+  "/comfyui": "AI 生成",
   "/code": "代碼瀏覽器",
   "/settings": "系統設定",
 }

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, status
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
@@ -19,6 +19,7 @@ from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_to
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
 from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
+from .comfyui_models import ComfyJob  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
@@ -64,7 +65,7 @@ import logging
 import os
 import shutil
 from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from . import agent as agent_service
 from .agent_models import AgentConversation, AgentMessage
@@ -78,6 +79,16 @@ from .agent_schemas import (
     AgentMessagesListResponse,
 )
 from . import clouds as clouds_service
+from . import comfyui as comfyui_service
+from .comfyui_schemas import (
+    ComfyGenerateRequest,
+    ComfyGenerateResponse,
+    ComfyJobListResponse,
+    ComfyJobResponse,
+    ComfyStatusResponse,
+    ComfyUploadResponse,
+    ComfyWorkflowListResponse,
+)
 
 # ── Simple response cache ────────────────────────────────────────────────────
 _cache: dict[str, tuple[Any, float]] = {}
@@ -1710,6 +1721,217 @@ def reindex_rag(
     from .agent_rag import build_full_index, get_index_stats
     stats = build_full_index(session)
     return {"status": "ok", "index_stats": get_index_stats(), "build_stats": stats}
+
+
+# ── ComfyUI 生成 ──────────────────────────────────────────────────────────
+
+
+@app.get("/api/v1/comfyui/status", response_model=ComfyStatusResponse)
+async def comfyui_status(
+    current_user: User = Depends(get_current_user),
+):
+    """ComfyUI 健康狀態 + GPU + 佇列。"""
+    return await comfyui_service.get_status()
+
+
+@app.get("/api/v1/comfyui/workflows", response_model=ComfyWorkflowListResponse)
+def comfyui_workflows(
+    current_user: User = Depends(get_current_user),
+):
+    """可用工作流模板列表（已轉 API 格式 + 參數映射）。"""
+    return {"templates": comfyui_service.list_templates()}
+
+
+@app.post("/api/v1/comfyui/generate", response_model=ComfyGenerateResponse)
+async def comfyui_generate(
+    body: ComfyGenerateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """提交生成任務：注入參數 → POST ComfyUI /prompt → 記錄 ComfyJob。"""
+    template = comfyui_service.get_template(body.workflow_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="工作流模板不存在")
+    workflow = comfyui_service.load_workflow(template)
+    comfyui_service.inject_params(workflow, template, body.params)
+    try:
+        prompt_id = await comfyui_service.submit_workflow(workflow)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"ComfyUI 提交失敗：{e}")
+    job = ComfyJob(
+        id=f"cf-{uuid4().hex[:12]}",
+        prompt_id=prompt_id,
+        workflow_id=template["id"],
+        workflow_name=template.get("name", template["id"]),
+        params_json=json.dumps(body.params, ensure_ascii=False),
+        status="queued",
+        created_by=current_user.username,
+        created_at=datetime.now(UTC),
+    )
+    session.add(job)
+    session.commit()
+    return {"job_id": job.id, "prompt_id": prompt_id, "status": job.status}
+
+
+@app.get("/api/v1/comfyui/jobs", response_model=ComfyJobListResponse)
+def comfyui_jobs(
+    limit: int = Query(20, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """生成任務歷史（最新在前）。"""
+    jobs = session.scalars(
+        select(ComfyJob).order_by(ComfyJob.created_at.desc()).limit(limit)
+    ).all()
+    return {"jobs": [comfyui_service.job_to_response(j) for j in jobs]}
+
+
+@app.get("/api/v1/comfyui/jobs/{job_id}", response_model=ComfyJobResponse)
+async def comfyui_job_detail(
+    job_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """任務詳情；進行中的任務會嘗試從 ComfyUI history 補齊狀態。"""
+    job = session.get(ComfyJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任務不存在")
+    prompt_id = job.prompt_id
+    if prompt_id and job.status in ("queued", "running"):
+        try:
+            history = await comfyui_service.get_history(prompt_id)
+            if history:
+                job.status, job.error = comfyui_service.history_status(history)
+                job.outputs_json = json.dumps(
+                    comfyui_service.parse_outputs(history), ensure_ascii=False
+                )
+                job.finished_at = datetime.now(UTC)
+                session.commit()
+        except Exception:
+            pass  # ComfyUI 可能剛重啟，維持現狀
+    return comfyui_service.job_to_response(job)
+
+
+@app.get("/api/v1/comfyui/jobs/{job_id}/events")
+async def comfyui_job_events(
+    job_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """任務進度 SSE 串流：progress / executing / done / error。"""
+    job = session.get(ComfyJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任務不存在")
+    if not job.prompt_id:
+        raise HTTPException(status_code=400, detail="任務無 prompt_id")
+    prompt_id: str = job.prompt_id
+
+    async def event_gen():
+        def _sse(payload: dict) -> str:
+            return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        # 已完成的任務直接回放結果
+        try:
+            history = await comfyui_service.get_history(prompt_id)
+        except Exception:
+            history = None
+        if history:
+            job.status, job.error = comfyui_service.history_status(history)
+            job.outputs_json = json.dumps(
+                comfyui_service.parse_outputs(history), ensure_ascii=False
+            )
+            job.finished_at = datetime.now(UTC)
+            session.commit()
+            yield _sse({"event": "progress", "value": 100, "max": 100})
+            if job.status == "error":
+                yield _sse({"event": "error", "message": job.error or "執行失敗", "prompt_id": prompt_id})
+            else:
+                yield _sse({"event": "done", "prompt_id": prompt_id})
+            return
+
+        # 不在 history 也不在佇列 → ComfyUI 重啟或任務遺失，直接標錯誤
+        queued_ids = await comfyui_service.get_queue_prompt_ids()
+        if prompt_id not in queued_ids:
+            job.status = "error"
+            job.error = "ComfyUI 已重啟或任務遺失"
+            job.finished_at = datetime.now(UTC)
+            session.commit()
+            yield _sse({"event": "error", "message": job.error, "prompt_id": prompt_id})
+            return
+
+        async for ev in comfyui_service.stream_progress(prompt_id):
+            etype = ev["event"]
+            if etype == "progress":
+                if ev.get("max"):
+                    job.progress = min(99, round(ev["value"] * 100 / ev["max"]))
+                if job.status == "queued":
+                    job.status = "running"
+                session.commit()
+            elif etype == "done":
+                job.status = "done"
+                job.progress = 100
+                try:
+                    history = await comfyui_service.get_history(prompt_id)
+                    if history:
+                        job.outputs_json = json.dumps(
+                            comfyui_service.parse_outputs(history), ensure_ascii=False
+                        )
+                except Exception:
+                    pass
+                job.finished_at = datetime.now(UTC)
+                session.commit()
+            elif etype == "error":
+                job.status = "error"
+                job.error = ev.get("message", "執行失敗")
+                job.finished_at = datetime.now(UTC)
+                session.commit()
+            yield _sse(ev)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/v1/comfyui/view")
+async def comfyui_view(
+    filename: str,
+    subfolder: str = "",
+    view_type: str = "output",
+    current_user: User = Depends(get_current_user),
+):
+    """代理 ComfyUI /view 輸出預覽（圖片/視頻/音頻）。"""
+    try:
+        content, ctype = await comfyui_service.fetch_view(filename, subfolder, view_type)
+    except Exception:
+        raise HTTPException(status_code=404, detail="檔案不存在")
+    return Response(
+        content=content,
+        media_type=ctype,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.post("/api/v1/comfyui/upload", response_model=ComfyUploadResponse)
+async def comfyui_upload(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """上傳圖片到 ComfyUI input 目錄（供圖生視頻模板使用）。"""
+    data = await file.read()
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="檔案過大（上限 50MB）")
+    filename = (file.filename or "image.png").split("/")[-1]
+    try:
+        res = await comfyui_service.upload_image(filename, data)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"上傳失敗：{e}")
+    return {
+        "filename": res.get("name", filename),
+        "subfolder": res.get("subfolder", ""),
+        "type": res.get("type", "input"),
+    }
 
 
 # ── SPA Fallback ──────────────────────────────────────────────────────────────

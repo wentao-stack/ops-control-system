@@ -229,3 +229,21 @@ Port 5173 is in use, trying another one...
   VITE v8.1.5  ready in 110 ms
 
   ➜  Local:   http://127.0.0.1:5173/
+
+  VITE v8.1.5  ready in 197 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+
+  VITE v8.1.5  ready in 181 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+4:09:41 PM [vite] (client) hmr update /src/pages/AssetsPage.tsx, /src/pages/AssetDetailPage.tsx, /src/pages/AgentChatPage.tsx
+4:10:15 PM [vite] (client) hmr update /src/main.tsx
+4:10:15 PM [vite] (client) hmr update /src/Layout.tsx
+4:10:15 PM [vite] (client) hmr update /src/main.tsx
+4:10:16 PM [vite] (client) hmr update /src/Layout.tsx
+4:10:36 PM [vite] (client) hmr update /src/styles.css
+
+  VITE v8.1.5  ready in 133 ms
+
+  ➜  Local:   http://127.0.0.1:5173/

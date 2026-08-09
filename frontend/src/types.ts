@@ -221,3 +221,75 @@ export type WorkflowExecutionDetail = {
   completed_at: string | null
   duration_seconds: number
 }
+
+// ── ComfyUI 生成 ──────────────────────────────────────────────────────────
+
+export type ComfyParamDef = {
+  key: string
+  label: string
+  type: string          // textarea | text | number | slider | select | seed | image
+  required?: boolean
+  default?: unknown
+  min?: number
+  max?: number
+  step?: number
+  options?: string[]
+  help?: string
+  placeholder?: string
+}
+
+export type ComfyWorkflowTemplate = {
+  id: string
+  name: string
+  description?: string
+  category: string
+  icon?: string
+  model?: string
+  estimated_time?: string
+  output_kind: string   // image | video | audio
+  params: ComfyParamDef[]
+}
+
+export type ComfyStatusDevice = {
+  name?: string
+  vram_total?: number
+  vram_free?: number
+}
+
+export type ComfyStatus = {
+  online: boolean
+  comfyui_version?: string
+  devices?: ComfyStatusDevice[]
+  queue_running: number
+  queue_pending: number
+  error?: string
+}
+
+export type ComfyOutputItem = {
+  filename: string
+  subfolder?: string
+  type?: string
+  kind: string          // image | gif | video | audio
+  node_id?: string
+}
+
+export type ComfyJob = {
+  id: string
+  prompt_id?: string
+  workflow_id: string
+  workflow_name: string
+  params: Record<string, any>
+  status: string        // queued | running | done | error | cancelled
+  progress: number
+  error?: string
+  outputs: ComfyOutputItem[]
+  created_by?: string
+  created_at?: string
+  finished_at?: string
+}
+
+export type ComfyGenerateResponse = {
+  job_id: string
+  prompt_id: string
+  status: string
+}
