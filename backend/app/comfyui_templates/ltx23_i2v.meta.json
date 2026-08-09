@@ -60,7 +60,7 @@
       "max": 10,
       "step": 1,
       "unit": "秒",
-      "help": "生成視頻的時長（24fps，1 秒 = 24 幀）",
+      "help": "建議 ≤5 秒品質最佳；超過 8 秒細節明顯退化",
       "targets": [{"node": "7", "input": "length", "multiply": 24}, {"node": "8", "input": "length", "multiply": 24}]
     },
     {
