@@ -235,6 +235,7 @@ _WS_CLIENT_ID = "ocs-backend"
 _ws_task: asyncio.Task | None = None
 _ws_ready = asyncio.Event()
 _job_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
+_last_pct: dict[str, float] = {}  # 每任務最後發出的進度百分比（單調遞增）
 
 
 def ensure_ws() -> None:
@@ -276,17 +277,25 @@ def _dispatch_event(msg: dict[str, Any]) -> None:
     if not pid:
         return
     if mtype == "progress_state":
-        # 0.31.0 新格式：所有節點進度聚合。取完成比例最高的節點作為整體進度。
+        # 0.31.0 新格式：所有節點進度聚合。
+        # 規則: ① 只認 max>1 的節點（真實工作，如取樣器 4 步 / VHS 合併 N 幀），
+        # max=1 的瞬間節點會把比例撐到 1.0 蓋掉真實進度；② 整體進度單調遞增，
+        # 避免節段切換時 100%→低% 的回落。
         best: tuple[float, float, float] | None = None
         for n in (data.get("nodes") or {}).values():
             mx = n.get("max") or 0
-            if mx <= 0:
+            if mx <= 1:
                 continue
             ratio = (n.get("value") or 0) / mx
-            if best is None or ratio > best[0]:
+            if best is None or mx > best[2] or (mx == best[2] and ratio > best[0]):
                 best = (ratio, n.get("value") or 0, mx)
         if best:
-            _put_event(pid, {"event": "progress", "value": best[1], "max": best[2]})
+            value, mx = best[1], best[2]
+            pct = value / mx * 100
+            if pct < _last_pct.get(pid, -1.0):
+                return  # 不下發回退的進度
+            _last_pct[pid] = pct
+            _put_event(pid, {"event": "progress", "value": value, "max": mx})
     elif mtype == "executing":
         _put_event(pid, {"event": "executing", "node": data.get("node")})
     elif mtype == "execution_success":
@@ -344,6 +353,7 @@ async def stream_progress(prompt_id: str, timeout: float = 900.0) -> AsyncIterat
         yield {"event": "error", "message": "等待進度逾時（任務可能已中斷）"}
     finally:
         _job_queues.pop(prompt_id, None)
+        _last_pct.pop(prompt_id, None)
 
 
 # ── Job → Response 轉換 ──────────────────────────────────────────────────

@@ -302,7 +302,10 @@ export function ComfyUIPage() {
     loadStatus()
     loadTemplates()
     loadJobs()
-    const t = setInterval(loadStatus, 15000)
+    const t = setInterval(() => {
+      loadStatus()
+      loadJobs()  // 刷新任務清單 → 讓 resume 效果可重新掛接斷線的進行中任務
+    }, 15000)
     return () => clearInterval(t)
   }, [loadStatus, loadTemplates, loadJobs])
 
@@ -397,6 +400,7 @@ export function ComfyUIPage() {
               try {
                 const ev = JSON.parse(line.slice(6))
                 if (ev.event === "progress") {
+                  setError("")
                   setProgress({ value: ev.value, max: ev.max })
                 } else if (ev.event === "done" || ev.event === "error") {
                   setProgress(ev.event === "done" ? { value: 100, max: 100 } : null)
@@ -415,7 +419,7 @@ export function ComfyUIPage() {
         if (!cancelled) {
           setGenerating(false)
           setActiveJobId(null)
-          setError("進度連線失敗，請重新整理頁面")
+          setError("進度連線中斷，將自動重連…")
         }
       }
     })()
