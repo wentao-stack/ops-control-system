@@ -45,8 +45,9 @@ def main() -> int:
             "prompt": "A short test clip of ocean waves crashing on a rocky shore at sunset, gentle synchronized wave sounds, no music.",
             "width": 640,
             "height": 384,
-            "length": 48,
-            "steps": 4,
+            "length": 2,
+            "video_steps": 4,
+            "audio_steps": 10,
             "seed": -1,
         },
     }

@@ -55,11 +55,12 @@
     }
   },
   "7": {
-    "class_type": "MiniMaxH3DualClockSamplerT8",
+    "class_type": "MiniMaxH3MultiRateSamplerEXPT8",
     "inputs": {
       "model": ["2", 0],
       "av_latent": ["6", 1],
-      "steps": 4,
+      "video_steps": 4,
+      "audio_steps": 10,
       "shift_video": 12.0,
       "shift_audio": 3.0
     }

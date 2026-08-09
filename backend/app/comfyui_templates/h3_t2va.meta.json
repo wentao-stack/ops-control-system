@@ -1,11 +1,11 @@
 {
   "id": "h3_t2va",
-  "name": "文生視頻 H3 Turbo 4V4A",
-  "description": "MiniMax H3 Turbo：一句話生成帶同步音效的短視頻（4 步採樣，視頻+音頻）。",
+  "name": "文生視頻 H3 EXP 4V/10A",
+  "description": "MiniMax H3 EXP 取樣：視頻 4 步、音頻 10 次完整 joint H3 呼叫（音頻品質更佳）。",
   "category": "video",
   "icon": "🎬",
   "model": "MiniMax H3 + Turbo LoRA",
-  "estimated_time": "約 1-5 分鐘",
+  "estimated_time": "約 5-20 分鐘（10 次 H3 呼叫，比 STABLE 4/4 慢約 2.5 倍）",
   "workflow": "h3_t2va.api.json",
   "output_kind": "video",
   "params": [
@@ -52,15 +52,26 @@
       "targets": [{"node": "6", "input": "length", "multiply": 24}]
     },
     {
-      "key": "steps",
-      "label": "步數",
+      "key": "video_steps",
+      "label": "視頻步數",
       "type": "slider",
       "default": 4,
       "min": 1,
       "max": 8,
       "step": 1,
-      "help": "Turbo 建議 4 步",
-      "targets": [{"node": "7", "input": "steps"}]
+      "help": "視頻 Euler 宏步數，EXP 建議 4",
+      "targets": [{"node": "7", "input": "video_steps"}]
+    },
+    {
+      "key": "audio_steps",
+      "label": "音頻呼叫次數",
+      "type": "slider",
+      "default": 10,
+      "min": 1,
+      "max": 20,
+      "step": 1,
+      "help": "完整 joint H3 DiT 呼叫次數（= 實際模型評估次數）。4/10 ≈ 10 次呼叫，音頻品質比 4/4 好但慢約 2.5 倍",
+      "targets": [{"node": "7", "input": "audio_steps"}]
     },
     {
       "key": "seed",
