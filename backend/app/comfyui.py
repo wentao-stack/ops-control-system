@@ -1,7 +1,7 @@
-"""ComfyUI 整合模組 — 工作流模板化、參數注入、提交、進度串流。
+"""ComfyUI 整合模組 — 動態工作流、參數注入、提交、進度串流。
 
 對接本機 ComfyUI (預設 http://127.0.0.1:8188)：
-- 模板: backend/app/comfyui_templates/*.api.json (API 格式工作流) + *.meta.json (參數映射)
+- 工作流: 即時讀取 ComfyUI userdata/workflows，支援 API 與平面 UI JSON
 - 提交: POST /prompt
 - 進度: WebSocket /ws 轉成事件串流 (progress / executing / done / error)
 - 輸出: /history 解析 + /view 代理預覽
@@ -13,12 +13,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import math
 import os
 import random
+import time
 from pathlib import Path
 from typing import Any, AsyncIterator
+from urllib.parse import quote
 
 import httpx
 import websockets
@@ -27,40 +31,437 @@ logger = logging.getLogger(__name__)
 
 COMFY_BASE = os.environ.get("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/")
 WS_BASE = COMFY_BASE.replace("http://", "ws://", 1)
-TEMPLATES_DIR = Path(__file__).resolve().parent / "comfyui_templates"
+COMFY_OUTPUT_DIR = Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/home/wentao/project/ComfyUI/output"))
+COMFY_TEMP_DIR = Path(os.environ.get("COMFYUI_TEMP_DIR", "/home/wentao/project/ComfyUI/temp"))
 
 _TIMEOUT = httpx.Timeout(60.0, connect=5.0)
 
-# ── 模板載入 ──────────────────────────────────────────────────────────────
+# ── 動態工作流發現 ────────────────────────────────────────────────────────
+
+_object_info_cache: dict[str, Any] | None = None
+_object_info_cached_at = 0.0
 
 
-def list_templates() -> list[dict[str, Any]]:
-    """掃描模板目錄，回傳 meta 列表（含內部 node 映射，schema 層會過濾）。"""
-    out: list[dict[str, Any]] = []
-    for meta_path in sorted(TEMPLATES_DIR.glob("*.meta.json")):
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except Exception as e:
-            logger.warning("模板 meta 解析失敗 %s: %s", meta_path.name, e)
-            continue
-        wf_path = TEMPLATES_DIR / meta.get("workflow", "")
-        if not wf_path.exists():
-            logger.warning("模板 %s 缺少工作流檔 %s", meta.get("id"), meta.get("workflow"))
-            continue
-        out.append(meta)
-    return out
+async def _get_object_info() -> dict[str, Any]:
+    """取得 ComfyUI 節點 schema；短暫快取避免每次重新下載約 3MB。"""
+    global _object_info_cache, _object_info_cached_at
+    now = time.monotonic()
+    if _object_info_cache is not None and now - _object_info_cached_at < 60:
+        return _object_info_cache
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(f"{COMFY_BASE}/object_info")
+        response.raise_for_status()
+        _object_info_cache = response.json()
+        _object_info_cached_at = now
+    return _object_info_cache
 
 
-def get_template(template_id: str) -> dict[str, Any] | None:
-    for t in list_templates():
-        if t.get("id") == template_id:
-            return t
+async def _list_workflow_files() -> list[dict[str, Any]]:
+    """直接讀取 ComfyUI userdata，讓新工作流不需在本專案重複註冊。"""
+    params = {"dir": "workflows", "recurse": "true", "full_info": "true"}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(f"{COMFY_BASE}/userdata", params=params)
+        response.raise_for_status()
+        files = response.json()
+    return [
+        item for item in files
+        if isinstance(item, dict)
+        and isinstance(item.get("path"), str)
+        and item["path"].lower().endswith(".json")
+    ]
+
+
+async def _read_workflow_file(path: str) -> dict[str, Any]:
+    encoded = quote(f"workflows/{path}", safe="")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(f"{COMFY_BASE}/userdata/{encoded}")
+        response.raise_for_status()
+        workflow = response.json()
+    if not isinstance(workflow, dict):
+        raise ValueError("工作流根節點必須是 JSON object")
+    return workflow
+
+
+def _workflow_id(path: str) -> str:
+    return f"wf-{hashlib.sha256(path.encode('utf-8')).hexdigest()[:24]}"
+
+
+def _input_spec(node_info: dict[str, Any], name: str) -> tuple[Any, dict[str, Any], bool] | None:
+    inputs = node_info.get("input") or {}
+    for section, required in (("required", True), ("optional", False)):
+        spec = (inputs.get(section) or {}).get(name)
+        if isinstance(spec, list) and spec:
+            config = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            return spec[0], config, required
     return None
 
 
-def load_workflow(template: dict[str, Any]) -> dict[str, Any]:
-    wf_path = TEMPLATES_DIR / template["workflow"]
-    return json.loads(wf_path.read_text(encoding="utf-8"))
+def _is_widget_spec(spec: tuple[Any, dict[str, Any], bool] | None) -> bool:
+    if spec is None:
+        return False
+    input_type, config, _ = spec
+    if config.get("forceInput"):
+        return False
+    return isinstance(input_type, list) or input_type in {"INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"}
+
+
+def _ordered_input_names(node_info: dict[str, Any]) -> list[str]:
+    order = node_info.get("input_order") or {}
+    if order:
+        return list(order.get("required") or []) + list(order.get("optional") or [])
+    inputs = node_info.get("input") or {}
+    return list((inputs.get("required") or {}).keys()) + list((inputs.get("optional") or {}).keys())
+
+
+def compile_ui_workflow(workflow: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
+    """把不含子圖的 ComfyUI UI workflow 轉成 /prompt 接受的 API 格式。"""
+    nodes = workflow.get("nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("不是 ComfyUI UI 工作流")
+    subgraphs = ((workflow.get("definitions") or {}).get("subgraphs") or [])
+    if subgraphs:
+        raise ValueError("包含子圖；請在 ComfyUI 將工作流匯出為 API 格式後再執行")
+
+    nodes_by_id = {str(node.get("id")): node for node in nodes if isinstance(node, dict)}
+    links_by_target: dict[tuple[str, int], tuple[str, int]] = {}
+    links_by_target_name: dict[tuple[str, str], tuple[str, int]] = {}
+    for link in workflow.get("links") or []:
+        if isinstance(link, list) and len(link) >= 5:
+            links_by_target[(str(link[3]), int(link[4]))] = (str(link[1]), int(link[2]))
+        elif isinstance(link, dict):
+            target_id = link.get("target_id")
+            target_slot = link.get("target_slot")
+            origin_id = link.get("origin_id")
+            origin_slot = link.get("origin_slot")
+            if None not in (target_id, target_slot, origin_id, origin_slot):
+                if isinstance(origin_slot, str):
+                    origin_node = nodes_by_id.get(str(origin_id)) or {}
+                    outputs = origin_node.get("outputs") or []
+                    origin_slot = next(
+                        (index for index, output in enumerate(outputs) if output.get("name") == origin_slot),
+                        None,
+                    )
+                if origin_slot is None:
+                    continue
+                source = (str(origin_id), int(origin_slot))
+                if isinstance(target_slot, str):
+                    links_by_target_name[(str(target_id), target_slot)] = source
+                else:
+                    links_by_target[(str(target_id), int(target_slot))] = source
+
+    prompt: dict[str, Any] = {}
+    missing_types: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("mode", 0) == 2:
+            continue
+        if node.get("mode", 0) == 4:
+            raise ValueError("包含 bypass 節點；請先在 ComfyUI 固化連線或匯出 API 格式")
+        node_id = str(node.get("id"))
+        class_type = str(node.get("type", ""))
+        node_info = object_info.get(class_type)
+        if not isinstance(node_info, dict):
+            missing_types.add(class_type)
+            continue
+
+        node_inputs = node.get("inputs") or []
+        connected: dict[str, list[Any]] = {}
+        widget_names: list[str] = []
+        for slot, node_input in enumerate(node_inputs):
+            if not isinstance(node_input, dict) or not node_input.get("name"):
+                continue
+            name = str(node_input["name"])
+            link = links_by_target_name.get((node_id, name)) or links_by_target.get((node_id, slot))
+            if link is not None:
+                connected[name] = [link[0], link[1]]
+            if node_input.get("widget") is not None:
+                widget_names.append(name)
+
+        values = node.get("widgets_values")
+        widget_values: dict[str, Any] = {}
+        if isinstance(values, dict):
+            widget_values.update(values)
+        elif isinstance(values, list):
+            if not widget_names:
+                widget_names = [
+                    name for name in _ordered_input_names(node_info)
+                    if _is_widget_spec(_input_spec(node_info, name))
+                ]
+            value_index = 0
+            for name in widget_names:
+                if value_index >= len(values):
+                    break
+                widget_values[name] = values[value_index]
+                value_index += 1
+                spec = _input_spec(node_info, name)
+                if spec and spec[1].get("control_after_generate") and value_index < len(values):
+                    value_index += 1
+
+        api_inputs: dict[str, Any] = dict(widget_values)
+        api_inputs.update(connected)
+        title = node.get("title") or (node.get("properties") or {}).get("Node name for S&R")
+        prompt[node_id] = {
+            "inputs": api_inputs,
+            "class_type": class_type,
+            "_meta": {"title": title or node_info.get("display_name") or class_type},
+        }
+
+    if missing_types:
+        missing = ", ".join(sorted(t for t in missing_types if t))
+        raise ValueError(f"ComfyUI 缺少節點：{missing}")
+    if not prompt:
+        raise ValueError("工作流沒有可執行節點")
+    return prompt
+
+
+def _is_api_workflow(workflow: dict[str, Any]) -> bool:
+    return bool(workflow) and all(
+        isinstance(node, dict) and isinstance(node.get("class_type"), str)
+        for node in workflow.values()
+    )
+
+
+def _display_name(path: str) -> str:
+    name = Path(path).stem.replace("_", " ").replace("-", " ")
+    return " ".join(part.upper() if part.lower() in {"h3", "i2v", "t2v", "api", "ltx"} else part for part in name.split())
+
+
+def _workflow_presentation(prompt: dict[str, Any]) -> tuple[str, str, str | None]:
+    class_types = [str(node.get("class_type", "")) for node in prompt.values()]
+    lowered = " ".join(class_types).lower()
+    if any(key in lowered for key in ("video", "vhs", "movie")):
+        output_kind, icon = "video", "🎬"
+    elif "audio" in lowered:
+        output_kind, icon = "audio", "🎧"
+    else:
+        output_kind, icon = "image", "✨"
+
+    model = None
+    for node in prompt.values():
+        class_type = str(node.get("class_type", "")).lower()
+        if any(key in class_type for key in ("checkpointloader", "unetloader", "diffusionmodelload")):
+            inputs = node.get("inputs") or {}
+            model = inputs.get("ckpt_name") or inputs.get("unet_name") or inputs.get("model_name")
+            if model:
+                model = Path(str(model)).name
+                break
+    return output_kind, icon, model
+
+
+_COMMON_INPUTS = {
+    "prompt", "text", "negative_prompt", "negative", "image", "seed", "noise_seed",
+    "width", "height", "length", "steps", "video_steps", "audio_steps", "cfg", "denoise",
+    "strength", "strength_model", "fps", "frame_rate", "batch_size", "task_type", "audio_mode",
+}
+
+
+def _param_definition(
+    node_id: str,
+    class_type: str,
+    node: dict[str, Any],
+    input_name: str,
+    value: Any,
+    node_info: dict[str, Any],
+) -> dict[str, Any] | None:
+    spec = _input_spec(node_info, input_name)
+    if not _is_widget_spec(spec):
+        return None
+    input_type, config, required = spec
+    options: list[Any] | None = None
+    if isinstance(input_type, list):
+        options = input_type
+    elif input_type == "COMBO":
+        options = config.get("options")
+
+    lowered = input_name.lower()
+    if class_type == "LoadImage" and input_name == "image":
+        param_type = "image"
+        options = None
+    elif "seed" in lowered:
+        param_type = "seed"
+    elif options is not None:
+        param_type = "select"
+    elif input_type == "BOOLEAN":
+        param_type = "boolean"
+    elif input_type == "STRING":
+        param_type = "textarea" if config.get("multiline") or "prompt" in lowered or "text" in lowered else "text"
+    elif input_type in {"INT", "FLOAT"}:
+        param_type = "number"
+    else:
+        return None
+
+    node_title = (node.get("_meta") or {}).get("title") or node_info.get("display_name") or class_type
+    label = input_name.replace("_", " ").strip().title()
+    return {
+        "key": f"{node_id}:{input_name}",
+        "label": label,
+        "type": param_type,
+        "required": required,
+        "default": value,
+        "min": config.get("min"),
+        "max": config.get("max"),
+        "step": config.get("step"),
+        "options": [str(option) for option in options] if options is not None else None,
+        "help": config.get("tooltip"),
+        "advanced": bool(config.get("advanced")) or lowered not in _COMMON_INPUTS,
+        "node_id": node_id,
+        "node_title": str(node_title),
+        "targets": [{"node": node_id, "input": input_name}],
+    }
+
+
+def _extract_params(prompt: dict[str, Any], object_info: dict[str, Any]) -> list[dict[str, Any]]:
+    params: list[dict[str, Any]] = []
+    for node_id, node in prompt.items():
+        class_type = str(node.get("class_type", ""))
+        node_info = object_info.get(class_type) or {}
+        for input_name, value in (node.get("inputs") or {}).items():
+            if isinstance(value, list) and len(value) == 2 and str(value[0]) in prompt:
+                continue
+            definition = _param_definition(node_id, class_type, node, input_name, value, node_info)
+            if definition:
+                params.append(definition)
+    return _normalize_duration_params(params, prompt)
+
+
+def _workflow_frame_rate(prompt: dict[str, Any]) -> float:
+    """Find the FPS used by the workflow's video output, with a safe fallback."""
+    preferred_classes = ("CreateVideo", "VHS_VideoCombine")
+    for preferred in preferred_classes:
+        for node in prompt.values():
+            if node.get("class_type") != preferred:
+                continue
+            inputs = node.get("inputs") or {}
+            for name in ("fps", "frame_rate"):
+                value = inputs.get(name)
+                if isinstance(value, (int, float)) and value > 0:
+                    return float(value)
+    for node in prompt.values():
+        inputs = node.get("inputs") or {}
+        for name in ("fps", "frame_rate"):
+            value = inputs.get(name)
+            if isinstance(value, (int, float)) and value > 0:
+                return float(value)
+    return 24.0
+
+
+def _normalize_duration_params(
+    params: list[dict[str, Any]],
+    prompt: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Expose frame-based length inputs as one duration-in-seconds parameter."""
+    length_params = [param for param in params if param.get("key", "").lower().endswith(":length")]
+    if not length_params:
+        return params
+
+    fps = _workflow_frame_rate(prompt)
+    first = length_params[0]
+    raw_default = first.get("default")
+    default_seconds = max(1, math.floor(raw_default / fps)) if isinstance(raw_default, (int, float)) else 5
+    raw_max = first.get("max")
+    max_seconds = max(1, math.floor(raw_max / fps)) if isinstance(raw_max, (int, float)) else None
+    targets: list[dict[str, Any]] = []
+    for param in length_params:
+        frame_step = param.get("step")
+        frame_min = param.get("min")
+        for original_target in param.get("targets", []):
+            target = {**original_target, "multiply": fps}
+            if isinstance(frame_step, (int, float)) and frame_step > 1:
+                snap_mod = int(frame_step)
+                snap_min = int(frame_min) if isinstance(frame_min, (int, float)) else 0
+                target.update({
+                    "snap_mod": snap_mod,
+                    "snap_rem": snap_min % snap_mod,
+                    "snap_min": snap_min,
+                })
+            targets.append(target)
+
+    duration = {
+        **first,
+        "key": "duration_seconds",
+        "label": "生成时间长度",
+        "type": "number",
+        "default": default_seconds,
+        "min": 1,
+        "max": max_seconds,
+        "step": 1,
+        "unit": "秒",
+        "help": f"输入期望时长；后端按 {fps:g} FPS 换算，并自动对齐为 ComfyUI 模型允许的帧数。",
+        "node_title": "视频生成",
+        "targets": targets,
+    }
+    first_index = params.index(first)
+    without_lengths = [param for param in params if param not in length_params]
+    without_lengths.insert(first_index, duration)
+    return without_lengths
+
+
+async def _build_workflow(file_info: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
+    path = file_info["path"]
+    raw = await _read_workflow_file(path)
+    workflow_format = "api" if _is_api_workflow(raw) else "ui"
+    runnable = True
+    disabled_reason = None
+    try:
+        prompt = raw if workflow_format == "api" else compile_ui_workflow(raw, object_info)
+    except ValueError as exc:
+        prompt = {}
+        runnable = False
+        disabled_reason = str(exc)
+
+    output_kind, icon, model = _workflow_presentation(prompt)
+    modified = file_info.get("modified")
+    return {
+        "id": _workflow_id(path),
+        "name": _display_name(path),
+        "description": f"同步自 ComfyUI · {workflow_format.upper()} 工作流",
+        "category": output_kind,
+        "icon": icon,
+        "model": model,
+        "output_kind": output_kind,
+        "params": _extract_params(prompt, object_info) if runnable else [],
+        "filename": path,
+        "workflow_format": workflow_format,
+        "node_count": len(prompt) if runnable else len(raw.get("nodes") or []),
+        "updated_at": modified,
+        "runnable": runnable,
+        "disabled_reason": disabled_reason,
+        "workflow": prompt,
+    }
+
+
+async def list_workflows() -> list[dict[str, Any]]:
+    object_info = await _get_object_info()
+    workflows: list[dict[str, Any]] = []
+    for file_info in await _list_workflow_files():
+        try:
+            workflows.append(await _build_workflow(file_info, object_info))
+        except Exception as exc:
+            logger.warning("工作流解析失敗 %s: %s", file_info.get("path"), exc)
+            workflows.append({
+                "id": _workflow_id(file_info["path"]),
+                "name": _display_name(file_info["path"]),
+                "description": "同步自 ComfyUI · 無法解析",
+                "category": "general",
+                "icon": "⚠️",
+                "output_kind": "image",
+                "params": [],
+                "filename": file_info["path"],
+                "workflow_format": "unknown",
+                "node_count": 0,
+                "updated_at": file_info.get("modified"),
+                "runnable": False,
+                "disabled_reason": str(exc),
+                "workflow": {},
+            })
+    return sorted(workflows, key=lambda item: (not item["runnable"], item["name"].lower()))
+
+
+async def get_workflow(workflow_id: str) -> dict[str, Any] | None:
+    object_info = await _get_object_info()
+    for file_info in await _list_workflow_files():
+        if _workflow_id(file_info["path"]) == workflow_id:
+            return await _build_workflow(file_info, object_info)
+    return None
 
 
 # ── 參數注入 ──────────────────────────────────────────────────────────────
@@ -90,7 +491,15 @@ def inject_params(workflow: dict[str, Any], template: dict[str, Any], params: di
             node.setdefault("inputs", {})[input_name] = value
             # target 級轉換（例如 秒 → 幀數 ×24）
             if tgt.get("multiply") and isinstance(value, (int, float)):
-                node["inputs"][input_name] = value * tgt["multiply"]
+                v = math.ceil(value * tgt["multiply"])
+                # H3 幀數需 ≡5 (mod 17)（模型結構要求，來自原工作流公式）
+                if tgt.get("snap_mod") and isinstance(v, (int, float)):
+                    rem = v % tgt["snap_mod"]
+                    target_rem = tgt.get("snap_rem", 0)
+                    if rem != target_rem:
+                        v += (target_rem - rem) % tgt["snap_mod"]
+                    v = max(v, tgt.get("snap_min", 0))
+                node["inputs"][input_name] = v
     return workflow
 
 
@@ -143,7 +552,12 @@ async def submit_workflow(workflow: dict[str, Any]) -> str:
         r = await client.post(f"{COMFY_BASE}/prompt", json=payload)
         r.raise_for_status()
         prompt_id = r.json()["prompt_id"]
-    make_job_queue(prompt_id)  # 提交後立刻建佇列，避免快任務事件遺失
+    _job_node_titles[prompt_id] = {
+        str(node_id): str((node.get("_meta") or {}).get("title") or node.get("class_type") or f"節點 {node_id}")
+        for node_id, node in workflow.items()
+        if isinstance(node, dict)
+    }
+    make_job_queue(prompt_id)
     return prompt_id
 
 
@@ -171,6 +585,24 @@ async def get_queue_prompt_ids() -> set[str]:
         if isinstance(item, list) and len(item) > 1 and isinstance(item[1], str):
             ids.add(item[1])
     return ids
+
+
+async def get_prompt_queue_state(prompt_id: str) -> tuple[str, int | None] | None:
+    """返回 running 或 queued 及排队位置；任务不在队列时返回 None。"""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        try:
+            r = await client.get(f"{COMFY_BASE}/queue")
+            r.raise_for_status()
+            queue = r.json()
+        except Exception:
+            return None
+    for item in queue.get("queue_running", []) or []:
+        if isinstance(item, list) and len(item) > 1 and item[1] == prompt_id:
+            return "running", None
+    for position, item in enumerate(queue.get("queue_pending", []) or [], start=1):
+        if isinstance(item, list) and len(item) > 1 and item[1] == prompt_id:
+            return "queued", position
+    return None
 
 
 _KIND_BY_EXT = {
@@ -224,6 +656,57 @@ async def upload_image(filename: str, data: bytes) -> dict[str, Any]:
         return r.json()
 
 
+async def cancel_prompt(prompt_id: str) -> None:
+    """取消指定的排隊或執行中 prompt。"""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        queue = await client.get(f"{COMFY_BASE}/queue")
+        queue.raise_for_status()
+        payload = queue.json()
+        pending = {
+            str(item[1]) for item in payload.get("queue_pending", [])
+            if isinstance(item, list) and len(item) > 1
+        }
+        if prompt_id in pending:
+            response = await client.post(f"{COMFY_BASE}/queue", json={"delete": [prompt_id]})
+        else:
+            response = await client.post(f"{COMFY_BASE}/interrupt", json={"prompt_id": prompt_id})
+        response.raise_for_status()
+
+
+async def free_memory() -> None:
+    """要求 ComfyUI 卸載模型並清理未使用顯存。"""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(
+            f"{COMFY_BASE}/free",
+            json={"unload_models": True, "free_memory": True},
+        )
+        response.raise_for_status()
+
+
+def delete_output_file(output: dict[str, Any]) -> bool:
+    """刪除受控 ComfyUI output/temp 檔案；所有路徑都做 containment 驗證。"""
+    view_type = str(output.get("type") or "output")
+    root = {"output": COMFY_OUTPUT_DIR, "temp": COMFY_TEMP_DIR}.get(view_type)
+    if root is None:
+        raise ValueError("只允許刪除 output 或 temp 作品")
+    filename = str(output.get("filename") or "")
+    subfolder = str(output.get("subfolder") or "")
+    if not filename or Path(filename).name != filename:
+        raise ValueError("無效的作品檔名")
+    if Path(subfolder).is_absolute() or ".." in Path(subfolder).parts:
+        raise ValueError("無效的作品路徑")
+    resolved_root = root.resolve()
+    target = (resolved_root / subfolder / filename).resolve()
+    try:
+        target.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError("作品路徑超出允許目錄") from exc
+    if not target.is_file():
+        return False
+    target.unlink()
+    return True
+
+
 # ── 永續 WebSocket + 事件分發 ────────────────────────────────────────────
 #
 # ComfyUI 的執行事件（executing / progress_state / executed / execution_success /
@@ -234,8 +717,9 @@ async def upload_image(filename: str, data: bytes) -> dict[str, Any]:
 _WS_CLIENT_ID = "ocs-backend"
 _ws_task: asyncio.Task | None = None
 _ws_ready = asyncio.Event()
-_job_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
-_last_pct: dict[str, float] = {}  # 每任務最後發出的進度百分比（單調遞增）
+_job_subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
+_job_snapshots: dict[str, dict[str, Any]] = {}
+_job_node_titles: dict[str, dict[str, str]] = {}
 
 
 def ensure_ws() -> None:
@@ -278,11 +762,12 @@ def _dispatch_event(msg: dict[str, Any]) -> None:
         return
     if mtype == "progress_state":
         # 0.31.0 新格式：所有節點進度聚合。
-        # 規則: ① 只認 max>1 的節點（真實工作，如取樣器 4 步 / VHS 合併 N 幀），
-        # max=1 的瞬間節點會把比例撐到 1.0 蓋掉真實進度；② 整體進度單調遞增，
-        # 避免節段切換時 100%→低% 的回落。
+        # 只認 max>1 的真實工作節點，並優先顯示目前 running 的節點；
+        # 切換階段時允許從 100% 回到新節點的 0%。
         best: tuple[float, float, float] | None = None
-        for n in (data.get("nodes") or {}).values():
+        nodes = list((data.get("nodes") or {}).values())
+        running_nodes = [n for n in nodes if str(n.get("state", "")).lower() == "running"]
+        for n in running_nodes or nodes:
             mx = n.get("max") or 0
             if mx <= 1:
                 continue
@@ -291,13 +776,22 @@ def _dispatch_event(msg: dict[str, Any]) -> None:
                 best = (ratio, n.get("value") or 0, mx)
         if best:
             value, mx = best[1], best[2]
-            pct = value / mx * 100
-            if pct < _last_pct.get(pid, -1.0):
-                return  # 不下發回退的進度
-            _last_pct[pid] = pct
-            _put_event(pid, {"event": "progress", "value": value, "max": mx})
+            node = str(next((n.get("node_id") for n in (running_nodes or nodes)
+                             if (n.get("value") or 0) == value and (n.get("max") or 0) == mx), ""))
+            _put_event(pid, _with_node_title(pid, {
+                "event": "progress", "value": value, "max": mx, "node": node,
+            }))
+    elif mtype == "progress":
+        value, mx = data.get("value") or 0, data.get("max") or 0
+        if mx:
+            _put_event(pid, _with_node_title(pid, {
+                "event": "progress", "value": value, "max": mx,
+                "node": str(data.get("node") or ""),
+            }))
     elif mtype == "executing":
-        _put_event(pid, {"event": "executing", "node": data.get("node")})
+        _put_event(pid, _with_node_title(pid, {
+            "event": "executing", "node": str(data.get("node") or ""),
+        }))
     elif mtype == "execution_success":
         _put_event(pid, {"event": "done", "prompt_id": pid})
     elif mtype == "execution_interrupted":
@@ -318,22 +812,37 @@ def _dispatch_event(msg: dict[str, Any]) -> None:
         )
 
 
+def _with_node_title(pid: str, ev: dict[str, Any]) -> dict[str, Any]:
+    node = str(ev.get("node") or "")
+    if node:
+        ev["node_title"] = _job_node_titles.get(pid, {}).get(node) or f"節點 {node}"
+    return ev
+
+
 def _put_event(pid: str, ev: dict[str, Any]) -> None:
-    q = _job_queues.get(pid)
-    if q is None:
-        return
-    try:
-        q.put_nowait(ev)
-    except asyncio.QueueFull:
-        pass
+    """保存最新快照，并广播给每个 SSE 订阅者；订阅者之间不会抢事件。"""
+    if ev.get("event") in {"progress", "executing", "done", "error"}:
+        _job_snapshots[pid] = dict(ev)
+    for q in tuple(_job_subscribers.get(pid, ())):
+        try:
+            q.put_nowait(dict(ev))
+        except asyncio.QueueFull:
+            pass
 
 
 def make_job_queue(prompt_id: str) -> None:
-    """在提交前先建立事件佇列，避免快任務的事件在 SSE 連上前遺失。"""
-    _job_queues.setdefault(prompt_id, asyncio.Queue(maxsize=200))
+    """初始化任务通道；事件会先保存快照，因此 SSE 晚连接也不会丢状态。"""
+    _job_subscribers.setdefault(prompt_id, set())
 
 
-async def stream_progress(prompt_id: str, timeout: float = 900.0) -> AsyncIterator[dict[str, Any]]:
+def get_progress_snapshot(prompt_id: str | None) -> dict[str, Any] | None:
+    if not prompt_id:
+        return None
+    snapshot = _job_snapshots.get(prompt_id)
+    return dict(snapshot) if snapshot else None
+
+
+async def stream_progress(prompt_id: str, timeout: float = 10.0) -> AsyncIterator[dict[str, Any]]:
     """從事件佇列讀取指定 prompt 的進度事件。
 
     事件型別:
@@ -342,18 +851,28 @@ async def stream_progress(prompt_id: str, timeout: float = 900.0) -> AsyncIterat
       {"event": "done", "prompt_id": ...}
       {"event": "error", "message": ...}
     """
-    q = _job_queues.setdefault(prompt_id, asyncio.Queue(maxsize=200))
+    ensure_ws()
+    q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=200)
+    subscribers = _job_subscribers.setdefault(prompt_id, set())
+    subscribers.add(q)
+    snapshot = _job_snapshots.get(prompt_id)
     try:
+        if snapshot:
+            yield dict(snapshot)
         while True:
-            ev = await asyncio.wait_for(q.get(), timeout=timeout)
+            try:
+                ev = await asyncio.wait_for(q.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # 心跳触发 history/queue 兜底检查，长节点不会被误判为失败。
+                yield {"event": "heartbeat", "prompt_id": prompt_id}
+                continue
             yield ev
             if ev["event"] in ("done", "error"):
                 return
-    except asyncio.TimeoutError:
-        yield {"event": "error", "message": "等待進度逾時（任務可能已中斷）"}
     finally:
-        _job_queues.pop(prompt_id, None)
-        _last_pct.pop(prompt_id, None)
+        subscribers.discard(q)
+        if not subscribers:
+            _job_subscribers.pop(prompt_id, None)
 
 
 # ── Job → Response 轉換 ──────────────────────────────────────────────────
@@ -374,6 +893,7 @@ def history_status(history: dict[str, Any]) -> tuple[str, str | None]:
 
 
 def job_to_response(job: Any) -> dict[str, Any]:
+    live = get_progress_snapshot(job.prompt_id) or {}
     return {
         "id": job.id,
         "prompt_id": job.prompt_id,
@@ -382,6 +902,10 @@ def job_to_response(job: Any) -> dict[str, Any]:
         "params": json.loads(job.params_json or "{}"),
         "status": job.status,
         "progress": job.progress,
+        "current_node": live.get("node"),
+        "current_node_title": live.get("node_title"),
+        "step_value": live.get("value"),
+        "step_max": live.get("max"),
         "error": job.error,
         "outputs": json.loads(job.outputs_json or "[]"),
         "created_by": job.created_by,

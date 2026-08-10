@@ -237,6 +237,9 @@ export type ComfyParamDef = {
   help?: string
   placeholder?: string
   unit?: string
+  advanced?: boolean
+  node_id?: string
+  node_title?: string
 }
 
 export type ComfyWorkflowTemplate = {
@@ -249,6 +252,12 @@ export type ComfyWorkflowTemplate = {
   estimated_time?: string
   output_kind: string   // image | video | audio
   params: ComfyParamDef[]
+  filename?: string
+  workflow_format: string
+  node_count: number
+  updated_at?: number
+  runnable: boolean
+  disabled_reason?: string
 }
 
 export type ComfyStatusDevice = {
@@ -281,6 +290,10 @@ export type ComfyJob = {
   workflow_name: string
   params: Record<string, any>
   status: string        // queued | running | done | error | cancelled
+  current_node?: string
+  current_node_title?: string
+  step_value?: number
+  step_max?: number
   progress: number
   error?: string
   outputs: ComfyOutputItem[]
@@ -293,4 +306,39 @@ export type ComfyGenerateResponse = {
   job_id: string
   prompt_id: string
   status: string
+}
+
+export type ComfySequenceSegment = {
+  index: number
+  prompt_id: string
+  requested_seconds: number
+  frames: number
+  output: ComfyOutputItem
+  last_frame: string
+}
+
+export type ComfySequence = {
+  id: string
+  title: string
+  prompt: string
+  first_frame: string
+  character_ref: string
+  background_ref: string
+  width: number
+  height: number
+  segment_seconds: number
+  total_seconds: number
+  seed: number
+  status: string
+  progress: number
+  current_segment: number
+  total_segments: number
+  current_prompt_id?: string
+  segments: ComfySequenceSegment[]
+  final_output?: ComfyOutputItem
+  error?: string
+  created_by?: string
+  created_at: string
+  updated_at: string
+  finished_at?: string
 }

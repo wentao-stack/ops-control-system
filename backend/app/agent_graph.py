@@ -51,9 +51,12 @@ import uuid as _uuid
 from typing import Any, AsyncIterator, TypedDict
 
 import httpx
+import logging
 
 from .agent_models import AgentConversation, AgentMessage
 from .agent_schemas import AgentChatRequest
+
+logger = logging.getLogger(__name__)
 
 # ── SSE Event Types ────────────────────────────────────────────────────────
 
@@ -222,11 +225,60 @@ def build_llm_messages(session, conv_id, memories_text):
     return llm_messages
 
 
+def _keyword_score(memory_obj, user_message: str) -> float:
+    """Keyword-based relevance score for a single memory."""
+    from datetime import UTC, datetime
+    score = 0.0
+    user_lower = user_message.lower()
+    if memory_obj.key.lower() in user_lower:
+        score += 10
+    if any(word in user_lower for word in memory_obj.value.lower().split() if len(word) >= 2):
+        score += 5
+    if memory_obj.category == "preference" and any(kw in user_lower for kw in ["偏好", "喜歡", "習慣"]):
+        score += 3
+    if memory_obj.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
+        score += 3
+    if memory_obj.updated_at:
+        ua = memory_obj.updated_at.replace(tzinfo=UTC) if memory_obj.updated_at.tzinfo is None else memory_obj.updated_at
+        if (datetime.now(UTC) - ua).days < 30:
+            score += 2
+    return score
+
+
+def _format_memories_text(memories: list) -> str:
+    """Format memory objects into system prompt text."""
+    if not memories:
+        return ""
+    groups: dict[str, list] = {}
+    for m in memories:
+        groups.setdefault(m.category, []).append(f"- {m.key}: {m.value}")
+    return "\n".join(f"[{cat}]\n" + "\n".join(items) for cat, items in groups.items()) + "\n"
+
+
 def load_memories(session, user, user_message):
-    """Load relevant memories with scoring."""
+    """Load relevant memories via hybrid search: vector (RAG) + keyword fallback.
+
+    Strategy:
+    1. Query ChromaDB for semantically relevant memories (source=memory).
+    2. Also run keyword scoring on all user memories as a recall boost.
+    3. Merge by memory id, take top 20 by combined score.
+    """
     from datetime import UTC, datetime
     from .models import AgentMemory
 
+    # ── Step 1: Vector search via RAG ──────────────────────────────────
+    vector_ids: dict[str, float] = {}  # memory_id -> cosine_similarity
+    try:
+        from .agent_rag import rag_search
+        result = rag_search(query=user_message, source="memories", limit=10)
+        for hit in result.get("results", []):
+            mid = hit.get("source_id", "")
+            if mid:
+                vector_ids[mid] = hit.get("score", 0.0)
+    except Exception as e:
+        logger.warning(f"RAG vector search failed, falling back to keyword only: {e}")
+
+    # ── Step 2: Keyword scoring on all user memories ───────────────────
     all_memories = (
         session.query(AgentMemory)
         .filter(AgentMemory.user == user)
@@ -234,36 +286,18 @@ def load_memories(session, user, user_message):
         .all()
     )
 
-    user_lower = user_message.lower()
-    scored = []
+    scored: list[tuple[float, AgentMemory]] = []
     for m in all_memories:
-        score = 0
-        if m.key.lower() in user_lower:
-            score += 10
-        if any(word in user_lower for word in m.value.lower().split() if len(word) >= 2):
-            score += 5
-        if m.category == "preference" and any(kw in user_lower for kw in ["偏好", "喜歡", "習慣"]):
-            score += 3
-        if m.category == "environment" and any(kw in user_lower for kw in ["伺服器", "環境", "部署", "配置", "IP", "端口"]):
-            score += 3
-        if m.updated_at:
-            ua = m.updated_at.replace(tzinfo=UTC) if m.updated_at.tzinfo is None else m.updated_at
-            if (datetime.now(UTC) - ua).days < 30:
-                score += 2
-        scored.append((score, m))
+        kw_score = _keyword_score(m, user_message)
+        vec_score = vector_ids.get(str(m.id), -1.0)  # -1 = no vector hit
+        # Hybrid: vector hits get boosted (0-1 range scaled to 15 max), keyword adds on top
+        combined = kw_score + (vec_score * 15 if vec_score >= 0 else 0)
+        scored.append((combined, m))
 
     scored.sort(key=lambda x: (-x[0], x[1].updated_at or datetime.min.replace(tzinfo=UTC)))
     memories = [m for _, m in scored[:20]]
 
-    memories_text = ""
-    if memories:
-        groups: dict[str, list] = {}
-        for m in memories:
-            groups.setdefault(m.category, []).append(f"- {m.key}: {m.value}")
-        for cat, items in groups.items():
-            memories_text += f"[{cat}]\n" + "\n".join(items) + "\n"
-
-    return memories_text
+    return _format_memories_text(memories)
 
 
 # ── Main Agent Loop (Event Bus) ────────────────────────────────────────────

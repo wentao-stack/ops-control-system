@@ -21,6 +21,9 @@ class ComfyParamDef(BaseModel):
     help: str | None = None
     placeholder: str | None = None
     unit: str | None = None  # 顯示單位（如 秒），滑桿數值旁顯示
+    advanced: bool = False
+    node_id: str | None = None
+    node_title: str | None = None
 
 
 class ComfyWorkflowTemplate(BaseModel):
@@ -35,6 +38,12 @@ class ComfyWorkflowTemplate(BaseModel):
     estimated_time: str | None = None
     output_kind: str = "image"  # image | video | audio
     params: list[ComfyParamDef] = Field(default_factory=list)
+    filename: str | None = None
+    workflow_format: str = "ui"
+    node_count: int = 0
+    updated_at: int | None = None
+    runnable: bool = True
+    disabled_reason: str | None = None
 
 
 class ComfyWorkflowListResponse(BaseModel):
@@ -80,6 +89,10 @@ class ComfyJobResponse(BaseModel):
     prompt_id: str | None = None
     workflow_id: str
     workflow_name: str
+    current_node: str | None = None
+    current_node_title: str | None = None
+    step_value: float | None = None
+    step_max: float | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     status: str
     progress: int = 0

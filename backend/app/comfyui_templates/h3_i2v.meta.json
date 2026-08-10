@@ -1,0 +1,82 @@
+{
+  "id": "h3_i2v",
+  "name": "圖生視頻 H3 Uncensored",
+  "description": "MiniMax H3 FL2VA Pruned + Heretic CLIP：上傳一張圖，生成帶同步音效的短片（原 uncensored enhancer 工作流核心）。",
+  "category": "video",
+  "icon": "🎞",
+  "model": "H3 FL2VA Pruned + Heretic CLIP",
+  "estimated_time": "約 3-12 分鐘",
+  "workflow": "h3_i2v.api.json",
+  "output_kind": "video",
+  "params": [
+    {
+      "key": "image",
+      "label": "起始圖片",
+      "type": "image",
+      "default": "xianxia_start_000.png",
+      "required": true,
+      "help": "上傳一張圖片作為視頻首幀（未上傳則用預設圖）",
+      "targets": [{"node": "5", "input": "image"}]
+    },
+    {
+      "key": "prompt",
+      "label": "提示詞",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "描述畫面動態與音效…",
+      "targets": [{"node": "104", "input": "prompt"}]
+    },
+    {
+      "key": "width",
+      "label": "寬度",
+      "type": "slider",
+      "default": 1344,
+      "min": 640,
+      "max": 1920,
+      "step": 64,
+      "help": "官方建議 1344×768（16:9）",
+      "targets": [{"node": "104", "input": "width"}]
+    },
+    {
+      "key": "height",
+      "label": "高度",
+      "type": "slider",
+      "default": 768,
+      "min": 384,
+      "max": 1088,
+      "step": 64,
+      "targets": [{"node": "104", "input": "height"}]
+    },
+    {
+      "key": "length",
+      "label": "時長",
+      "type": "slider",
+      "default": 5,
+      "min": 1,
+      "max": 15,
+      "step": 1,
+      "unit": "秒",
+      "help": "生成時長；幀數自動對齊 H3 結構（≡5 mod 17）",
+      "targets": [{"node": "104", "input": "length", "multiply": 24, "snap_mod": 17, "snap_rem": 5, "snap_min": 56}]
+    },
+    {
+      "key": "steps",
+      "label": "步數",
+      "type": "slider",
+      "default": 20,
+      "min": 8,
+      "max": 40,
+      "step": 1,
+      "help": "原工作流固定 20 步",
+      "targets": [{"node": "9", "input": "steps"}]
+    },
+    {
+      "key": "seed",
+      "label": "種子",
+      "type": "seed",
+      "default": -1,
+      "help": "-1 = 每次隨機",
+      "targets": [{"node": "15", "input": "noise_seed"}]
+    }
+  ]
+}

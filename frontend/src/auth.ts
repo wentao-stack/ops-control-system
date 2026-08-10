@@ -42,15 +42,9 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
       clearToken()
       window.location.reload()
     }
-    // Try to extract detail from JSON body for 5xx errors
-    if (response.status >= 500) {
-      try {
-        const body = await response.json()
-        if (body?.detail) throw new Error(body.detail)
-      } catch (e: any) {
-        if (e?.message && !e.message.includes("Request failed")) throw e
-      }
-    }
+    const body = await response.json().catch(() => null)
+    if (body?.detail) throw new Error(body.detail)
+    if (response.status === 413) throw new Error("上傳圖片過大，請重新選擇圖片；系統會自動壓縮後再上傳")
     throw new Error(`Request failed: ${response.status}`)
   }
   // Handle streaming responses (SSE)

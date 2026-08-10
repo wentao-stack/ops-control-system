@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api, getToken } from "../auth"
 import type {
   ComfyGenerateResponse,
@@ -9,95 +9,133 @@ import type {
   ComfyWorkflowTemplate,
 } from "../types"
 
-// ── helpers ──────────────────────────────────────────────────────────────
-
-const fmtVram = (bytes?: number) => {
-  if (!bytes) return "?"
-  return (bytes / 1024 ** 3).toFixed(1) + "G"
+const fmtVram = (bytes?: number) => bytes ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : "—"
+const fmtElapsed = (seconds: number) => {
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const rest = total % 60
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
+    : `${minutes}:${String(rest).padStart(2, "0")}`
+}
+type LiveProgress = {
+  value: number; max: number; node?: string; nodeTitle?: string; status?: string; queuePosition?: number
 }
 
-const defaultsOf = (t: ComfyWorkflowTemplate): Record<string, unknown> => {
-  const d: Record<string, unknown> = {}
-  for (const p of t.params) {
-    if (p.default != null) d[p.key] = p.default
-    else if (p.type === "slider" || p.type === "number") d[p.key] = p.min ?? 0
-    else if (p.type === "seed") d[p.key] = -1
-    else if (p.type === "select") d[p.key] = p.options?.[0] ?? ""
-    else d[p.key] = ""
+const fmtDate = (value?: string | number) => {
+  if (!value) return "—"
+  const date = new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1000 : value)
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-TW")
+}
+
+const defaultsOf = (workflow: ComfyWorkflowTemplate): Record<string, unknown> => {
+  const defaults: Record<string, unknown> = {}
+  for (const param of workflow.params) {
+    if (param.default != null) defaults[param.key] = param.default
+    else if (param.type === "number" || param.type === "slider") defaults[param.key] = param.min ?? 0
+    else if (param.type === "seed") defaults[param.key] = -1
+    else if (param.type === "boolean") defaults[param.key] = false
+    else if (param.type === "select") defaults[param.key] = param.options?.[0] ?? ""
+    else defaults[param.key] = ""
   }
-  return d
+  return defaults
 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   queued: { label: "排隊中", cls: "comfy-st-queued" },
   running: { label: "生成中", cls: "comfy-st-running" },
-  done: { label: "完成", cls: "comfy-st-done" },
+  done: { label: "已完成", cls: "comfy-st-done" },
   error: { label: "失敗", cls: "comfy-st-error" },
-  cancelled: { label: "已取消", cls: "comfy-st-error" },
+  cancelled: { label: "已取消", cls: "comfy-st-cancelled" },
 }
 
-// 帶 JWT 的媒體抓取 → object URL
-async function fetchMediaUrl(o: ComfyOutputItem): Promise<string | null> {
-  const token = getToken()
-  const qs = new URLSearchParams({
-    filename: o.filename,
-    subfolder: o.subfolder ?? "",
-    type: o.type ?? "output",
+async function fetchMediaUrl(output: ComfyOutputItem): Promise<string | null> {
+  const query = new URLSearchParams({
+    filename: output.filename,
+    subfolder: output.subfolder ?? "",
+    view_type: output.type ?? "output",
   })
   try {
-    const resp = await fetch(`/api/v1/comfyui/view?${qs}`, {
+    const token = getToken()
+    const response = await fetch(`/api/v1/comfyui/view?${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!resp.ok) return null
-    const blob = await resp.blob()
-    return URL.createObjectURL(blob)
+    if (!response.ok) return null
+    return URL.createObjectURL(await response.blob())
   } catch {
     return null
   }
 }
 
-// ── 單一輸出卡片 ──────────────────────────────────────────────────────────
-
-function ComfyOutputCard({ output }: { output: ComfyOutputItem }) {
+function ComfyOutputCard({
+  output,
+  onDelete,
+}: {
+  output: ComfyOutputItem
+  onDelete: () => Promise<void>
+}) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    let alive = true
-    fetchMediaUrl(output).then(u => {
-      if (!alive) return
-      if (u) setUrl(u)
+    let active = true
+    let objectUrl: string | null = null
+    setFailed(false)
+    fetchMediaUrl(output).then(nextUrl => {
+      if (!active) {
+        if (nextUrl) URL.revokeObjectURL(nextUrl)
+        return
+      }
+      objectUrl = nextUrl
+      if (nextUrl) setUrl(nextUrl)
       else setFailed(true)
     })
     return () => {
-      alive = false
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [output.filename, output.subfolder, output.type])
 
-  if (failed) {
-    return <div className="comfy-output-card comfy-output-failed">❌ 無法載入</div>
+  const remove = async () => {
+    if (!window.confirm(`確定永久刪除作品「${output.filename}」？`)) return
+    setDeleting(true)
+    try {
+      await onDelete()
+    } finally {
+      setDeleting(false)
+    }
   }
-  if (!url) {
-    return <div className="comfy-output-card comfy-output-loading">載入中…</div>
-  }
+
   return (
-    <div className="comfy-output-card">
-      {output.kind === "image" ? (
-        <img src={url} alt={output.filename} loading="lazy" />
-      ) : output.kind === "video" || output.kind === "gif" ? (
-        <video src={url} controls preload="metadata" />
-      ) : (
-        <audio src={url} controls />
-      )}
-      <div className="comfy-output-actions">
-        <a className="btn btn-sm" href={url} download={output.filename}>⬇ 下載</a>
-        <span className="comfy-output-name" title={output.filename}>{output.filename}</span>
+    <article className="comfy-output-card">
+      <div className="comfy-output-stage">
+        {failed ? (
+          <div className="comfy-output-placeholder">檔案不存在或無法載入</div>
+        ) : !url ? (
+          <div className="comfy-output-placeholder comfy-output-loading">載入作品中…</div>
+        ) : output.kind === "image" ? (
+          <img src={url} alt={output.filename} loading="lazy" />
+        ) : output.kind === "video" || output.kind === "gif" ? (
+          <video src={url} controls preload="metadata" />
+        ) : (
+          <audio src={url} controls preload="metadata" />
+        )}
+        <span className="comfy-kind-badge">{output.kind}</span>
       </div>
-    </div>
+      <div className="comfy-output-info">
+        <span className="comfy-output-name" title={output.filename}>{output.filename}</span>
+        <div className="comfy-output-actions">
+          {url && <a className="comfy-icon-btn" href={url} download={output.filename} title="下載">↓</a>}
+          {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title="開啟">↗</a>}
+          <button className="comfy-icon-btn comfy-icon-danger" onClick={remove} disabled={deleting} title="刪除作品">
+            {deleting ? "…" : "⌫"}
+          </button>
+        </div>
+      </div>
+    </article>
   )
 }
-
-// ── 參數輸入 ──────────────────────────────────────────────────────────────
 
 function ParamInput({
   def,
@@ -107,194 +145,165 @@ function ParamInput({
 }: {
   def: ComfyParamDef
   value: unknown
-  onChange: (v: unknown) => void
+  onChange: (value: unknown) => void
   disabled: boolean
 }) {
-  const [preview, setPreview] = useState<string>("")
+  const [preview, setPreview] = useState("")
 
-  const handleFile = (file: File | undefined) => {
-    if (!file) return
-    onChange({ __upload: true, file, name: file.name })
-  }
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview)
+  }, [preview])
 
-  const render = () => {
-    switch (def.type) {
-      case "textarea":
-        return (
-          <textarea
-            className="comfy-input comfy-textarea"
-            placeholder={def.placeholder ?? ""}
-            rows={def.key === "prompt" ? 5 : 3}
-            value={String(value ?? "")}
-            disabled={disabled}
-            onChange={e => onChange(e.target.value)}
-          />
-        )
-      case "text":
-        return (
-          <input
-            className="comfy-input"
-            type="text"
-            placeholder={def.placeholder ?? ""}
-            value={String(value ?? "")}
-            disabled={disabled}
-            onChange={e => onChange(e.target.value)}
-          />
-        )
-      case "number":
-        return (
-          <input
-            className="comfy-input comfy-number"
-            type="number"
-            value={value == null ? "" : String(value)}
-            disabled={disabled}
-            onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-          />
-        )
-      case "slider": {
-        const v = Number(value ?? def.min ?? 0)
-        return (
-          <div className="comfy-slider-row">
-            <input
-              type="range"
-              min={def.min}
-              max={def.max}
-              step={def.step}
-              value={v}
-              disabled={disabled}
-              onChange={e => onChange(Number(e.target.value))}
-            />
-            <span className="comfy-slider-value">{v}{def.unit ?? ""}</span>
-          </div>
-        )
-      }
-      case "select":
-        return (
-          <select
-            className="comfy-input"
-            value={String(value ?? "")}
-            disabled={disabled}
-            onChange={e => onChange(e.target.value)}
-          >
-            {(def.options ?? []).map(o => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </select>
-        )
-      case "seed":
-        return (
-          <div className="comfy-seed-row">
-            <input
-              className="comfy-input comfy-number"
-              type="number"
-              value={value == null ? "" : String(value)}
-              disabled={disabled}
-              onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-            />
-            <button
-              className="btn btn-sm"
-              disabled={disabled}
-              onClick={() => onChange(Math.floor(Math.random() * 2 ** 31))}
-              title="隨機種子"
-            >🎲 隨機</button>
-          </div>
-        )
-      case "image":
-        return (
-          <div className="comfy-image-upload">
-            {preview ? (
-              <img className="comfy-image-preview" src={preview} alt="preview" />
-            ) : value ? (
-              <div className="comfy-image-current">🖼 {String(value)}</div>
-            ) : null}
-            <label className="btn btn-sm comfy-upload-btn">
-              {preview ? "更換圖片" : "⬆ 上傳圖片"}
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                disabled={disabled}
-                onChange={e => {
-                  const f = e.target.files?.[0]
-                  if (f) {
-                    setPreview(URL.createObjectURL(f))
-                    handleFile(f)
-                  }
-                }}
-              />
-            </label>
-            {preview && (
-              <button
-                className="btn btn-sm"
-                disabled={disabled}
-                onClick={() => {
-                  setPreview("")
-                  onChange("")
-                }}
-              >✕ 移除</button>
-            )}
-          </div>
-        )
-      default:
-        return null
-    }
+  let control
+  if (def.type === "textarea") {
+    control = (
+      <textarea
+        className="comfy-input comfy-textarea"
+        placeholder={def.placeholder ?? ""}
+        rows={def.key.includes("prompt") || def.key.includes("text") ? 5 : 3}
+        value={String(value ?? "")}
+        disabled={disabled}
+        onChange={event => onChange(event.target.value)}
+      />
+    )
+  } else if (def.type === "text") {
+    control = (
+      <input className="comfy-input" type="text" value={String(value ?? "")} disabled={disabled}
+        placeholder={def.placeholder ?? ""} onChange={event => onChange(event.target.value)} />
+    )
+  } else if (def.type === "number") {
+    control = (
+      <input className="comfy-input comfy-number" type="number" value={value == null ? "" : String(value)}
+        min={def.min} max={def.max} step={def.step} disabled={disabled}
+        onChange={event => onChange(event.target.value === "" ? "" : Number(event.target.value))} />
+    )
+  } else if (def.type === "slider") {
+    const numeric = Number(value ?? def.min ?? 0)
+    control = (
+      <div className="comfy-slider-row">
+        <input type="range" min={def.min} max={def.max} step={def.step} value={numeric} disabled={disabled}
+          onChange={event => onChange(Number(event.target.value))} />
+        <span className="comfy-slider-value">{numeric}{def.unit ?? ""}</span>
+      </div>
+    )
+  } else if (def.type === "select") {
+    control = (
+      <select className="comfy-input" value={String(value ?? "")} disabled={disabled}
+        onChange={event => onChange(event.target.value)}>
+        {(def.options ?? []).map(option => <option key={option} value={option}>{option}</option>)}
+      </select>
+    )
+  } else if (def.type === "boolean") {
+    control = (
+      <label className="comfy-switch-row">
+        <input type="checkbox" checked={Boolean(value)} disabled={disabled}
+          onChange={event => onChange(event.target.checked)} />
+        <span className="comfy-switch" />
+        <span>{value ? "開啟" : "關閉"}</span>
+      </label>
+    )
+  } else if (def.type === "seed") {
+    control = (
+      <div className="comfy-seed-row">
+        <input className="comfy-input comfy-number" type="number" value={value == null ? "" : String(value)}
+          disabled={disabled} onChange={event => onChange(event.target.value === "" ? "" : Number(event.target.value))} />
+        <button className="comfy-secondary-btn" disabled={disabled}
+          onClick={() => onChange(Math.floor(Math.random() * 2 ** 31))}>隨機</button>
+      </div>
+    )
+  } else if (def.type === "image") {
+    control = (
+      <div className="comfy-image-upload">
+        <div className="comfy-image-preview-wrap">
+          {preview ? <img className="comfy-image-preview" src={preview} alt="輸入預覽" /> : (
+            <div className="comfy-image-current">{value ? `目前：${String(value)}` : "尚未選擇圖片"}</div>
+          )}
+        </div>
+        <div className="comfy-upload-actions">
+          <label className="comfy-secondary-btn">
+            上傳圖片
+            <input type="file" accept="image/*" hidden disabled={disabled} onChange={event => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              if (preview) URL.revokeObjectURL(preview)
+              setPreview(URL.createObjectURL(file))
+              onChange({ __upload: true, file, name: file.name })
+            }} />
+          </label>
+          {preview && <button className="comfy-secondary-btn" disabled={disabled} onClick={() => {
+            URL.revokeObjectURL(preview)
+            setPreview("")
+            onChange("")
+          }}>移除</button>}
+        </div>
+      </div>
+    )
+  } else {
+    control = null
   }
 
   return (
     <div className="comfy-param">
       <label className="comfy-param-label">
-        {def.label}
-        {def.required && <span className="comfy-required"> *</span>}
+        {def.label}{def.unit ? `（${def.unit}）` : ""}{def.required && <span className="comfy-required"> *</span>}
       </label>
-      {render()}
+      {control}
       {def.help && <div className="comfy-param-help">{def.help}</div>}
     </div>
   )
 }
 
-// ── 主頁面 ────────────────────────────────────────────────────────────────
-
 export function ComfyUIPage() {
   const [status, setStatus] = useState<ComfyStatus | null>(null)
   const [templates, setTemplates] = useState<ComfyWorkflowTemplate[]>([])
-  const [selectedId, setSelectedId] = useState<string>("")
+  const [selectedId, setSelectedId] = useState("")
   const [params, setParams] = useState<Record<string, unknown>>({})
-  const [pendingUploads, setPendingUploads] = useState<Record<string, { file: File; name: string }>>({})
-  const [uploading, setUploading] = useState(false)
   const [jobs, setJobs] = useState<ComfyJob[]>([])
   const [generating, setGenerating] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
-  const [progress, setProgress] = useState<{ value: number; max: number } | null>(null)
-  const [error, setError] = useState<string>("")
+  const [progress, setProgress] = useState<LiveProgress | null>(null)
+  const [clock, setClock] = useState(() => Date.now())
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [workflowQuery, setWorkflowQuery] = useState("")
+  const [jobFilter, setJobFilter] = useState("all")
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [actionBusy, setActionBusy] = useState("")
   const abortRef = useRef<AbortController | null>(null)
 
-  const template = templates.find(t => t.id === selectedId) ?? templates[0] ?? null
+  const template = templates.find(item => item.id === selectedId) ?? templates[0] ?? null
+  const filteredTemplates = useMemo(() => {
+    const query = workflowQuery.trim().toLowerCase()
+    if (!query) return templates
+    return templates.filter(item => `${item.name} ${item.filename ?? ""} ${item.model ?? ""}`.toLowerCase().includes(query))
+  }, [templates, workflowQuery])
+  const filteredJobs = useMemo(() => jobs.filter(job => jobFilter === "all" || job.status === jobFilter), [jobs, jobFilter])
+  const doneJobs = jobs.filter(job => job.outputs.length > 0)
 
-  // ── 載入 ──
   const loadStatus = useCallback(async () => {
-    try {
-      setStatus(await api<ComfyStatus>("/api/v1/comfyui/status"))
-    } catch {
-      /* ComfyUI 離線時 status 也應回傳 online:false，此處失敗僅略過 */
-    }
+    try { setStatus(await api<ComfyStatus>("/api/v1/comfyui/status")) } catch { /* status polling is best effort */ }
   }, [])
-
-  const loadTemplates = useCallback(async () => {
-    try {
-      const r = await api<{ templates: ComfyWorkflowTemplate[] }>("/api/v1/comfyui/workflows")
-      setTemplates(r.templates)
-      setSelectedId(prev => (prev && r.templates.some(t => t.id === prev) ? prev : r.templates[0]?.id ?? ""))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }, [])
-
   const loadJobs = useCallback(async () => {
     try {
-      const r = await api<{ jobs: ComfyJob[] }>("/api/v1/comfyui/jobs?limit=20")
-      setJobs(r.jobs)
-    } catch {
-      /* 略過 */
+      const response = await api<{ jobs: ComfyJob[] }>("/api/v1/comfyui/jobs?limit=50")
+      setJobs(response.jobs)
+    } catch { /* history polling is best effort */ }
+  }, [])
+  const loadTemplates = useCallback(async (showFeedback = false) => {
+    setSyncing(true)
+    try {
+      const response = await api<{ templates: ComfyWorkflowTemplate[] }>("/api/v1/comfyui/workflows")
+      setTemplates(response.templates)
+      setSelectedId(previous => previous && response.templates.some(item => item.id === previous)
+        ? previous
+        : response.templates.find(item => item.runnable)?.id ?? response.templates[0]?.id ?? "")
+      if (showFeedback) setNotice(`已同步 ${response.templates.length} 個工作流`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setSyncing(false)
     }
   }, [])
 
@@ -302,58 +311,72 @@ export function ComfyUIPage() {
     loadStatus()
     loadTemplates()
     loadJobs()
-    const t = setInterval(() => {
-      loadStatus()
-      loadJobs()  // 刷新任務清單 → 讓 resume 效果可重新掛接斷線的進行中任務
-    }, 15000)
-    return () => clearInterval(t)
+    const timer = window.setInterval(() => { loadStatus(); loadJobs() }, 15_000)
+    return () => window.clearInterval(timer)
   }, [loadStatus, loadTemplates, loadJobs])
 
-  // 切換模板 → 重置參數為預設
   useEffect(() => {
-    if (template) setParams(defaultsOf(template))
+    if (!template) return
+    setParams(defaultsOf(template))
+    setShowAdvanced(false)
+    setError("")
   }, [template?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 掛載時若有未完成任務 → 重連進度
   useEffect(() => {
-    if (jobs.length) {
-      const running = jobs.find(j => j.status === "queued" || j.status === "running")
-      if (running) setActiveJobId(running.id)
+    const running = jobs.find(job => job.status === "queued" || job.status === "running")
+    if (running && !activeJobId) {
+      setActiveJobId(running.id)
+      setGenerating(true)
+      if (running.step_max) {
+        setProgress({
+          value: running.step_value ?? 0, max: running.step_max,
+          node: running.current_node, nodeTitle: running.current_node_title,
+        })
+      }
     }
-  }, [jobs])
+  }, [jobs, activeJobId])
 
-  // ── 上傳圖片（延遲到 generate 前統一送出） ──
+  useEffect(() => {
+    if (!activeJobId) return
+    setClock(Date.now())
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [activeJobId])
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(""), 3000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
   const handleGenerate = async () => {
-    const t = template
-    if (!t || generating) return
+    if (!template || !template.runnable || generating) return
     setError("")
-
-    // 上傳待處理圖片
+    setNotice("")
     let finalParams = { ...params }
-    for (const [key, up] of Object.entries(pendingUploads)) {
+
+    for (const [key, value] of Object.entries(params)) {
+      if (!value || typeof value !== "object" || !("__upload" in value)) continue
+      const upload = value as { file?: unknown }
+      if (!(upload.file instanceof File)) continue
       setUploading(true)
       try {
-        const fd = new FormData()
-        fd.append("file", up.file)
-        const r = await api<{ filename: string; subfolder: string; type: string }>("/api/v1/comfyui/upload", {
-          method: "POST",
-          body: fd,
-        })
-        finalParams = { ...finalParams, [key]: r.filename }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
+        const form = new FormData()
+        form.append("file", upload.file)
+        const result = await api<{ filename: string }>("/api/v1/comfyui/upload", { method: "POST", body: form })
+        finalParams = { ...finalParams, [key]: result.filename }
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason))
         setUploading(false)
         return
       }
     }
     setUploading(false)
-    setPendingUploads({})
 
-    // 必填檢查
-    for (const p of t.params) {
-      const v = finalParams[p.key]
-      if (p.required && (v === undefined || v === null || v === "")) {
-        setError(`請填寫「${p.label}」`)
+    for (const definition of template.params) {
+      const value = finalParams[definition.key]
+      if (definition.required && (value === undefined || value === null || value === "")) {
+        setError(`請填寫「${definition.label}」`)
         return
       }
     }
@@ -361,216 +384,360 @@ export function ComfyUIPage() {
     setGenerating(true)
     setProgress(null)
     try {
-      const r = await api<ComfyGenerateResponse>("/api/v1/comfyui/generate", {
+      const result = await api<ComfyGenerateResponse>("/api/v1/comfyui/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflow_id: t.id, params: finalParams }),
+        body: JSON.stringify({ workflow_id: template.id, params: finalParams }),
       })
-      setActiveJobId(r.job_id)
+      setActiveJobId(result.job_id)
+      setNotice("任務已加入 ComfyUI 佇列")
       await loadJobs()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
       setGenerating(false)
     }
   }
 
-  // ── SSE 進度串流 ──
   useEffect(() => {
     if (!activeJobId) return
     let cancelled = false
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-
+    const controller = new AbortController()
+    abortRef.current = controller
     ;(async () => {
       try {
-        const resp = await api<Response>(`/api/v1/comfyui/jobs/${activeJobId}/events`, { signal: ctrl.signal })
-        const reader = resp.body!.getReader()
-        const dec = new TextDecoder()
-        let buf = ""
+        const response = await api<Response>(`/api/v1/comfyui/jobs/${activeJobId}/events`, { signal: controller.signal })
+        const reader = response.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
         while (!cancelled) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buf += dec.decode(value, { stream: true })
-          let idx: number
-          while ((idx = buf.indexOf("\n\n")) >= 0) {
-            const chunk = buf.slice(0, idx)
-            buf = buf.slice(idx + 2)
-            for (const line of chunk.split("\n")) {
+          const chunk = await reader.read()
+          if (chunk.done) break
+          buffer += decoder.decode(chunk.value, { stream: true })
+          let boundary
+          while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+            const message = buffer.slice(0, boundary)
+            buffer = buffer.slice(boundary + 2)
+            for (const line of message.split("\n")) {
               if (!line.startsWith("data: ")) continue
-              try {
-                const ev = JSON.parse(line.slice(6))
-                if (ev.event === "progress") {
-                  setError("")
-                  setProgress({ value: ev.value, max: ev.max })
-                } else if (ev.event === "done" || ev.event === "error") {
-                  setProgress(ev.event === "done" ? { value: 100, max: 100 } : null)
-                  setGenerating(false)
-                  setActiveJobId(null)
-                  if (ev.event === "error" && ev.message) setError(ev.message)
-                  await loadJobs()
-                }
-              } catch {
-                /* 忽略壞事件 */
+              const event = JSON.parse(line.slice(6))
+              if (event.event === "progress") {
+                setError("")
+                setProgress({
+                  value: event.value, max: event.max, node: event.node,
+                  nodeTitle: event.node_title,
+                })
+              } else if (event.event === "executing") {
+                setProgress(previous => ({
+                  value: previous && previous.node === event.node ? previous.value : 0,
+                  max: previous && previous.node === event.node ? previous.max : 0,
+                  node: event.node, nodeTitle: event.node_title,
+                  status: "running",
+                }))
+              } else if (event.event === "heartbeat") {
+                setProgress(previous => ({
+                  ...(previous ?? { value: 0, max: 0 }),
+                  status: event.status, queuePosition: event.queue_position,
+                }))
+              } else if (event.event === "done" || event.event === "error") {
+                setGenerating(false)
+                setActiveJobId(null)
+                setProgress(event.event === "done" ? { value: 100, max: 100 } : null)
+                if (event.event === "error") setError(event.message || "生成失敗")
+                await loadJobs()
               }
             }
           }
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setGenerating(false)
           setActiveJobId(null)
-          setError("進度連線中斷，將自動重連…")
+          setError("進度連線中斷；任務狀態會由背景輪詢更新")
         }
       }
     })()
-
-    return () => {
-      cancelled = true
-      ctrl.abort()
-    }
+    return () => { cancelled = true; controller.abort() }
   }, [activeJobId, loadJobs])
 
-  // ── 重跑 ──
-  const handleRerun = (job: ComfyJob) => {
-    if (generating) return
-    setSelectedId(job.workflow_id)
-    setParams(job.params)
-    setError("")
+  const handleCancel = async (job: ComfyJob) => {
+    if (!window.confirm("確定取消目前的生成任務？")) return
+    setActionBusy(`cancel-${job.id}`)
+    try {
+      await api(`/api/v1/comfyui/jobs/${job.id}/cancel`, { method: "POST" })
+      abortRef.current?.abort()
+      setActiveJobId(null)
+      setGenerating(false)
+      setProgress(null)
+      setNotice("任務已取消")
+      await loadJobs()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally { setActionBusy("") }
   }
 
-  const doneJobs = jobs.filter(j => j.outputs.length > 0)
+  const handleDeleteJob = async (job: ComfyJob) => {
+    const withFiles = job.outputs.length > 0
+    const message = withFiles
+      ? `刪除「${job.workflow_name}」記錄及 ${job.outputs.length} 個作品檔案？此操作無法復原。`
+      : `刪除「${job.workflow_name}」記錄？`
+    if (!window.confirm(message)) return
+    setActionBusy(`delete-${job.id}`)
+    try {
+      await api(`/api/v1/comfyui/jobs/${job.id}?delete_outputs=true`, { method: "DELETE" })
+      setNotice("記錄與作品已刪除")
+      await loadJobs()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally { setActionBusy("") }
+  }
+
+  const handleDeleteOutput = async (job: ComfyJob, outputIndex: number) => {
+    try {
+      await api(`/api/v1/comfyui/jobs/${job.id}/outputs/${outputIndex}`, { method: "DELETE" })
+      setNotice("作品已刪除")
+      await loadJobs()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  const handleRerun = (job: ComfyJob) => {
+    const target = templates.find(item => item.id === job.workflow_id)
+    if (!target) {
+      setError("原工作流已從 ComfyUI 移除，無法重跑")
+      return
+    }
+    setSelectedId(job.workflow_id)
+    setParams({ ...defaultsOf(target), ...job.params })
+    setNotice("已載入上次使用的參數")
+  }
+
+  const handleFreeMemory = async () => {
+    setActionBusy("free")
+    try {
+      await api("/api/v1/comfyui/free", { method: "POST" })
+      setNotice("已要求 ComfyUI 卸載模型並釋放顯存")
+      window.setTimeout(loadStatus, 1000)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally { setActionBusy("") }
+  }
+
+  const visibleParams = template?.params.filter(param => showAdvanced || !param.advanced) ?? []
+  const groupedParams = visibleParams.reduce<Record<string, ComfyParamDef[]>>((groups, param) => {
+    const title = param.node_title || "工作流參數"
+    ;(groups[title] ||= []).push(param)
+    return groups
+  }, {})
+  const advancedCount = template?.params.filter(param => param.advanced).length ?? 0
+  const progressPercent = progress?.max ? Math.round(progress.value / progress.max * 100) : 0
+  const activeJob = jobs.find(job => job.id === activeJobId)
+  const elapsedSeconds = activeJob?.created_at
+    ? (clock - new Date(activeJob.created_at).getTime()) / 1000 : 0
+  const phaseLabel = progress?.queuePosition
+    ? `排隊第 ${progress.queuePosition} 位`
+    : progress?.nodeTitle || (progress?.node ? `節點 ${progress.node}` : "等待 ComfyUI 回報階段")
+  const stepLabel = progress?.max ? `${progress.value} / ${progress.max} · ${progressPercent}%` : "執行中"
 
   return (
     <div className="comfy-page">
-      {/* 狀態列 */}
+      <header className="comfy-hero">
+        <div>
+          <div className="comfy-eyebrow">GENERATIVE WORKSPACE</div>
+          <h1>ComfyUI 創作工作台</h1>
+          <p>自動同步 ComfyUI 工作流，集中管理參數、任務與生成作品。</p>
+        </div>
+        <div className="comfy-hero-actions">
+          <button className="comfy-secondary-btn" onClick={handleFreeMemory} disabled={actionBusy === "free" || Boolean(activeJobId)}>
+            {actionBusy === "free" ? "釋放中…" : "釋放顯存"}
+          </button>
+          <button className="comfy-primary-btn" onClick={() => loadTemplates(true)} disabled={syncing}>
+            {syncing ? "同步中…" : "同步工作流"}
+          </button>
+        </div>
+      </header>
+
       <div className="comfy-statusbar">
-        <div className={`comfy-status-dot ${status?.online ? "comfy-online" : "comfy-offline"}`} />
-        <span>{status?.online ? `ComfyUI 連線中` : "ComfyUI 離線"}</span>
-        {status?.comfyui_version && <span className="comfy-status-muted">v{status.comfyui_version}</span>}
-        {status?.devices?.map(d => (
-          <span key={d.name} className="comfy-status-muted">
-            {d.name}: {fmtVram(d.vram_free)}/{fmtVram(d.vram_total)} 可用
-          </span>
+        <div className="comfy-status-main">
+          <span className={`comfy-status-dot ${status?.online ? "comfy-online" : "comfy-offline"}`} />
+          <strong>{status?.online ? "ComfyUI 已連線" : "ComfyUI 離線"}</strong>
+          {status?.comfyui_version && <span>v{status.comfyui_version}</span>}
+        </div>
+        {status?.devices?.map(device => (
+          <div className="comfy-status-stat" key={device.name}>
+            <span>GPU 顯存</span><strong>{fmtVram(device.vram_free)} / {fmtVram(device.vram_total)}</strong>
+          </div>
         ))}
-        <span className="comfy-status-muted">
-          佇列 {status?.queue_running ?? 0} 執行中 / {status?.queue_pending ?? 0} 排隊
-        </span>
-        <button className="btn btn-sm" onClick={loadStatus}>↻</button>
+        <div className="comfy-status-stat"><span>執行中</span><strong>{status?.queue_running ?? 0}</strong></div>
+        <div className="comfy-status-stat"><span>排隊</span><strong>{status?.queue_pending ?? 0}</strong></div>
       </div>
 
-      <div className="comfy-body">
-        {/* 左：工作流選擇 */}
-        <aside className="comfy-templates">
-          <h3 className="comfy-panel-title">工作流</h3>
-          {templates.map(t => (
-            <button
-              key={t.id}
-              className={`comfy-template-card ${t.id === template?.id ? "comfy-template-active" : ""}`}
-              onClick={() => setSelectedId(t.id)}
-            >
-              <div className="comfy-template-head">
-                <span className="comfy-template-icon">{t.icon ?? "🎨"}</span>
-                <span className="comfy-template-name">{t.name}</span>
-              </div>
-              {t.model && <div className="comfy-template-meta">🧠 {t.model}</div>}
-              {t.estimated_time && <div className="comfy-template-meta">⏱ {t.estimated_time}</div>}
-            </button>
-          ))}
-          {templates.length === 0 && <div className="comfy-empty">沒有可用工作流</div>}
+      {(error || notice) && (
+        <div className={error ? "comfy-toast comfy-toast-error" : "comfy-toast comfy-toast-success"}>
+          <span>{error || notice}</span>
+          <button onClick={() => { setError(""); setNotice("") }}>×</button>
+        </div>
+      )}
+
+      <div className="comfy-workspace">
+        <aside className="comfy-workflows-panel">
+          <div className="comfy-panel-heading">
+            <div><span className="comfy-section-kicker">LIBRARY</span><h2>工作流</h2></div>
+            <span className="comfy-count">{templates.length}</span>
+          </div>
+          <div className="comfy-search-wrap">
+            <span>⌕</span>
+            <input value={workflowQuery} onChange={event => setWorkflowQuery(event.target.value)} placeholder="搜尋工作流或模型" />
+          </div>
+          <div className="comfy-workflow-list">
+            {filteredTemplates.map(item => (
+              <button key={item.id} className={`comfy-workflow-card ${item.id === template?.id ? "is-active" : ""} ${!item.runnable ? "is-disabled" : ""}`}
+                onClick={() => setSelectedId(item.id)}>
+                <div className="comfy-workflow-card-top">
+                  <span className="comfy-workflow-icon">{item.icon}</span>
+                  <span className="comfy-workflow-name">{item.name}</span>
+                  <span className={`comfy-format-badge ${item.workflow_format}`}>{item.workflow_format.toUpperCase()}</span>
+                </div>
+                <div className="comfy-workflow-file" title={item.filename}>{item.filename}</div>
+                <div className="comfy-workflow-meta">
+                  <span>{item.node_count} 節點</span>
+                  <span>{item.params.length} 參數</span>
+                  <span>{item.runnable ? "可執行" : "需處理"}</span>
+                </div>
+              </button>
+            ))}
+            {!filteredTemplates.length && <div className="comfy-empty-state">找不到符合條件的工作流</div>}
+          </div>
         </aside>
 
-        {/* 中：參數表單 */}
-        <section className="comfy-form">
+        <main className="comfy-editor-panel">
           {template ? (
             <>
-              <h3 className="comfy-form-title">
-                {template.icon ?? "🎨"} {template.name}
-              </h3>
-              {template.description && <p className="comfy-form-desc">{template.description}</p>}
-              <div className="comfy-form-fields">
-                {template.params.map(p => (
-                  <ParamInput
-                    key={p.key}
-                    def={p}
-                    value={params[p.key]}
-                    disabled={generating || uploading}
-                    onChange={v => setParams(prev => ({ ...prev, [p.key]: v }))}
-                  />
-                ))}
+              <div className="comfy-editor-header">
+                <div>
+                  <div className="comfy-editor-title-row"><span>{template.icon}</span><h2>{template.name}</h2></div>
+                  <p>{template.filename} · 更新於 {fmtDate(template.updated_at)}</p>
+                </div>
+                <span className={`comfy-ready-badge ${template.runnable ? "ready" : "blocked"}`}>
+                  {template.runnable ? "READY" : "BLOCKED"}
+                </span>
               </div>
-              {error && <div className="comfy-error">{error}</div>}
-              <button
-                className="comfy-generate-btn"
-                onClick={handleGenerate}
-                disabled={generating || uploading || !status?.online}
-              >
-                {uploading ? "上傳中…" : generating ? "⏳ 生成中…" : "⚡ 生成"}
-              </button>
-              {!status?.online && <div className="comfy-error">ComfyUI 未連線，無法生成</div>}
-            </>
-          ) : (
-            <div className="comfy-empty">請選擇一個工作流</div>
-          )}
-        </section>
 
-        {/* 右：進度 + 歷史 + 畫廊 */}
-        <section className="comfy-panel">
-          <h3 className="comfy-panel-title">生成歷史</h3>
+              {!template.runnable ? (
+                <div className="comfy-blocked-card">
+                  <strong>此工作流已識別，但無法直接執行</strong>
+                  <p>{template.disabled_reason}</p>
+                  <span>若包含子圖，請在 ComfyUI 中使用「匯出 API 格式」另存到 workflows 目錄。</span>
+                </div>
+              ) : (
+                <>
+                  <div className="comfy-parameter-toolbar">
+                    <div>
+                      <strong>生成參數</strong>
+                      <span>{visibleParams.length} / {template.params.length} 個欄位</span>
+                    </div>
+                    {advancedCount > 0 && (
+                      <button className={`comfy-text-btn ${showAdvanced ? "active" : ""}`} onClick={() => setShowAdvanced(value => !value)}>
+                        {showAdvanced ? "隱藏進階設定" : `顯示 ${advancedCount} 個進階設定`}
+                      </button>
+                    )}
+                  </div>
+                  <div className="comfy-form-fields">
+                    {Object.entries(groupedParams).map(([group, definitions]) => (
+                      <section className="comfy-param-group" key={group}>
+                        <div className="comfy-param-group-title"><span>{group}</span><small>NODE {definitions[0]?.node_id}</small></div>
+                        <div className="comfy-param-grid">
+                          {definitions.map(definition => (
+                            <ParamInput key={definition.key} def={definition} value={params[definition.key]}
+                              disabled={generating || uploading}
+                              onChange={value => setParams(current => ({ ...current, [definition.key]: value }))} />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                    {!visibleParams.length && <div className="comfy-empty-state">此工作流沒有可調整參數，將使用已儲存設定執行。</div>}
+                  </div>
+                  <div className="comfy-generate-dock">
+                    <div><strong>{template.output_kind.toUpperCase()}</strong><span>{template.model || "使用工作流內模型"}</span></div>
+                    <button className="comfy-generate-btn" onClick={handleGenerate}
+                      disabled={generating || uploading || !status?.online}>
+                      {uploading ? "正在上傳…" : generating ? "正在生成…" : "開始生成"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          ) : <div className="comfy-empty-state">ComfyUI workflows 目錄目前沒有 JSON 工作流。</div>}
+        </main>
+
+        <aside className="comfy-activity-panel">
+          <div className="comfy-panel-heading">
+            <div><span className="comfy-section-kicker">ACTIVITY</span><h2>任務</h2></div>
+            <button className="comfy-icon-btn" onClick={loadJobs} title="重新整理">↻</button>
+          </div>
 
           {activeJobId && (
             <div className="comfy-progress-box">
-              <div className="comfy-progress-label">
-                正在生成…
-                {progress?.max ? ` ${Math.round((progress.value / progress.max) * 100)}%` : ""}
+              <div className="comfy-progress-head"><span>目前階段</span><strong>{stepLabel}</strong></div>
+              <div className="comfy-progress-phase" title={phaseLabel}>{phaseLabel}</div>
+              <div className="comfy-progress-track"><div className={`comfy-progress-fill ${!progress?.max ? "is-indeterminate" : ""}`}
+                style={progress?.max ? { width: `${progressPercent}%` } : undefined} /></div>
+              <div className="comfy-progress-metrics">
+                <span>目前節點進度</span>
+                <span>已耗時 {fmtElapsed(elapsedSeconds)}</span>
               </div>
-              {progress?.max ? (
-                <div className="comfy-progress-track">
-                  <div
-                    className="comfy-progress-fill"
-                    style={{ width: `${Math.round((progress.value / progress.max) * 100)}%` }}
-                  />
-                </div>
-              ) : (
-                <div className="comfy-progress-track"><div className="comfy-progress-fill comfy-progress-indeterminate" /></div>
-              )}
+              <small>步數為 ComfyUI 目前節點的實際 N/M；切換解碼、合成等階段時會重新計算。</small>
             </div>
           )}
 
-          <div className="comfy-jobs">
-            {jobs.map(j => {
-              const sm = STATUS_META[j.status] ?? { label: j.status, cls: "" }
-              return (
-                <div key={j.id} className={`comfy-job-item ${j.id === activeJobId ? "comfy-job-active" : ""}`}>
-                  <div className="comfy-job-line">
-                    <span className="comfy-job-icon">{j.outputs.length ? "✅" : j.status === "error" ? "❌" : "⏳"}</span>
-                    <span className="comfy-job-name" title={j.workflow_name}>{j.workflow_name}</span>
-                    <span className={`comfy-status-chip ${sm.cls}`}>{sm.label}</span>
-                  </div>
-                  <div className="comfy-job-line comfy-job-sub">
-                    <span>{new Date(j.created_at ?? Date.now()).toLocaleString("zh-TW")}</span>
-                    {j.status === "done" && (
-                      <button className="btn btn-sm" onClick={() => handleRerun(j)}>↻ 重跑</button>
-                    )}
-                    {j.status === "error" && j.error && <span className="comfy-job-err" title={j.error}>{j.error.slice(0, 40)}</span>}
-                  </div>
-                </div>
-              )
-            })}
-            {jobs.length === 0 && <div className="comfy-empty">還沒有生成任務</div>}
+          <div className="comfy-job-filters">
+            {[['all', '全部'], ['running', '生成中'], ['done', '完成'], ['error', '失敗']].map(([value, label]) => (
+              <button key={value} className={jobFilter === value ? "active" : ""} onClick={() => setJobFilter(value)}>{label}</button>
+            ))}
           </div>
 
-          {doneJobs.length > 0 && (
-            <>
-              <h3 className="comfy-panel-title comfy-gallery-title">結果畫廊</h3>
-              <div className="comfy-gallery">
-                {doneJobs.map(j =>
-                  j.outputs.map(o => <ComfyOutputCard key={`${j.id}-${o.filename}`} output={o} />)
-                )}
-              </div>
-            </>
-          )}
-        </section>
+          <div className="comfy-jobs">
+            {filteredJobs.map(job => {
+              const meta = STATUS_META[job.status] ?? { label: job.status, cls: "" }
+              const running = job.status === "queued" || job.status === "running"
+              return (
+                <article key={job.id} className={`comfy-job-item ${job.id === activeJobId ? "is-active" : ""}`}>
+                  <div className="comfy-job-top">
+                    <span className="comfy-job-name" title={job.workflow_name}>{job.workflow_name}</span>
+                    <span className={`comfy-status-chip ${meta.cls}`}>{meta.label}</span>
+                  </div>
+                  <div className="comfy-job-date">{fmtDate(job.created_at)} · {job.outputs.length} 個作品</div>
+                  {job.error && <div className="comfy-job-error" title={job.error}>{job.error}</div>}
+                  {running && job.current_node_title && (
+                    <div className="comfy-job-progress">{job.current_node_title}{job.step_max ? ` · ${job.step_value ?? 0}/${job.step_max}` : ""}</div>
+                  )}
+                  <div className="comfy-job-actions">
+                    {!running && <button onClick={() => handleRerun(job)}>重跑</button>}
+                    {running && <button className="danger" disabled={actionBusy === `cancel-${job.id}`} onClick={() => handleCancel(job)}>取消</button>}
+                    {!running && <button className="danger" disabled={actionBusy === `delete-${job.id}`} onClick={() => handleDeleteJob(job)}>刪除</button>}
+                  </div>
+                </article>
+              )
+            })}
+            {!filteredJobs.length && <div className="comfy-empty-state">此分類尚無任務</div>}
+          </div>
+        </aside>
       </div>
+
+      <section className="comfy-gallery-section">
+        <div className="comfy-gallery-header">
+          <div><span className="comfy-section-kicker">CREATIONS</span><h2>作品庫</h2></div>
+          <span>{doneJobs.reduce((sum, job) => sum + job.outputs.length, 0)} 個作品</span>
+        </div>
+        {doneJobs.length ? (
+          <div className="comfy-gallery">
+            {doneJobs.flatMap(job => job.outputs.map((output, outputIndex) => (
+              <ComfyOutputCard key={`${job.id}-${outputIndex}-${output.filename}`} output={output}
+                onDelete={() => handleDeleteOutput(job, outputIndex)} />
+            )))}
+          </div>
+        ) : <div className="comfy-gallery-empty"><span>✦</span><strong>還沒有作品</strong><p>選擇工作流並開始第一次生成。</p></div>}
+      </section>
     </div>
   )
 }

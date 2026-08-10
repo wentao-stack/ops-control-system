@@ -20,6 +20,7 @@ from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
 from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
 from .comfyui_models import ComfyJob  # noqa: F401 — ensure tables are created
+from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
@@ -83,6 +84,7 @@ from .agent_schemas import (
 )
 from . import clouds as clouds_service
 from . import comfyui as comfyui_service
+from . import comfyui_sequence as comfyui_sequence_service
 from .comfyui_schemas import (
     ComfyGenerateRequest,
     ComfyGenerateResponse,
@@ -91,6 +93,11 @@ from .comfyui_schemas import (
     ComfyStatusResponse,
     ComfyUploadResponse,
     ComfyWorkflowListResponse,
+)
+from .comfyui_sequence_schemas import (
+    ComfySequenceCreate,
+    ComfySequenceListResponse,
+    ComfySequenceResponse,
 )
 
 # ── Simple response cache ────────────────────────────────────────────────────
@@ -1744,11 +1751,15 @@ async def comfyui_status(
 
 
 @app.get("/api/v1/comfyui/workflows", response_model=ComfyWorkflowListResponse)
-def comfyui_workflows(
+async def comfyui_workflows(
     current_user: User = Depends(get_current_user),
 ):
-    """可用工作流模板列表（已轉 API 格式 + 參數映射）。"""
-    return {"templates": comfyui_service.list_templates()}
+    """即時列出 ComfyUI userdata/workflows 中的所有 JSON 工作流。"""
+    try:
+        workflows = await comfyui_service.list_workflows()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"讀取 ComfyUI 工作流失敗：{e}")
+    return {"templates": workflows}
 
 
 @app.post("/api/v1/comfyui/generate", response_model=ComfyGenerateResponse)
@@ -1758,10 +1769,15 @@ async def comfyui_generate(
     current_user: User = Depends(get_current_user),
 ):
     """提交生成任務：注入參數 → POST ComfyUI /prompt → 記錄 ComfyJob。"""
-    template = comfyui_service.get_template(body.workflow_id)
+    try:
+        template = await comfyui_service.get_workflow(body.workflow_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"讀取工作流失敗：{e}")
     if not template:
-        raise HTTPException(status_code=404, detail="工作流模板不存在")
-    workflow = comfyui_service.load_workflow(template)
+        raise HTTPException(status_code=404, detail="工作流不存在或已從 ComfyUI 移除")
+    if not template.get("runnable"):
+        raise HTTPException(status_code=422, detail=template.get("disabled_reason") or "工作流目前無法直接執行")
+    workflow = json.loads(json.dumps(template["workflow"]))
     comfyui_service.inject_params(workflow, template, body.params)
     try:
         prompt_id = await comfyui_service.submit_workflow(workflow)
@@ -1780,6 +1796,239 @@ async def comfyui_generate(
     session.add(job)
     session.commit()
     return {"job_id": job.id, "prompt_id": prompt_id, "status": job.status}
+
+
+def _can_manage_comfy_job(job: ComfyJob, current_user: User) -> bool:
+    return current_user.role == "admin" or job.created_by == current_user.username
+
+
+def _can_manage_comfy_sequence(sequence: ComfySequence, current_user: User) -> bool:
+    return current_user.role == "admin" or sequence.created_by == current_user.username
+
+
+def _sequence_response(sequence: ComfySequence) -> dict[str, Any]:
+    return {
+        "id": sequence.id,
+        "title": sequence.title,
+        "prompt": sequence.prompt,
+        "first_frame": sequence.first_frame,
+        "character_ref": sequence.character_ref,
+        "background_ref": sequence.background_ref,
+        "width": sequence.width,
+        "height": sequence.height,
+        "segment_seconds": sequence.segment_seconds,
+        "total_seconds": sequence.total_seconds,
+        "seed": sequence.seed,
+        "status": sequence.status,
+        "progress": sequence.progress,
+        "current_segment": sequence.current_segment,
+        "total_segments": sequence.total_segments,
+        "current_prompt_id": sequence.current_prompt_id,
+        "segments": json.loads(sequence.segments_json or "[]"),
+        "final_output": json.loads(sequence.final_output_json) if sequence.final_output_json else None,
+        "error": sequence.error,
+        "created_by": sequence.created_by,
+        "created_at": sequence.created_at,
+        "updated_at": sequence.updated_at,
+        "finished_at": sequence.finished_at,
+    }
+
+
+@app.post("/api/v1/comfyui/sequences", response_model=ComfySequenceResponse)
+async def comfyui_create_sequence(
+    body: ComfySequenceCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """建立首尾幀接力的長動畫任務。"""
+    try:
+        status_info = await comfyui_service.get_status()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"無法連線 ComfyUI：{exc}")
+    if not status_info.get("online"):
+        raise HTTPException(status_code=503, detail=status_info.get("error") or "ComfyUI 未啟動")
+
+    now = datetime.now(UTC)
+    sequence = ComfySequence(
+        id=f"seq-{uuid4().hex[:12]}",
+        title=body.title.strip(),
+        prompt=body.prompt.strip(),
+        first_frame=body.first_frame,
+        character_ref=body.character_ref,
+        background_ref=body.background_ref,
+        width=body.width,
+        height=body.height,
+        segment_seconds=body.segment_seconds,
+        total_seconds=body.total_seconds,
+        seed=body.seed,
+        status="queued",
+        progress=0,
+        current_segment=0,
+        total_segments=comfyui_sequence_service.segment_count(body.total_seconds, body.segment_seconds),
+        segments_json="[]",
+        created_by=current_user.username,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(sequence)
+    session.commit()
+    session.refresh(sequence)
+    response = _sequence_response(sequence)
+    comfyui_sequence_service.start_sequence(sequence.id)
+    return response
+
+
+@app.get("/api/v1/comfyui/sequences", response_model=ComfySequenceListResponse)
+def comfyui_sequences(
+    limit: int = Query(30, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    query = select(ComfySequence).order_by(ComfySequence.created_at.desc()).limit(limit)
+    sequences = session.scalars(query).all()
+    return {"sequences": [_sequence_response(item) for item in sequences]}
+
+
+@app.get("/api/v1/comfyui/sequences/{sequence_id}", response_model=ComfySequenceResponse)
+def comfyui_sequence_detail(
+    sequence_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    sequence = session.get(ComfySequence, sequence_id)
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="長動畫任務不存在")
+    return _sequence_response(sequence)
+
+
+@app.post("/api/v1/comfyui/sequences/{sequence_id}/cancel")
+async def comfyui_cancel_sequence(
+    sequence_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    sequence = session.get(ComfySequence, sequence_id)
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="長動畫任務不存在")
+    if not _can_manage_comfy_sequence(sequence, current_user):
+        raise HTTPException(status_code=403, detail="無權管理此任務")
+    if sequence.status not in ("queued", "running", "stitching"):
+        raise HTTPException(status_code=409, detail="此任務目前無法取消")
+    try:
+        await comfyui_sequence_service.cancel_sequence(sequence_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"取消任務失敗：{exc}")
+    return {"status": "cancelled"}
+
+
+@app.delete("/api/v1/comfyui/sequences/{sequence_id}")
+def comfyui_delete_sequence(
+    sequence_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    sequence = session.get(ComfySequence, sequence_id)
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="長動畫任務不存在")
+    if not _can_manage_comfy_sequence(sequence, current_user):
+        raise HTTPException(status_code=403, detail="無權管理此任務")
+    if sequence.status in ("queued", "running", "stitching"):
+        raise HTTPException(status_code=409, detail="請先取消進行中的任務")
+    comfyui_sequence_service.delete_sequence_files(sequence_id)
+    session.delete(sequence)
+    session.commit()
+    return {"deleted": True}
+
+
+@app.post("/api/v1/comfyui/jobs/{job_id}/cancel")
+async def comfyui_cancel_job(
+    job_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """取消排隊或執行中的生成任務。"""
+    job = session.get(ComfyJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任務不存在")
+    if not _can_manage_comfy_job(job, current_user):
+        raise HTTPException(status_code=403, detail="無權管理此任務")
+    if job.status not in ("queued", "running") or not job.prompt_id:
+        raise HTTPException(status_code=409, detail="只有排隊或執行中的任務可以取消")
+    try:
+        await comfyui_service.cancel_prompt(job.prompt_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"取消 ComfyUI 任務失敗：{e}")
+    job.status = "cancelled"
+    job.error = "使用者取消任務"
+    job.finished_at = datetime.now(UTC)
+    session.commit()
+    return {"status": "cancelled"}
+
+
+@app.delete("/api/v1/comfyui/jobs/{job_id}/outputs/{output_index}")
+def comfyui_delete_output(
+    job_id: str,
+    output_index: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """刪除單一生成作品及其資料庫引用。"""
+    job = session.get(ComfyJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任務不存在")
+    if not _can_manage_comfy_job(job, current_user):
+        raise HTTPException(status_code=403, detail="無權管理此作品")
+    outputs = json.loads(job.outputs_json or "[]")
+    if output_index < 0 or output_index >= len(outputs):
+        raise HTTPException(status_code=404, detail="作品不存在")
+    output = outputs[output_index]
+    try:
+        deleted = comfyui_service.delete_output_file(output)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    outputs.pop(output_index)
+    job.outputs_json = json.dumps(outputs, ensure_ascii=False)
+    session.commit()
+    return {"deleted": deleted, "remaining": len(outputs)}
+
+
+@app.delete("/api/v1/comfyui/jobs/{job_id}")
+def comfyui_delete_job(
+    job_id: str,
+    delete_outputs: bool = True,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """刪除生成記錄；預設一併刪除 output/temp 作品檔。"""
+    job = session.get(ComfyJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任務不存在")
+    if not _can_manage_comfy_job(job, current_user):
+        raise HTTPException(status_code=403, detail="無權管理此任務")
+    if job.status in ("queued", "running"):
+        raise HTTPException(status_code=409, detail="請先取消進行中的任務")
+    deleted_files = 0
+    if delete_outputs:
+        for output in json.loads(job.outputs_json or "[]"):
+            try:
+                deleted_files += int(comfyui_service.delete_output_file(output))
+            except ValueError:
+                continue
+    session.delete(job)
+    session.commit()
+    return {"deleted": True, "deleted_files": deleted_files}
+
+
+@app.post("/api/v1/comfyui/free")
+async def comfyui_free_memory(
+    current_user: User = Depends(get_current_user),
+):
+    """卸載 ComfyUI 模型並釋放未使用顯存。"""
+    try:
+        await comfyui_service.free_memory()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"釋放顯存失敗：{e}")
+    return {"status": "ok"}
 
 
 @app.get("/api/v1/comfyui/jobs", response_model=ComfyJobListResponse)
@@ -1870,12 +2119,42 @@ async def comfyui_job_events(
 
         async for ev in comfyui_service.stream_progress(prompt_id):
             etype = ev["event"]
+            if etype == "heartbeat":
+                try:
+                    history = await comfyui_service.get_history(prompt_id)
+                except Exception:
+                    history = None
+                if history:
+                    job.status, job.error = comfyui_service.history_status(history)
+                    job.outputs_json = json.dumps(
+                        comfyui_service.parse_outputs(history), ensure_ascii=False
+                    )
+                    job.progress = 100
+                    job.finished_at = datetime.now(UTC)
+                    session.commit()
+                    if job.status == "error":
+                        ev = {"event": "error", "message": job.error or "執行失敗", "prompt_id": prompt_id}
+                    else:
+                        ev = {"event": "done", "prompt_id": prompt_id}
+                    yield _sse(ev)
+                    return
+                queue_state = await comfyui_service.get_prompt_queue_state(prompt_id)
+                if queue_state:
+                    job.status = queue_state[0]
+                    session.commit()
+                    ev.update(status=queue_state[0], queue_position=queue_state[1])
+                yield _sse(ev)
+                continue
             if etype == "progress":
                 if ev.get("max"):
                     job.progress = min(99, round(ev["value"] * 100 / ev["max"]))
                 if job.status == "queued":
                     job.status = "running"
                 session.commit()
+            elif etype == "executing":
+                if ev.get("node"):
+                    job.status = "running"
+                    session.commit()
             elif etype == "done":
                 job.status = "done"
                 job.progress = 100
@@ -1931,7 +2210,8 @@ async def comfyui_upload(
     data = await file.read()
     if len(data) > 50 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="檔案過大（上限 50MB）")
-    filename = (file.filename or "image.png").split("/")[-1]
+    original_name = (file.filename or "image.png").replace("\\", "/").split("/")[-1]
+    filename = f"{uuid4().hex[:10]}-{original_name}"
     try:
         res = await comfyui_service.upload_image(filename, data)
     except Exception as e:

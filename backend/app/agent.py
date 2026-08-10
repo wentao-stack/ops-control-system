@@ -867,12 +867,28 @@ async def tool_save_memory(params: dict, session: Session) -> str:
             updated_at=now,
         ))
     session.commit()
+
+    # Upsert to ChromaDB vector index for semantic search
+    mem_id = existing.id if existing else session.scalar(select(func.max(AgentMemory.id)))
+    try:
+        from .agent_rag import upsert_document
+        text = f"# {key}\n\n{value}"
+        upsert_document(
+            source="memory",
+            source_id=str(mem_id),
+            text=text,
+            title=key,
+            category=category,
+        )
+    except Exception as e:
+        logger.warning(f"RAG upsert memory failed [{key}]: {e}")
+
     return f"✅ 已記憶 [{category}] {key}: {value}"
 
 
 @register_tool(
     name="get_memories",
-    description="檢索已保存的記憶。當需要回顧用戶偏好、環境配置或操作經驗時使用。",
+    description="檢索已保存的記憶。支援語義搜索和關鍵字搜索。當需要回顧用戶偏好、環境配置或操作經驗時使用。",
     params_schema={
         "type": "object",
         "properties": {
@@ -900,7 +916,7 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     Args:
         user: username
         category: optional filter ('user' | 'environment' | 'procedure' | 'preference')
-        query: optional keyword search in value
+        query: optional keyword / semantic search in value
     """
     from .models import AgentMemory
 
@@ -911,15 +927,34 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     if not user:
         return "❌ 需要 user 參數"
 
+    # ── Semantic search via RAG when query provided ─────────────────────
+    semantic_ids: dict[str, float] = {}
+    if query:
+        try:
+            from .agent_rag import rag_search
+            result = rag_search(query=query, source="memories", limit=10)
+            for hit in result.get("results", []):
+                sid = hit.get("source_id", "")
+                if sid:
+                    semantic_ids[sid] = hit.get("score", 0.0)
+        except Exception:
+            pass
+
+    # ── DB query ────────────────────────────────────────────────────────
     q = select(AgentMemory).where(AgentMemory.user == user)
     if category:
         q = q.where(AgentMemory.category == category)
-    if query:
-        q = q.where(AgentMemory.value.ilike(f"%{query}%"))
+    if query and not semantic_ids:
+        # Fallback to keyword if vector search had no hits
+        q = q.where(AgentMemory.value.ilike(f"%{query}%") | AgentMemory.key.ilike(f"%{query}%"))
 
-    memories = session.scalars(q.order_by(AgentMemory.updated_at.desc()).limit(50)).all()
+    memories = list(session.scalars(q.order_by(AgentMemory.updated_at.desc()).limit(50)).all())
     if not memories:
         return "暫無記憶"
+
+    # ── Rank by semantic score when available ───────────────────────────
+    if semantic_ids:
+        memories.sort(key=lambda m: -semantic_ids.get(str(m.id), -1.0))
 
     # Group by category
     groups: dict[str, list] = {}
@@ -930,7 +965,8 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     for cat, items in groups.items():
         lines.append(f"\n  [{cat}]")
         for m in items:
-            lines.append(f"    • {m.key}: {m.value[:100]}")
+            vec_tag = f" (相似度 {semantic_ids.get(str(m.id), 0):.2f})" if str(m.id) in semantic_ids else ""
+            lines.append(f"    • {m.key}: {m.value[:100]}{vec_tag}")
     return "\n".join(lines)
 
 
@@ -1102,6 +1138,28 @@ async def _auto_extract_memories(user_message: str, username: str, session: Sess
                 updated_at=now,
             ))
     session.commit()
+
+    # Upsert extracted memories to ChromaDB vector index
+    try:
+        from .agent_rag import upsert_document
+        for key, category, value in extractions:
+            mem_obj = session.scalar(
+                select(AgentMemory).where(
+                    AgentMemory.user == username,
+                    AgentMemory.key == key,
+                )
+            )
+            if mem_obj:
+                text = f"# {key}\n\n{value}"
+                upsert_document(
+                    source="memory",
+                    source_id=str(mem_obj.id),
+                    text=text,
+                    title=key,
+                    category=category,
+                )
+    except Exception as e:
+        logger.warning(f"RAG upsert auto-extracted memory failed: {e}")
 
 
 # ── System prompt (generated dynamically with tool descriptions) ─────────────
