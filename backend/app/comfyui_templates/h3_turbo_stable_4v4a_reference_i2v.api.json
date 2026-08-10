@@ -1,0 +1,153 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {"title": "H3 FL2VA 模型"}
+  },
+  "2": {
+    "class_type": "LoraLoaderBypassModelOnly",
+    "inputs": {
+      "model": ["1", 0],
+      "lora_name": "minimax_h3_turbo_4步加速ema_comfyui.safetensors",
+      "strength_model": 1.0
+    },
+    "_meta": {"title": "H3 Turbo 四步 LoRA"}
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {"title": "Qwen3-VL H3 文本编码器"}
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {"title": "H3 视频 VAE"}
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {"title": "H3 音频 VAE"}
+  },
+  "6": {
+    "class_type": "MiniMaxH3AudioConditioningT8",
+    "inputs": {
+      "clip": ["3", 0],
+      "video_vae": ["4", 0],
+      "audio_vae": ["5", 0],
+      "prompt": "Create one coherent cinematic shot. Use <Picture 1> as the exact opening frame and preserve its composition at frame 0. Use <Picture 2> as the subject identity, face, clothing and material reference. Use <Picture 3> as the environment, lighting and visual-style reference. Keep identity and scene continuity stable while adding subtle natural body motion, breathing, blinking, cloth and hair response, and a slow controlled camera push-in. Do not copy an incompatible pose from the reference images. No cuts, morphing, duplicate subjects, text, subtitles or watermark. Audio: synchronized natural ambience and restrained environmental sound effects, no dialogue and no music.",
+      "width": 864,
+      "height": 480,
+      "length": 124,
+      "task_type": "Hybrid",
+      "audio_mode": "native",
+      "audio_denoise_strength": 1.0,
+      "add_source_as_reference": false,
+      "prompt_primary_audio_ordinal": 0,
+      "strict_prompt_tags": true,
+      "ref_image_size": "match",
+      "reference_video_policy": "official_2_to_15s",
+      "first_frame": ["13", 0],
+      "ref_images.ref_image_0": ["14", 0],
+      "ref_images.ref_image_1": ["15", 0]
+    },
+    "_meta": {"title": "H3 Hybrid 首帧 + 参考图条件"}
+  },
+  "7": {
+    "class_type": "MiniMaxH3DualClockSamplerT8",
+    "inputs": {
+      "model": ["2", 0],
+      "av_latent": ["6", 1],
+      "steps": 4,
+      "shift_video": 12.0,
+      "shift_audio": 3.0,
+      "sampler_name": "dual_clock_euler",
+      "scheduler": "native_flow"
+    },
+    "_meta": {"title": "Stable 4V / 4A 双时钟采样"}
+  },
+  "8": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": ["7", 0],
+      "conditioning": ["6", 0]
+    },
+    "_meta": {"title": "H3 引导"}
+  },
+  "9": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 123456789
+    },
+    "_meta": {"title": "随机种子"}
+  },
+  "10": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["9", 0],
+      "guider": ["8", 0],
+      "sampler": ["7", 1],
+      "sigmas": ["7", 2],
+      "latent_image": ["6", 1]
+    },
+    "_meta": {"title": "H3 联合音视频生成"}
+  },
+  "11": {
+    "class_type": "MiniMaxH3AVDecodeT8",
+    "inputs": {
+      "av_latent": ["10", 0],
+      "video_vae": ["4", 0],
+      "audio_vae": ["5", 0]
+    },
+    "_meta": {"title": "H3 音视频解码"}
+  },
+  "12": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["11", 0],
+      "audio": ["11", 1],
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "MiniMaxH3/stable_4v4a_reference_i2v",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true
+    },
+    "_meta": {"title": "输出 MP4（24 FPS + 同步音频）"}
+  },
+  "13": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "20260807130241_665874-1536x864.webp"
+    },
+    "_meta": {"title": "Picture 1 · I2V 精确首帧"}
+  },
+  "14": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "107daea5b1-woman.webp"
+    },
+    "_meta": {"title": "Picture 2 · 主体身份参考"}
+  },
+  "15": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "726188ea2c-backend.webp"
+    },
+    "_meta": {"title": "Picture 3 · 场景风格参考"}
+  }
+}
