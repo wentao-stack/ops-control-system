@@ -72,7 +72,7 @@ function ComfyOutputCard({ output }: { output: ComfyOutputItem }) {
     return () => {
       alive = false
     }
-  }, [output])
+  }, [output.filename, output.subfolder, output.type])
 
   if (failed) {
     return <div className="comfy-output-card comfy-output-failed">❌ 無法載入</div>
