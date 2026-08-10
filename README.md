@@ -142,6 +142,7 @@ frontend/
 supervisor/
 ├── supervisord.conf                # Supervisor 主配置（unix socket, RPC, 包含 conf.d/*.conf）
 ├── conf.d/
+│   ├── ocs-comfyui.conf            # ComfyUI 按需启动配置（:8188，不自动启动）
 │   ├── ocs-backend.conf            # 後端程序配置（uvicorn :18080, 自動重啟, 日誌輪轉）
 │   └── ocs-frontend.conf           # 前端程序配置（Vite dev server :5173, 自動重啟）
 ├── log/                            # 運行日誌（不進入 Git）
@@ -171,6 +172,7 @@ deploy/
 
 ```
 docs/
+├── COMFYUI.md                          # ComfyUI 啟停、健康檢查、日誌與 GPU 注意事項
 └── STORAGE.md                          # 存儲方案設計（數據分層、SQLite WAL、備份策略、文件存儲架構）
 ```
 
@@ -203,6 +205,7 @@ All services are managed by Supervisor under `supervisor/`. One command starts e
 Services:
 - **ocs-backend** — FastAPI on `127.0.0.1:18080`
 - **ocs-frontend** — Vite dev server on `127.0.0.1:5173`
+- **ocs-comfyui** — ComfyUI on `0.0.0.0:8188`（按需啟動；詳見 `docs/COMFYUI.md`）
 
 Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` and `/ws` to the backend.
 
