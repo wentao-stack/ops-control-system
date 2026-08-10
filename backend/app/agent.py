@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import UTC, datetime
@@ -33,6 +34,7 @@ from .agent_schemas import (
 LLM_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:9292/v1")
 DEFAULT_MODEL = os.getenv("AGENT_DEFAULT_MODEL", "qwen36-27b-no-think-v1")
+logger = logging.getLogger(__name__)
 
 # ── Tool Registry ───────────────────────────────────────────────────────────
 
@@ -1285,25 +1287,27 @@ async def check_llm_health() -> AgentHealthResponse:
                 return AgentHealthResponse(
                     status="ok",
                     model=DEFAULT_MODEL,
-                    message=f"url={LLM_BASE_URL} key_len={len(LLM_API_KEY)}",
+                    message="模型服務正常",
                 )
+            logger.warning("LLM health check returned HTTP %s", resp.status_code)
             return AgentHealthResponse(
                 status="error",
                 model=DEFAULT_MODEL,
-                message=f"API returned {resp.status_code} url={LLM_BASE_URL}",
+                message=f"模型服務回應異常（HTTP {resp.status_code}）",
             )
     except Exception as e:
+        logger.warning("LLM health check failed: %s", e)
         return AgentHealthResponse(
             status="error",
             model=DEFAULT_MODEL,
-            message=f"{str(e)[:80]} url={LLM_BASE_URL}",
+            message="無法連接模型服務，請稍後重試",
         )
 
 
 # ── Proactive system inspection ─────────────────────────────────────────────
 
 
-async def inspect_system(model: str | None = None) -> dict:
+async def inspect_system(model: str | None = None, create_notes: bool = False) -> dict:
     """
     Proactive system health inspection.
     Collects metrics, services, alerts → LLM analyzes → returns report.
@@ -1413,13 +1417,20 @@ async def inspect_system(model: str | None = None) -> dict:
                 summary = analysis.get("summary", "分析完成")
                 issues = analysis.get("issues", [])
 
-                # 6. Auto-create notes for critical issues
-                for issue in issues:
-                    if issue.get("severity") in ("critical", "high"):
+                # 6. Optionally create notes for critical issues. Inspection is
+                # read-only by default so opening the panel cannot mutate data.
+                for issue in issues if create_notes else []:
+                    if isinstance(issue, dict) and issue.get("severity") in ("critical", "high"):
+                        note_title = f"🔴 系統檢查: {issue.get('title', '異常')}"
+                        existing_note = session.scalar(
+                            select(Note).where(Note.title == note_title)
+                        )
+                        if existing_note:
+                            continue
                         note_id = f"note-{uuid4().hex[:12]}"
                         note = Note(
                             id=note_id,
-                            title=f"🔴 系統檢查: {issue.get('title', '異常')}",
+                            title=note_title,
                             content=issue.get("detail", issue.get("title", "")),
                             category="知識",
                             tags=json.dumps(["自動檢查", "告警"], ensure_ascii=False),
@@ -1632,13 +1643,16 @@ def get_messages(
     limit: int = 100,
 ) -> AgentMessagesListResponse:
     """Get messages for a conversation."""
-    msgs = (
+    # Fetch the latest messages, then restore chronological order for the UI.
+    # Ordering ascending before LIMIT returned the oldest messages forever once a
+    # long conversation crossed the limit.
+    msgs = list(reversed(
         session.query(AgentMessage)
         .filter(AgentMessage.conversation_id == conv_id)
-        .order_by(AgentMessage.id.asc())
+        .order_by(AgentMessage.id.desc())
         .limit(limit)
         .all()
-    )
+    ))
     return AgentMessagesListResponse(
         messages=[
             AgentMessageResponse(

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { api } from "../auth"
 import { AgentConversation, AgentMessage, fmtRel } from "../types"
 
@@ -14,6 +16,12 @@ type PendingConfirm = {
   name: string
   parameters: Record<string, any>
   level?: string
+}
+
+type AgentHealth = {
+  status: "ok" | "error"
+  model: string
+  message: string
 }
 
 /* ── SSE Event Bus Types ─────────────────────────────────────────────────── */
@@ -55,13 +63,16 @@ type ToastState = {
 function groupConversations(convs: AgentConversation[]): Map<string, AgentConversation[]> {
   const groups = new Map<string, AgentConversation[]>()
   const now = Date.now()
-  const dayMs = 86400000
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const yesterdayStart = todayStart.getTime() - 86_400_000
 
   for (const c of convs) {
-    const age = now - new Date(c.updated_at).getTime()
+    const updatedAt = new Date(c.updated_at).getTime()
     let label: string
-    if (age < dayMs) label = "今天"
-    else if (age < dayMs * 2) label = "昨天"
+    if (!Number.isFinite(updatedAt) || updatedAt > now) label = "今天"
+    else if (updatedAt >= todayStart.getTime()) label = "今天"
+    else if (updatedAt >= yesterdayStart) label = "昨天"
     else label = "更早"
     groups.set(label, [...(groups.get(label) ?? []), c])
   }
@@ -73,34 +84,18 @@ function groupConversations(convs: AgentConversation[]): Map<string, AgentConver
   return ordered
 }
 
-/* simple markdown → html (no external dep) */
-function renderMarkdown(text: string): string {
-  let html = text
-    // code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, __, code) => `<pre><code>${esc(code.trim())}</code></pre>`)
-    // inline code
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    // bold
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    // italic
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // tables
-    .replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+|\n?)*)/g, (_, header, body) => {
-      const ths = header.split("|").map((c: string) => c.trim()).filter(Boolean).map((c: string) => `<th>${c}</th>`).join("")
-      const rows = body.trim().split("\n").map((row: string) => {
-        const tds = row.split("|").map((c: string) => c.trim()).filter(Boolean).map((c: string) => `<td>${c}</td>`).join("")
-        return `<tr>${tds}</tr>`
-      }).join("")
-      return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`
-    })
-    // newlines
-    .replace(/\n/g, "<br>")
-
-  return html
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+function formatToolInput(value: string | null): string {
+  if (!value) return ""
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>
+    return Object.entries(parsed).map(([key, item]) => `${key}=${String(item)}`).join(" ")
+  } catch {
+    return value
+  }
 }
 
 /* ── sub-components (inline) ─────────────────────────────────────────────── */
@@ -111,21 +106,36 @@ function Sidebar({
   onSelect,
   onNew,
   onDelete,
+  disabled,
+  deletingId,
+  mobileOpen,
+  onClose,
+  loading,
+  error,
+  onRetry,
 }: {
   conversations: AgentConversation[]
   activeId: string | null
   onSelect: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
+  disabled: boolean
+  deletingId: string | null
+  mobileOpen: boolean
+  onClose: () => void
+  loading: boolean
+  error: string
+  onRetry: () => void
 }) {
   const groups = groupConversations(conversations)
 
   return (
-    <div className="agent-sidebar">
+    <aside className={`agent-sidebar${mobileOpen ? " mobile-open" : ""}`} aria-label="對話歷史">
       <div className="agent-sidebar-header">
-        <button className="btn btn-primary" style={{ width: "100%" }} onClick={onNew}>
+        <button className="btn btn-primary" style={{ width: "100%" }} onClick={onNew} disabled={disabled}>
           ＋ 新對話
         </button>
+        <button className="agent-sidebar-close" onClick={onClose} aria-label="關閉對話歷史">×</button>
       </div>
       <div className="agent-sidebar-list">
         {Array.from(groups.entries()).map(([label, convs]) => (
@@ -134,28 +144,44 @@ function Sidebar({
               {label}
             </div>
             {convs.map(c => (
-              <div
-                key={c.id}
-                className={`agent-chat-item${c.id === activeId ? " active" : ""}`}
-                onClick={() => onSelect(c.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  if (window.confirm(`刪除對話「${c.title}」？`)) onDelete(c.id)
-                }}
-              >
-                <div className="agent-chat-item-title">{c.title}</div>
-                <div className="agent-chat-item-time">{fmtRel(c.updated_at)}</div>
+              <div key={c.id} className={`agent-chat-item${c.id === activeId ? " active" : ""}`}>
+                <button
+                  type="button"
+                  className="agent-chat-select"
+                  onClick={() => { onSelect(c.id); onClose() }}
+                  disabled={disabled}
+                >
+                  <span className="agent-chat-item-title">{c.title}</span>
+                  <span className="agent-chat-item-time">{fmtRel(c.updated_at)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="agent-chat-delete"
+                  aria-label={`刪除對話 ${c.title}`}
+                  title="刪除對話"
+                  onClick={() => onDelete(c.id)}
+                  disabled={disabled || deletingId === c.id}
+                >
+                  {deletingId === c.id ? "…" : "×"}
+                </button>
               </div>
             ))}
           </div>
         ))}
-        {conversations.length === 0 && (
+        {loading && <div className="agent-sidebar-state">載入中...</div>}
+        {!loading && error && (
+          <div className="agent-sidebar-state agent-sidebar-error">
+            <span>{error}</span>
+            <button type="button" onClick={onRetry}>重試</button>
+          </div>
+        )}
+        {!loading && !error && conversations.length === 0 && (
           <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: "var(--text-secondary)" }}>
             尚無對話歷史
           </div>
         )}
       </div>
-    </div>
+    </aside>
   )
 }
 
@@ -170,9 +196,7 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
           <span>⚙</span>
           <span>{msg.tool_name}</span>
           {msg.tool_input && (
-            <span style={{ fontWeight: 400, opacity: 0.7 }}>
-              {JSON.parse(msg.tool_input || "{}") && Object.entries(JSON.parse(msg.tool_input)).map(([k, v]) => `${k}=${v}`).join(" ")}
-            </span>
+            <span className="agent-tool-params">{formatToolInput(msg.tool_input)}</span>
           )}
         </div>
         {msg.tool_result && (
@@ -186,10 +210,9 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
     <div className={`agent-msg ${isUser ? "user" : "assistant"}`}>
       <div className="agent-msg-avatar">{isUser ? "👤" : "🤖"}</div>
       <div className="agent-msg-content">
-        <div
-          className="agent-msg-bubble"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-        />
+        <div className="agent-msg-bubble">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+        </div>
         {msg.role === "assistant" && msg.usage && (
           <div className="agent-msg-usage">
             📊 {msg.usage.total_tokens.toLocaleString()} tokens
@@ -206,52 +229,90 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
 export function AgentChatPage() {
   const [tab, setTab] = useState<"chat" | "usage">("chat")
   const [conversations, setConversations] = useState<AgentConversation[]>([])
+  const [conversationsLoading, setConversationsLoading] = useState(true)
+  const [conversationsError, setConversationsError] = useState("")
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<AgentMessage[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messagesError, setMessagesError] = useState("")
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [toolCards, setToolCards] = useState<ToolCardState[]>([])
   const [toasts, setToasts] = useState<ToastState[]>([])
-  const [llmReady, setLlmReady] = useState(true)
-  const [creatingConv, setCreatingConv] = useState(false)
+  const [health, setHealth] = useState<AgentHealth | null>(null)
+  const [healthLoading, setHealthLoading] = useState(true)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
-  const toolCardsRef = useRef<ToolCardState[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const messageRequestRef = useRef(0)
+  const temporaryIdRef = useRef(-1)
+  const toastIdRef = useRef(0)
+
+  const pushToast = useCallback((type: ToastState["type"], message: string) => {
+    const id = `toast-${Date.now()}-${toastIdRef.current++}`
+    setToasts(prev => [...prev, { id, type, message }])
+  }, [])
 
   /* load conversations */
-  const loadConversations = useCallback(() => {
-    api<{ conversations: AgentConversation[] }>(`/api/v1/agent/conversations`)
-      .then(r => setConversations(r.conversations))
-      .catch(() => setConversations([]))
+  const loadConversations = useCallback(async () => {
+    setConversationsLoading(true)
+    setConversationsError("")
+    try {
+      const response = await api<{ conversations: AgentConversation[] }>("/api/v1/agent/conversations")
+      setConversations(response.conversations)
+    } catch (error) {
+      setConversationsError(errorMessage(error, "無法載入對話歷史"))
+    } finally {
+      setConversationsLoading(false)
+    }
   }, [])
 
   /* load messages for a conversation */
-  const loadMessages = useCallback((convId: string) => {
-    api<{ messages: AgentMessage[] }>(`/api/v1/agent/conversations/${convId}/messages`)
-      .then(r => setMessages(r.messages))
-      .catch(() => setMessages([]))
+  const loadMessages = useCallback(async (convId: string) => {
+    const requestId = ++messageRequestRef.current
+    setMessagesLoading(true)
+    setMessagesError("")
+    try {
+      const response = await api<{ messages: AgentMessage[] }>(`/api/v1/agent/conversations/${encodeURIComponent(convId)}/messages`)
+      if (messageRequestRef.current === requestId) setMessages(response.messages)
+    } catch (error) {
+      if (messageRequestRef.current === requestId) {
+        setMessagesError(errorMessage(error, "無法載入對話內容"))
+      }
+    } finally {
+      if (messageRequestRef.current === requestId) setMessagesLoading(false)
+    }
   }, [])
 
   /* check LLM health */
-  useEffect(() => {
-    api<{ status: string }>(`/api/v1/agent/health`)
-      .then(r => setLlmReady(r.status === "ok"))
-      .catch(() => setLlmReady(false))
+  const checkHealth = useCallback(async () => {
+    setHealthLoading(true)
+    try {
+      setHealth(await api<AgentHealth>("/api/v1/agent/health"))
+    } catch (error) {
+      setHealth({ status: "error", model: "", message: errorMessage(error, "無法檢查模型服務") })
+    } finally {
+      setHealthLoading(false)
+    }
   }, [])
 
   /* initial load */
   useEffect(() => {
     loadConversations()
-  }, [loadConversations])
+    checkHealth()
+  }, [checkHealth, loadConversations])
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   /* scroll to bottom on new messages */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [messages, thinking, toolCards])
 
   /* auto-resize textarea */
   useEffect(() => {
@@ -269,86 +330,62 @@ export function AgentChatPage() {
     return () => clearTimeout(timer)
   }, [toasts])
 
-  /* sync toolCards ref for done handler */
-  useEffect(() => { toolCardsRef.current = toolCards }, [toolCards])
-
-  /* create new conversation */
-  const handleNew = async () => {
-    if (creatingConv) return
-    setCreatingConv(true)
-    try {
-      const r = await api<AgentConversation>(`/api/v1/agent/conversations`, { method: "POST" })
-      setConversations(prev => [r, ...prev])
-      setActiveId(r.id)
-      setMessages([])
-    } catch {
-      // fallback: local-only new conversation state
-      const id = `local-${Date.now()}`
-      setActiveId(id)
-      setMessages([])
-    } finally {
-      setCreatingConv(false)
-    }
-  }
-
-  /* create new conversation and return the id (for handleSend auto-create) */
-  const handleNewAndGetId = async (): Promise<string> => {
-    if (creatingConv) {
-      // Already creating, wait a bit and retry
-      await new Promise(r => setTimeout(r, 200))
-      return activeId ?? handleNewAndGetId()
-    }
-    setCreatingConv(true)
-    try {
-      const r = await api<AgentConversation>(`/api/v1/agent/conversations`, { method: "POST" })
-      setConversations(prev => [r, ...prev])
-      setActiveId(r.id)
-      setMessages([])
-      return r.id
-    } catch {
-      const id = `local-${Date.now()}`
-      setActiveId(id)
-      setMessages([])
-      return id
-    } finally {
-      setCreatingConv(false)
-    }
+  /* Start locally; the backend creates the conversation with the first message. */
+  const handleNew = () => {
+    if (streaming) return
+    messageRequestRef.current += 1
+    setActiveId(null)
+    setMessages([])
+    setMessagesError("")
+    setMessagesLoading(false)
+    setToolCards([])
+    setPendingConfirm(null)
+    setMobileSidebarOpen(false)
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
   /* delete conversation */
   const handleDelete = async (id: string) => {
+    if (streaming || deletingId) return
+    const conversation = conversations.find(item => item.id === id)
+    if (!window.confirm(`刪除對話「${conversation?.title ?? "未命名對話"}」？此操作無法復原。`)) return
+    setDeletingId(id)
     try {
-      await api(`/api/v1/agent/conversations/${id}`, { method: "DELETE" })
-    } catch { /* ignore */ }
-    setConversations(prev => prev.filter(c => c.id !== id))
-    if (activeId === id) {
-      setActiveId(null)
-      setMessages([])
+      await api(`/api/v1/agent/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
+      setConversations(prev => prev.filter(c => c.id !== id))
+      if (activeId === id) handleNew()
+    } catch (error) {
+      pushToast("error", errorMessage(error, "刪除對話失敗"))
+    } finally {
+      setDeletingId(null)
     }
-    loadConversations()
   }
 
   /* select conversation */
   const handleSelect = (id: string) => {
+    if (streaming || id === activeId) return
     setActiveId(id)
+    setMessages([])
     loadMessages(id)
   }
 
   /* send message with SSE streaming */
   const handleSend = async (text?: string) => {
-    const message = text || input.trim()
-    if (!message || streaming) return
+    const message = (text ?? input).trim()
+    if (!message || streaming || health?.status !== "ok") return
 
     setInput("")
     let convId = activeId
-    // Auto-create conversation if none active
-    if (!convId) {
-      convId = await handleNewAndGetId()
-    }
+    setStreaming(true)
+    setThinking(true)
+    setMessagesError("")
+    setToolCards([])
 
     // optimistically add user message
+    const userId = temporaryIdRef.current--
+    const assistantId = temporaryIdRef.current--
     const userMsg: AgentMessage = {
-      id: Date.now(),
+      id: userId,
       conversation_id: convId ?? "",
       role: "user",
       content: message,
@@ -359,8 +396,6 @@ export function AgentChatPage() {
     }
     setMessages(prev => [...prev, userMsg])
 
-    // placeholder assistant message for streaming (this is the ONLY bubble)
-    const assistantId = Date.now() + 1
     setMessages(prev => [...prev, {
       id: assistantId,
       conversation_id: convId ?? "",
@@ -372,9 +407,162 @@ export function AgentChatPage() {
       created_at: new Date().toISOString(),
     }])
 
-    setStreaming(true)
     const abortCtrl = new AbortController()
     abortRef.current = abortCtrl
+    const cards = new Map<string, ToolCardState>()
+    let toolsFinalized = false
+    let receivedDone = false
+    let receivedError = false
+
+    const updateCard = (id: string, update: Partial<ToolCardState>) => {
+      const current = cards.get(id)
+      if (!current) return
+      const next = { ...current, ...update }
+      cards.set(id, next)
+      setToolCards(Array.from(cards.values()))
+    }
+
+    const finalizeTools = () => {
+      if (toolsFinalized) return
+      toolsFinalized = true
+      const toolMessages = Array.from(cards.values())
+        .filter(card => card.result !== undefined)
+        .map((card): AgentMessage => ({
+          id: temporaryIdRef.current--,
+          conversation_id: convId ?? "",
+          role: "tool",
+          content: "",
+          tool_name: card.name,
+          tool_input: JSON.stringify(card.params),
+          tool_result: card.result ?? "",
+          created_at: new Date().toISOString(),
+        }))
+      if (toolMessages.length) {
+        setMessages(prev => {
+          const assistantIndex = prev.findIndex(item => item.id === assistantId)
+          if (assistantIndex < 0) return [...prev, ...toolMessages]
+          return [
+            ...prev.slice(0, assistantIndex),
+            ...toolMessages,
+            prev[assistantIndex],
+            ...prev.slice(assistantIndex + 1),
+          ]
+        })
+      }
+      setToolCards([])
+    }
+
+    const appendAssistantText = (content: string) => {
+      setMessages(prev => prev.map(item => item.id === assistantId ? { ...item, content: item.content + content } : item))
+    }
+
+    const handleEventData = (data: string) => {
+      if (!data || data === "[DONE]") return
+      let parsed: SSEEvent
+      try {
+        parsed = JSON.parse(data) as SSEEvent
+      } catch {
+        appendAssistantText(data)
+        return
+      }
+
+      switch (parsed.event) {
+        case "conv_id":
+          convId = parsed.conv_id
+          setActiveId(parsed.conv_id)
+          setMessages(prev => prev.map(item =>
+            item.id === userId || item.id === assistantId
+              ? { ...item, conversation_id: parsed.conv_id }
+              : item
+          ))
+          break
+        case "thinking":
+          setThinking(true)
+          break
+        case "token":
+          setThinking(false)
+          appendAssistantText(parsed.token ?? "")
+          break
+        case "tool_call": {
+          const card: ToolCardState = {
+            id: parsed.id,
+            name: parsed.name,
+            params: parsed.params ?? {},
+            level: parsed.level,
+            status: "calling",
+          }
+          cards.set(card.id, card)
+          setToolCards(Array.from(cards.values()))
+          break
+        }
+        case "tool_progress":
+          updateCard(parsed.id, {
+            status: parsed.percent >= 100 ? "done" : "progress",
+            progress_msg: parsed.message,
+            progress_pct: Math.max(0, Math.min(100, parsed.percent)),
+          })
+          break
+        case "tool_result":
+          updateCard(parsed.id, { status: "done", result: parsed.result, duration_ms: parsed.duration_ms })
+          break
+        case "confirm":
+          setPendingConfirm({
+            confirm_id: parsed.id,
+            name: parsed.name,
+            parameters: parsed.params ?? {},
+            level: parsed.level,
+          })
+          break
+        case "confirm_result":
+          setPendingConfirm(current => current?.confirm_id === parsed.id ? null : current)
+          break
+        case "error":
+          receivedError = true
+          setThinking(false)
+          pushToast("error", parsed.message)
+          setMessages(prev => prev.map(item =>
+            item.id === assistantId && !item.content
+              ? { ...item, content: `⚠ ${parsed.message}` }
+              : item
+          ))
+          break
+        case "warning":
+          pushToast("warning", parsed.message)
+          break
+        case "usage":
+          setMessages(prev => prev.map(item => item.id === assistantId ? { ...item, usage: parsed } : item))
+          break
+        case "done":
+          receivedDone = true
+          setThinking(false)
+          finalizeTools()
+          break
+      }
+    }
+
+    const consumeBuffer = (rawBuffer: string, flush = false): string => {
+      let buffer = rawBuffer.replace(/\r\n/g, "\n")
+      let boundary = buffer.indexOf("\n\n")
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const data = block.split("\n")
+          .filter(line => line.startsWith("data:"))
+          .map(line => line.slice(5).trimStart())
+          .join("\n")
+        handleEventData(data)
+        boundary = buffer.indexOf("\n\n")
+      }
+      if (flush && buffer.trim()) {
+        const data = buffer.split("\n")
+          .filter(line => line.startsWith("data:"))
+          .map(line => line.slice(5).trimStart())
+          .join("\n")
+        handleEventData(data)
+        return ""
+      }
+      return buffer
+    }
 
     try {
       const body = JSON.stringify({
@@ -394,171 +582,52 @@ export function AgentChatPage() {
       }
 
       const reader = response.body?.getReader()
+      if (!reader) throw new Error("伺服器未返回可讀取的串流")
       const decoder = new TextDecoder()
       let buffer = ""
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n")
-          buffer = lines.pop() ?? ""
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6).trim()
-              if (data === "[DONE]") continue
-
-              try {
-                const parsed = JSON.parse(data) as SSEEvent
-                switch (parsed.event) {
-                  case "conv_id":
-                    if (!convId) setActiveId(parsed.conv_id)
-                    break
-
-                  case "thinking":
-                    setThinking(true)
-                    break
-
-                  case "token":
-                    setThinking(false)
-                    setMessages(prev =>
-                      prev.map(m =>
-                        m.id === assistantId
-                          ? { ...m, content: m.content + (parsed.token ?? "") }
-                          : m
-                      )
-                    )
-                    break
-
-                  case "tool_call": {
-                    const card: ToolCardState = {
-                      id: parsed.id,
-                      name: parsed.name,
-                      params: parsed.params,
-                      level: parsed.level,
-                      status: "calling",
-                    }
-                    setToolCards(prev => [...prev, card])
-                    break
-                  }
-
-                  case "tool_progress":
-                    setToolCards(prev =>
-                      prev.map(c =>
-                        c.id === parsed.id
-                          ? { ...c, status: "progress", progress_msg: parsed.message, progress_pct: parsed.percent }
-                          : c
-                      )
-                    )
-                    break
-
-                  case "tool_result":
-                    setToolCards(prev =>
-                      prev.map(c =>
-                        c.id === parsed.id
-                          ? { ...c, status: "done", result: parsed.result, duration_ms: parsed.duration_ms }
-                          : c
-                      )
-                    )
-                    break
-
-                  case "confirm":
-                    setPendingConfirm({
-                      confirm_id: parsed.id,
-                      name: parsed.name,
-                      parameters: parsed.params,
-                      level: parsed.level,
-                    })
-                    break
-
-                  case "confirm_result":
-                    // Update tool card status after confirmation
-                    break
-
-                  case "error":
-                    setToasts(prev => [...prev, { id: `t-${Date.now()}`, type: "error", message: parsed.message }])
-                    break
-
-                  case "warning":
-                    setToasts(prev => [...prev, { id: `t-${Date.now()}`, type: "warning", message: parsed.message }])
-                    break
-
-                  case "usage":
-                    setMessages(prev =>
-                      prev.map(m =>
-                        m.id === assistantId
-                          ? { ...m, usage: parsed }
-                          : m
-                      )
-                    )
-                    break
-
-                  case "done":
-                    setThinking(false)
-                    // Persist tool cards as messages
-                    const cards = toolCardsRef.current
-                    setMessages(prev => {
-                      let updated = [...prev]
-                      cards.forEach(card => {
-                        if (card.status === "done" && card.result) {
-                          updated.push({
-                            id: Date.now() + Math.random(),
-                            conversation_id: convId ?? "",
-                            role: "tool",
-                            content: "",
-                            tool_name: card.name,
-                            tool_input: JSON.stringify(card.params),
-                            tool_result: card.result,
-                            created_at: new Date().toISOString(),
-                          } as AgentMessage)
-                        }
-                      })
-                      return updated
-                    })
-                    setToolCards([])
-                    break
-                }
-              } catch {
-                // non-JSON data line, treat as token
-                setMessages(prev =>
-                  prev.map(m =>
-                    m.id === assistantId ? { ...m, content: m.content + data } : m
-                  )
-                )
-              }
-            }
-          }
-        }
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        buffer = consumeBuffer(buffer)
       }
-
-      // SSE stream complete — messages already updated via streaming, no need to reload
-    } catch (e: any) {
-      if (e.name !== "AbortError") {
-        // show error in chat
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, content: `⚠ 請求失敗：${e.message ?? "未知錯誤"}` }
-              : m
-          )
-        )
+      buffer += decoder.decode()
+      consumeBuffer(buffer, true)
+      if (!receivedDone) finalizeTools()
+    } catch (error) {
+      finalizeTools()
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setMessages(prev => prev.map(item =>
+          item.id === assistantId && !item.content ? { ...item, content: "已停止生成。" } : item
+        ))
+      } else {
+        const messageText = errorMessage(error, "未知錯誤")
+        pushToast("error", `請求失敗：${messageText}`)
+        setMessages(prev => prev.map(item =>
+          item.id === assistantId ? { ...item, content: item.content || `⚠ 請求失敗：${messageText}` } : item
+        ))
       }
     } finally {
       setStreaming(false)
       setThinking(false)
       setToolCards([])
-      toolCardsRef.current = []
+      setPendingConfirm(null)
       abortRef.current = null
-      // reload conversations so sidebar reflects the updated state
       loadConversations()
+      if (receivedError) checkHealth()
     }
   }
 
   /* stop streaming */
   const handleStop = () => {
+    if (pendingConfirm) {
+      api("/api/v1/agent/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm_id: pendingConfirm.confirm_id, approved: false }),
+      }).catch(() => undefined)
+    }
     abortRef.current?.abort()
   }
 
@@ -575,17 +644,17 @@ export function AgentChatPage() {
           approved,
         }),
       })
-    } catch {
-      // ignore — backend may have already processed
-    } finally {
       setPendingConfirm(null)
+    } catch (error) {
+      pushToast("error", errorMessage(error, "確認操作失敗"))
+    } finally {
       setConfirming(false)
     }
   }
 
   /* handle keyboard */
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       handleSend()
     }
@@ -598,12 +667,16 @@ export function AgentChatPage() {
       {/* Tab switcher */}
       <div className="agent-tabs">
         <button className={`agent-tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>💬 聊天</button>
-        <button className={`agent-tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")}>📊 用量統計</button>
+        <button className={`agent-tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")}>⚙ 管理中心</button>
+        <span className={`agent-health-pill ${healthLoading ? "loading" : health?.status ?? "error"}`}>
+          <span aria-hidden="true" />
+          {healthLoading ? "檢查模型" : health?.status === "ok" ? health.model : "模型離線"}
+        </span>
       </div>
 
       {tab === "chat" ? (
       <div className="agent-chat-body">
-      <>
+      {mobileSidebarOpen && <button className="agent-sidebar-backdrop" aria-label="關閉對話歷史" onClick={() => setMobileSidebarOpen(false)} />}
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -611,24 +684,54 @@ export function AgentChatPage() {
         onSelect={handleSelect}
         onNew={handleNew}
         onDelete={handleDelete}
+        disabled={streaming}
+        deletingId={deletingId}
+        mobileOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        loading={conversationsLoading}
+        error={conversationsError}
+        onRetry={loadConversations}
       />
 
       {/* Main chat area */}
       <div className="agent-main">
+        <div className="agent-mobile-toolbar">
+          <button type="button" onClick={() => setMobileSidebarOpen(true)}>☰ 對話歷史</button>
+          <button type="button" onClick={handleNew} disabled={streaming}>＋ 新對話</button>
+        </div>
+
+        {!healthLoading && health?.status === "error" && (
+          <div className="agent-health-banner" role="alert">
+            <div>
+              <strong>模型服務目前不可用</strong>
+              <span>{health.message}</span>
+            </div>
+            <button type="button" onClick={checkHealth} disabled={healthLoading}>重新檢查</button>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="agent-messages">
-          {!activeId && messages.length === 0 && (
+          {messagesLoading && <div className="agent-page-state">載入對話中...</div>}
+          {!messagesLoading && messagesError && (
+            <div className="agent-page-state agent-page-error">
+              <span>{messagesError}</span>
+              {activeId && <button type="button" onClick={() => loadMessages(activeId)}>重試</button>}
+            </div>
+          )}
+          {!messagesLoading && !messagesError && !activeId && messages.length === 0 && (
             <div className="agent-empty">
               <div className="agent-empty-icon">🤖</div>
               <h3>AI 助手</h3>
               <p>我可以幫您查看主機、服務、告警等 OPS 資源</p>
               <div className="agent-suggestions">
                 {SUGGESTIONS.map(s => (
-                  <button key={s} className="agent-suggestion" onClick={() => {
-                    setInput(s)
-                    // handleSend will auto-create conversation if needed
-                    setTimeout(() => handleSend(s), 50)
-                  }}>
+                  <button
+                    key={s}
+                    className="agent-suggestion"
+                    disabled={streaming || health?.status !== "ok"}
+                    onClick={() => handleSend(s)}
+                  >
                     {s}
                   </button>
                 ))}
@@ -636,9 +739,11 @@ export function AgentChatPage() {
             </div>
           )}
 
-          {messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
+          {!messagesLoading && messages.map(msg =>
+            msg.role === "assistant" && !msg.content && streaming
+              ? null
+              : <MessageBubble key={msg.id} msg={msg} />
+          )}
 
           {/* Tool execution cards (SSE event bus) */}
           {toolCards.map(card => (
@@ -729,16 +834,19 @@ export function AgentChatPage() {
         )}
 
         {/* Toast notifications (SSE event bus) */}
-        {toasts.map(toast => (
-          <div key={toast.id} className={`agent-toast agent-toast-${toast.type}`}>
-            <span className="agent-toast-icon">
-              {toast.type === "error" && "❌"}
-              {toast.type === "warning" && "⚠️"}
-              {toast.type === "info" && "ℹ️"}
-            </span>
-            <span className="agent-toast-message">{toast.message}</span>
-          </div>
-        ))}
+        <div className="agent-toast-stack" aria-live="polite">
+          {toasts.map(toast => (
+            <div key={toast.id} className={`agent-toast agent-toast-${toast.type}`}>
+              <span className="agent-toast-icon">
+                {toast.type === "error" && "❌"}
+                {toast.type === "warning" && "⚠️"}
+                {toast.type === "info" && "ℹ️"}
+              </span>
+              <span className="agent-toast-message">{toast.message}</span>
+              <button type="button" aria-label="關閉通知" onClick={() => setToasts(prev => prev.filter(item => item.id !== toast.id))}>×</button>
+            </div>
+          ))}
+        </div>
 
         {/* Input area */}
         <div className="agent-input-area">
@@ -750,6 +858,8 @@ export function AgentChatPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              disabled={healthLoading || health?.status !== "ok"}
+              maxLength={10000}
               rows={1}
             />
             {streaming ? (
@@ -760,7 +870,7 @@ export function AgentChatPage() {
               <button
                 className="agent-send-btn"
                 onClick={() => handleSend()}
-                disabled={!input.trim()}
+                disabled={!input.trim() || healthLoading || health?.status !== "ok"}
                 title="發送"
               >
                 ▶
@@ -769,7 +879,6 @@ export function AgentChatPage() {
           </div>
         </div>
       </div>
-      </>
       </div>
       ) : (
       <AgentUsagePanel />
@@ -813,22 +922,20 @@ function AgentUsagePanel() {
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const load = useCallback((p: string) => {
     setLoading(true)
+    setError("")
     api<UsageData>(`/api/v1/agent/usage?period=${p}`)
       .then(r => setData(r))
-      .catch(() => setData(null))
+      .catch(error => setError(errorMessage(error, "載入用量統計失敗")))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load(period) }, [period, load])
 
-  if (!data && !loading) return <div className="usage-empty">載入失敗，請稍後再試</div>
-  if (loading) return <div className="usage-empty">載入中...</div>
-  if (!data) return <div className="usage-empty">暫無用量數據</div>
-
-  const maxTokens = Math.max(...data.daily.map(d => d.total_tokens), 1)
+  const maxTokens = Math.max(...(data?.daily ?? []).map(d => d.total_tokens), 1)
 
   return (
     <div className="usage-panel">
@@ -839,7 +946,14 @@ function AgentUsagePanel() {
         <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>🔍 系統檢查</button>
       </div>
 
-      {subTab === "usage" ? (
+      {subTab === "usage" ? loading ? (
+        <div className="usage-empty">載入中...</div>
+      ) : error ? (
+        <div className="usage-empty usage-error-state">
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary" onClick={() => load(period)}>重試</button>
+        </div>
+      ) : data ? (
       <div className="usage-content">
       <div className="usage-header">
         <h3>📊 Token 用量統計</h3>
@@ -953,7 +1067,9 @@ function AgentUsagePanel() {
           </table>
         </div>
       )}
-      </div>) : (subTab === "memories" ? <AgentMemoryPanel /> : <AgentInspectPanel />)}
+      </div>) : (
+        <div className="usage-empty">暫無用量數據</div>
+      ) : (subTab === "memories" ? <AgentMemoryPanel /> : <AgentInspectPanel />)}
     </div>
   )
 }
@@ -978,16 +1094,18 @@ function AgentMemoryPanel() {
   const [newValue, setNewValue] = useState("")
   const [newCategory, setNewCategory] = useState("environment")
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
   const load = useCallback((q?: string, cat?: string) => {
     setLoading(true)
+    setError("")
     const params = new URLSearchParams()
     if (q) params.set("q", q)
     if (cat) params.set("category", cat)
     const qs = params.toString()
     api<{ memories: MemoryItem[] }>(`/api/v1/agent/memories${qs ? "?" + qs : ""}`)
       .then(r => setMemories(r.memories))
-      .catch(() => setMemories([]))
+      .catch(error => setError(errorMessage(error, "載入記憶失敗")))
       .finally(() => setLoading(false))
   }, [])
 
@@ -1000,28 +1118,32 @@ function AgentMemoryPanel() {
   const handleSave = async () => {
     if (!newKey.trim() || !newValue.trim()) return
     setSaving(true)
+    setError("")
     try {
       await api("/api/v1/agent/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: newKey, value: newValue, category: newCategory }),
+        body: JSON.stringify({ key: newKey.trim(), value: newValue.trim(), category: newCategory }),
       })
       setNewKey("")
       setNewValue("")
-      load()
-    } catch (e) {
-      console.error("Save memory failed:", e)
+      load(searchQuery || undefined, filterCategory || undefined)
+    } catch (error) {
+      setError(errorMessage(error, "儲存記憶失敗"))
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async (id: number) => {
+    const memory = memories.find(item => item.id === id)
+    if (!window.confirm(`刪除記憶「${memory?.key ?? id}」？`)) return
+    setError("")
     try {
       await api(`/api/v1/agent/memories/${id}`, { method: "DELETE" })
-      load()
-    } catch (e) {
-      console.error("Delete memory failed:", e)
+      setMemories(prev => prev.filter(item => item.id !== id))
+    } catch (error) {
+      setError(errorMessage(error, "刪除記憶失敗"))
     }
   }
 
@@ -1040,6 +1162,8 @@ function AgentMemoryPanel() {
         <h3>🧠 記憶管理</h3>
         <p className="memory-desc">Agent 的跨對話記憶 — 重要事實會自動保留到下次對話</p>
       </div>
+
+      {error && <div className="memory-error" role="alert">⚠ {error}</div>}
 
       {/* Search & filter */}
       <div className="memory-add" style={{ marginBottom: 8 }}>
@@ -1081,7 +1205,7 @@ function AgentMemoryPanel() {
           value={newValue}
           onChange={e => setNewValue(e.target.value)}
         />
-        <button className="memory-add-btn" onClick={handleSave} disabled={saving}>
+        <button className="memory-add-btn" onClick={handleSave} disabled={saving || !newKey.trim() || !newValue.trim()}>
           {saving ? "儲存中..." : "＋ 新增"}
         </button>
       </div>
@@ -1100,7 +1224,7 @@ function AgentMemoryPanel() {
                     <span className="memory-key">{m.key}</span>
                     <span className="memory-value">{m.value}</span>
                   </div>
-                  <button className="memory-delete-btn" onClick={() => handleDelete(m.id)}>×</button>
+                  <button className="memory-delete-btn" title={`刪除 ${m.key}`} aria-label={`刪除記憶 ${m.key}`} onClick={() => handleDelete(m.id)}>×</button>
                 </div>
               ))}
             </div>
@@ -1130,6 +1254,7 @@ function AgentInspectPanel() {
   const [report, setReport] = useState<InspectReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [createNotes, setCreateNotes] = useState(false)
 
   const runInspect = useCallback(() => {
     setLoading(true)
@@ -1137,14 +1262,12 @@ function AgentInspectPanel() {
     api<InspectReport>("/api/v1/agent/inspect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ create_notes: createNotes }),
     })
       .then(r => { setReport(r); setError("") })
-      .catch(e => { setError(typeof e === 'string' ? e : '檢查失敗') })
+      .catch(error => { setError(errorMessage(error, "檢查失敗")) })
       .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { runInspect() }, [runInspect])
+  }, [createNotes])
 
   const pctColor = (v: number | null) => {
     if (v === null) return "#888"
@@ -1164,14 +1287,29 @@ function AgentInspectPanel() {
     <div className="usage-content">
       <div className="usage-header">
         <h3>🔍 系統健康檢查</h3>
-        <button className="btn btn-secondary" onClick={runInspect} disabled={loading}>
-          {loading ? "檢查中..." : "🔄 重新檢查"}
-        </button>
+        <div className="inspect-actions">
+          <label>
+            <input type="checkbox" checked={createNotes} onChange={event => setCreateNotes(event.target.checked)} disabled={loading} />
+            為高風險問題建立筆記
+          </label>
+          <button className="btn btn-secondary" onClick={runInspect} disabled={loading}>
+            {loading ? "檢查中..." : report ? "🔄 重新檢查" : "開始檢查"}
+          </button>
+        </div>
       </div>
 
       {error && <div style={{ padding: "12px", background: "#fef2f2", color: "#dc2626", borderRadius: "6px", marginBottom: "12px" }}>⚠ {error}</div>}
 
       {loading && !report && <div className="usage-empty">系統檢查中...</div>}
+
+      {!loading && !report && !error && (
+        <div className="inspect-empty">
+          <span>🔍</span>
+          <strong>尚未執行系統檢查</strong>
+          <p>將收集主機、服務與告警狀態，並交由 Agent 分析；預設不會修改任何資料。</p>
+          <button className="btn btn-primary" onClick={runInspect}>開始檢查</button>
+        </div>
+      )}
 
       {report && (
         <>
@@ -1210,7 +1348,7 @@ function AgentInspectPanel() {
                   <div style={{ marginTop: "4px" }}>
                     {s.services.map((svc, i) => (
                       <div key={i} style={{ fontSize: "13px" }}>
-                        <span>✅ {svc.name} ({svc.type})</span>
+                        <span>{svc.status === "running" ? "✅" : "❌"} {svc.name} ({svc.type})</span>
                       </div>
                     ))}
                   </div>

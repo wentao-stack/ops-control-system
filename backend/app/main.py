@@ -6,9 +6,9 @@ import time as _time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
@@ -71,11 +71,14 @@ from . import agent as agent_service
 from .agent_models import AgentConversation, AgentMessage
 from .agent_schemas import (
     AgentChatRequest,
+    AgentConfirmRequest,
     AgentConversationCreate,
     AgentConversationListResponse,
     AgentConversationResponse,
     AgentHealthResponse,
     AgentInspectRequest,
+    AgentInspectReport,
+    AgentMemoryUpsert,
     AgentMessagesListResponse,
 )
 from . import clouds as clouds_service
@@ -1223,7 +1226,7 @@ def get_workflow_execution_detail(
 # ── Agent endpoints ─────────────────────────────────────────────────────────
 
 @app.get("/api/v1/agent/health", response_model=AgentHealthResponse)
-async def agent_health():
+async def agent_health(_: User = Depends(get_current_user)):
     """Check LLM API health."""
     return await agent_service.check_llm_health()
 
@@ -1299,34 +1302,43 @@ async def agent_chat(
 # ── Agent proactive inspection ──────────────────────────────────────────────
 
 
-@app.post("/api/v1/agent/inspect")
+@app.post("/api/v1/agent/inspect", response_model=AgentInspectReport)
 async def agent_inspect(
     req: AgentInspectRequest,
-    current_user: dict = Depends(get_current_user),
-):
+    _: User = Depends(get_current_user),
+) -> AgentInspectReport:
     """Proactive system health inspection. Collects data, analyzes with LLM, returns report."""
     from .agent_schemas import AgentInspectRequest
     from .agent import inspect_system
 
-    report = await inspect_system(req.model)
+    report = await inspect_system(req.model, create_notes=req.create_notes)
     return report
 
 
 # ── Agent tool confirmation ──────────────────────────────────────────────────
 
 # In-memory store for pending confirmations: key = confirm_id, value = asyncio.Future[bool] + result dict
-_confirm_store: dict[str, tuple[Any, dict]] = {}
+_confirm_store: dict[str, tuple[Any, dict[str, Any]]] = {}
 
 
 @app.post("/api/v1/agent/confirm")
-async def agent_confirm(confirm_id: str = Body(..., embed=True), approved: bool = Body(True, embed=True)):
+async def agent_confirm(
+    req: AgentConfirmRequest,
+    current_user: User = Depends(get_current_user),
+):
     """Frontend confirms or rejects a tool execution request."""
-    entry = _confirm_store.pop(confirm_id, None)
-    if entry:
-        future, result_dict = entry
-        result_dict["approved"] = approved
-        if not future.done():
-            future.set_result(approved)
+    entry = _confirm_store.get(req.confirm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Confirmation request expired or not found")
+
+    future, metadata = entry
+    if metadata.get("user") != current_user.username:
+        raise HTTPException(status_code=403, detail="Confirmation request belongs to another user")
+
+    _confirm_store.pop(req.confirm_id, None)
+    metadata["approved"] = req.approved
+    if not future.done():
+        future.set_result(req.approved)
     return {"status": "ok"}
 
 
@@ -1334,7 +1346,7 @@ async def agent_confirm(confirm_id: str = Body(..., embed=True), approved: bool 
 
 @app.get("/api/v1/agent/usage")
 def get_agent_usage(
-    period: str = "month",
+    period: Literal["today", "week", "month", "all"] = "month",
     user: str | None = None,
     session: Session = Depends(get_session),
     current_user: dict = Depends(get_current_user),
@@ -1468,7 +1480,7 @@ def get_agent_memories(
 
 @app.post("/api/v1/agent/memories")
 def save_agent_memory(
-    req: dict,
+    req: AgentMemoryUpsert,
     session: Session = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -1476,12 +1488,9 @@ def save_agent_memory(
     from .models import AgentMemory
     from datetime import UTC, datetime
 
-    key = req.get("key", "")
-    value = req.get("value", "")
-    category = req.get("category", "environment")
-
-    if not key or not value:
-        return {"error": "key and value required"}, 400
+    key = req.key
+    value = req.value
+    category = req.category
 
     existing = session.scalar(
         select(AgentMemory).where(
@@ -1523,7 +1532,7 @@ def delete_agent_memory(
         )
     )
     if not mem:
-        return {"error": "not found"}, 404
+        raise HTTPException(status_code=404, detail="Memory not found")
     session.delete(mem)
     session.commit()
     return {"ok": True}

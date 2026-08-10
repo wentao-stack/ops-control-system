@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ── Conversation schemas ─────────────────────────────────────────────────────
 
 class AgentConversationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     model: str
@@ -15,10 +18,6 @@ class AgentConversationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
-
-    class Config:
-        from_attributes = True
-
 
 class AgentConversationListResponse(BaseModel):
     conversations: list[AgentConversationResponse]
@@ -28,12 +27,14 @@ class AgentConversationCreate(BaseModel):
     # Leave the model unset so the service can use AGENT_DEFAULT_MODEL.
     # A hard-coded schema default overrides the configured local model even
     # when clients (such as the web UI) do not send a model field.
-    model: str | None = None
+    model: str | None = Field(default=None, max_length=128)
 
 
 # ── Message schemas ──────────────────────────────────────────────────────────
 
 class AgentMessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     conversation_id: str
     role: str
@@ -43,10 +44,6 @@ class AgentMessageResponse(BaseModel):
     tool_result: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
 class AgentMessagesListResponse(BaseModel):
     messages: list[AgentMessageResponse]
 
@@ -54,9 +51,36 @@ class AgentMessagesListResponse(BaseModel):
 # ── Chat request ─────────────────────────────────────────────────────────────
 
 class AgentChatRequest(BaseModel):
-    conversation_id: str | None = None
-    message: str = Field(min_length=1)
-    model: str | None = None
+    conversation_id: str | None = Field(default=None, max_length=64)
+    message: str = Field(min_length=1, max_length=10_000)
+    model: str | None = Field(default=None, max_length=128)
+
+    @field_validator("message")
+    @classmethod
+    def message_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be blank")
+        return value
+
+
+class AgentConfirmRequest(BaseModel):
+    confirm_id: str = Field(min_length=1, max_length=64)
+    approved: bool = True
+
+
+class AgentMemoryUpsert(BaseModel):
+    key: str = Field(min_length=1, max_length=128)
+    value: str = Field(min_length=1, max_length=10_000)
+    category: Literal["user", "environment", "procedure", "preference"] = "environment"
+
+    @field_validator("key", "value")
+    @classmethod
+    def strip_non_empty_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value must not be blank")
+        return value
 
 
 # ── Health ───────────────────────────────────────────────────────────────────
@@ -71,7 +95,8 @@ class AgentHealthResponse(BaseModel):
 
 class AgentInspectRequest(BaseModel):
     """Request for proactive system inspection."""
-    model: str | None = None
+    model: str | None = Field(default=None, max_length=128)
+    create_notes: bool = False
 
 
 class AgentInspectReport(BaseModel):

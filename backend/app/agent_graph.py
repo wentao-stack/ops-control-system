@@ -350,6 +350,12 @@ async def run_agent_graph(
         if not tool_calls and iteration == 0:
             auto_tool = detect_intent(req.message)
             if auto_tool:
+                auto_tool["id"] = f"call_{_uuid.uuid4().hex[:12]}"
+                auto_tool["type"] = "function"
+                # Keep the assistant/tool message sequence valid for the next
+                # OpenAI-compatible request. A standalone tool result without
+                # a preceding assistant tool_call is rejected by most servers.
+                assistant_msg["tool_calls"] = [auto_tool]
                 tool_calls = [auto_tool]
 
         # ── No tool calls = final response ──────────────────────────────
@@ -397,12 +403,20 @@ async def run_agent_graph(
                 confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
                 confirm_message = f"確認執行 {tool_name}？\n\n參數: {json.dumps(tool_args, ensure_ascii=False)}"
 
-                yield sse("confirm", id=confirm_id, name=tool_name, params=tool_args, level=tool_level, message=confirm_message)
-
                 loop = asyncio.get_running_loop()
                 confirm_future: asyncio.Future[bool] = loop.create_future()
-                confirm_result: dict = {"approved": False}
+                confirm_result: dict = {"approved": False, "user": user}
+                # Register before publishing the event so a fast frontend cannot
+                # confirm before the request exists in the store.
                 _confirm_store[confirm_id] = (confirm_future, confirm_result)
+
+                try:
+                    yield sse("confirm", id=confirm_id, name=tool_name, params=tool_args, level=tool_level, message=confirm_message)
+                except BaseException:
+                    _confirm_store.pop(confirm_id, None)
+                    if not confirm_future.done():
+                        confirm_future.cancel()
+                    raise
 
                 try:
                     approved = await asyncio.wait_for(confirm_future, timeout=300)
@@ -419,14 +433,7 @@ async def run_agent_graph(
                     continue
                 except asyncio.CancelledError:
                     _confirm_store.pop(confirm_id, None)
-                    result = "❌ 操作已取消"
-                    yield sse("confirm_result", id=confirm_id, approved=False)
-                    yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
-                    tool_input_json = json.dumps(tool_args, ensure_ascii=False)
-                    _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
-                    _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=False)
-                    llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
-                    continue
+                    raise
                 else:
                     _confirm_store.pop(confirm_id, None)
                     if not approved:
