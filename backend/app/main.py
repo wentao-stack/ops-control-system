@@ -1240,11 +1240,13 @@ async def agent_health(_: User = Depends(get_current_user)):
 
 @app.get("/api/v1/agent/conversations", response_model=AgentConversationListResponse)
 def agent_list_conversations(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> AgentConversationListResponse:
     """List all conversations for the current user."""
-    return agent_service.list_conversations(session, user.username)
+    return agent_service.list_conversations(session, user.username, limit=limit, offset=offset)
 
 
 @app.post("/api/v1/agent/conversations", response_model=AgentConversationResponse)
@@ -1274,6 +1276,8 @@ def agent_delete_conversation(
 @app.get("/api/v1/agent/conversations/{conversation_id}/messages", response_model=AgentMessagesListResponse)
 def agent_get_messages(
     conversation_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    before_id: int | None = Query(default=None, ge=1),
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> AgentMessagesListResponse:
@@ -1285,7 +1289,7 @@ def agent_get_messages(
     ).first()
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return agent_service.get_messages(session, conversation_id)
+    return agent_service.get_messages(session, conversation_id, limit=limit, before_id=before_id)
 
 
 @app.post("/api/v1/agent/chat")
@@ -1355,6 +1359,8 @@ async def agent_confirm(
 def get_agent_usage(
     period: Literal["today", "week", "month", "all"] = "month",
     user: str | None = None,
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -1434,6 +1440,9 @@ def get_agent_usage(
         "total_requests": len(records),
         "user_breakdown": user_breakdown,
         "daily": list(daily.values()),
+        "records_total": len(records),
+        "records_offset": offset,
+        "records_limit": limit,
         "records": [
             {
                 "id": r.id,
@@ -1446,7 +1455,7 @@ def get_agent_usage(
                 "tool_calls_count": r.tool_calls_count,
                 "created_at": r.created_at.isoformat(),
             }
-            for r in records[:100]  # limit to last 100
+            for r in records[offset:offset + limit]
         ],
     }
 
@@ -1455,6 +1464,8 @@ def get_agent_usage(
 def get_agent_memories(
     category: str | None = None,
     q: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -1469,7 +1480,8 @@ def get_agent_memories(
             (AgentMemory.key.ilike(f"%{q}%")) |
             (AgentMemory.value.ilike(f"%{q}%"))
         )
-    memories = session.scalars(sq.order_by(AgentMemory.updated_at.desc())).all()
+    total = session.scalar(select(func.count()).select_from(sq.subquery())) or 0
+    memories = session.scalars(sq.order_by(AgentMemory.updated_at.desc()).offset(offset).limit(limit)).all()
     return {
         "memories": [
             {
@@ -1481,7 +1493,10 @@ def get_agent_memories(
                 "updated_at": m.updated_at.isoformat(),
             }
             for m in memories
-        ]
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
     }
 
 

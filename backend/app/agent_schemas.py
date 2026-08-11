@@ -21,6 +21,9 @@ class AgentConversationResponse(BaseModel):
 
 class AgentConversationListResponse(BaseModel):
     conversations: list[AgentConversationResponse]
+    total: int = 0
+    offset: int = 0
+    limit: int = 50
 
 
 class AgentConversationCreate(BaseModel):
@@ -46,6 +49,8 @@ class AgentMessageResponse(BaseModel):
 
 class AgentMessagesListResponse(BaseModel):
     messages: list[AgentMessageResponse]
+    total: int = 0
+    has_more: bool = False
 
 
 # ── Chat request ─────────────────────────────────────────────────────────────

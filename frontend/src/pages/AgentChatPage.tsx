@@ -98,6 +98,32 @@ function formatToolInput(value: string | null): string {
   }
 }
 
+function PaginationControls({
+  offset,
+  limit,
+  total,
+  onPage,
+  compact = false,
+}: {
+  offset: number
+  limit: number
+  total: number
+  onPage: (offset: number) => void
+  compact?: boolean
+}) {
+  if (total <= limit) return null
+  const page = Math.floor(offset / limit) + 1
+  const pages = Math.ceil(total / limit)
+  return (
+    <nav className={`agent-pagination${compact ? " compact" : ""}`} aria-label="分頁">
+      <span>{offset + 1}–{Math.min(offset + limit, total)} / {total}</span>
+      <button type="button" onClick={() => onPage(Math.max(0, offset - limit))} disabled={offset === 0}>上一頁</button>
+      <span>第 {page} / {pages} 頁</span>
+      <button type="button" onClick={() => onPage(offset + limit)} disabled={offset + limit >= total}>下一頁</button>
+    </nav>
+  )
+}
+
 /* ── sub-components (inline) ─────────────────────────────────────────────── */
 
 function Sidebar({
@@ -113,6 +139,10 @@ function Sidebar({
   loading,
   error,
   onRetry,
+  total,
+  offset,
+  limit,
+  onPage,
 }: {
   conversations: AgentConversation[]
   activeId: string | null
@@ -126,6 +156,10 @@ function Sidebar({
   loading: boolean
   error: string
   onRetry: () => void
+  total: number
+  offset: number
+  limit: number
+  onPage: (offset: number) => void
 }) {
   const groups = groupConversations(conversations)
 
@@ -181,6 +215,7 @@ function Sidebar({
           </div>
         )}
       </div>
+      {!loading && !error && <PaginationControls compact total={total} offset={offset} limit={limit} onPage={onPage} />}
     </aside>
   )
 }
@@ -200,7 +235,10 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
           )}
         </div>
         {msg.tool_result && (
-          <div className="agent-tool-body">{msg.tool_result}</div>
+          <details className="agent-tool-details" open>
+            <summary>完整工具回傳</summary>
+            <pre className="agent-tool-body">{msg.tool_result}</pre>
+          </details>
         )}
       </div>
     )
@@ -231,10 +269,14 @@ export function AgentChatPage() {
   const [conversations, setConversations] = useState<AgentConversation[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(true)
   const [conversationsError, setConversationsError] = useState("")
+  const [conversationsTotal, setConversationsTotal] = useState(0)
+  const [conversationOffset, setConversationOffset] = useState(0)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<AgentMessage[]>([])
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [messagesError, setMessagesError] = useState("")
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [thinking, setThinking] = useState(false)
@@ -259,12 +301,14 @@ export function AgentChatPage() {
   }, [])
 
   /* load conversations */
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (offset = 0) => {
     setConversationsLoading(true)
     setConversationsError("")
     try {
-      const response = await api<{ conversations: AgentConversation[] }>("/api/v1/agent/conversations")
+      const response = await api<{ conversations: AgentConversation[]; total: number }>(`/api/v1/agent/conversations?limit=50&offset=${offset}`)
       setConversations(response.conversations)
+      setConversationsTotal(response.total)
+      setConversationOffset(offset)
     } catch (error) {
       setConversationsError(errorMessage(error, "無法載入對話歷史"))
     } finally {
@@ -273,19 +317,27 @@ export function AgentChatPage() {
   }, [])
 
   /* load messages for a conversation */
-  const loadMessages = useCallback(async (convId: string) => {
+  const loadMessages = useCallback(async (convId: string, beforeId?: number) => {
     const requestId = ++messageRequestRef.current
-    setMessagesLoading(true)
+    if (beforeId) setLoadingOlderMessages(true)
+    else setMessagesLoading(true)
     setMessagesError("")
     try {
-      const response = await api<{ messages: AgentMessage[] }>(`/api/v1/agent/conversations/${encodeURIComponent(convId)}/messages`)
-      if (messageRequestRef.current === requestId) setMessages(response.messages)
+      const query = beforeId ? `?limit=100&before_id=${beforeId}` : "?limit=100"
+      const response = await api<{ messages: AgentMessage[]; has_more: boolean }>(`/api/v1/agent/conversations/${encodeURIComponent(convId)}/messages${query}`)
+      if (messageRequestRef.current === requestId) {
+        setMessages(prev => beforeId ? [...response.messages, ...prev] : response.messages)
+        setHasMoreMessages(response.has_more)
+      }
     } catch (error) {
       if (messageRequestRef.current === requestId) {
         setMessagesError(errorMessage(error, "無法載入對話內容"))
       }
     } finally {
-      if (messageRequestRef.current === requestId) setMessagesLoading(false)
+      if (messageRequestRef.current === requestId) {
+        setMessagesLoading(false)
+        setLoadingOlderMessages(false)
+      }
     }
   }, [])
 
@@ -303,7 +355,7 @@ export function AgentChatPage() {
 
   /* initial load */
   useEffect(() => {
-    loadConversations()
+    loadConversations(0)
     checkHealth()
   }, [checkHealth, loadConversations])
 
@@ -338,6 +390,7 @@ export function AgentChatPage() {
     setMessages([])
     setMessagesError("")
     setMessagesLoading(false)
+    setHasMoreMessages(false)
     setToolCards([])
     setPendingConfirm(null)
     setMobileSidebarOpen(false)
@@ -366,6 +419,7 @@ export function AgentChatPage() {
     if (streaming || id === activeId) return
     setActiveId(id)
     setMessages([])
+    setHasMoreMessages(false)
     loadMessages(id)
   }
 
@@ -614,7 +668,7 @@ export function AgentChatPage() {
       setToolCards([])
       setPendingConfirm(null)
       abortRef.current = null
-      loadConversations()
+      loadConversations(0)
       if (receivedError) checkHealth()
     }
   }
@@ -691,6 +745,10 @@ export function AgentChatPage() {
         loading={conversationsLoading}
         error={conversationsError}
         onRetry={loadConversations}
+        total={conversationsTotal}
+        offset={conversationOffset}
+        limit={50}
+        onPage={loadConversations}
       />
 
       {/* Main chat area */}
@@ -739,6 +797,17 @@ export function AgentChatPage() {
             </div>
           )}
 
+          {hasMoreMessages && activeId && (
+            <button
+              type="button"
+              className="agent-load-older"
+              disabled={loadingOlderMessages || messages.length === 0}
+              onClick={() => loadMessages(activeId, messages[0]?.id)}
+            >
+              {loadingOlderMessages ? "載入較早訊息中…" : "載入較早訊息"}
+            </button>
+          )}
+
           {!messagesLoading && messages.map(msg =>
             msg.role === "assistant" && !msg.content && streaming
               ? null
@@ -770,7 +839,10 @@ export function AgentChatPage() {
                 </div>
               )}
               {card.status === "done" && card.result && (
-                <div className="agent-tool-exec-result">{card.result}</div>
+                <details className="agent-tool-details" open>
+                  <summary>完整工具回傳</summary>
+                  <pre className="agent-tool-exec-result">{card.result}</pre>
+                </details>
               )}
             </div>
           ))}
@@ -909,6 +981,9 @@ interface UsageData {
     tool_calls_count: number
     created_at: string
   }[]
+  records_total: number
+  records_offset: number
+  records_limit: number
 }
 
 function fmtTokens(n: number): string {
@@ -921,19 +996,20 @@ function AgentUsagePanel() {
   const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
+  const [recordsOffset, setRecordsOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const load = useCallback((p: string) => {
+  const load = useCallback((p: string, offset = 0) => {
     setLoading(true)
     setError("")
-    api<UsageData>(`/api/v1/agent/usage?period=${p}`)
+    api<UsageData>(`/api/v1/agent/usage?period=${p}&limit=25&offset=${offset}`)
       .then(r => setData(r))
       .catch(error => setError(errorMessage(error, "載入用量統計失敗")))
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load(period) }, [period, load])
+  useEffect(() => { setRecordsOffset(0); load(period, 0) }, [period, load])
 
   const maxTokens = Math.max(...(data?.daily ?? []).map(d => d.total_tokens), 1)
 
@@ -951,7 +1027,7 @@ function AgentUsagePanel() {
       ) : error ? (
         <div className="usage-empty usage-error-state">
           <span>{error}</span>
-          <button type="button" className="btn btn-secondary" onClick={() => load(period)}>重試</button>
+          <button type="button" className="btn btn-secondary" onClick={() => load(period, recordsOffset)}>重試</button>
         </div>
       ) : data ? (
       <div className="usage-content">
@@ -1054,7 +1130,7 @@ function AgentUsagePanel() {
               </tr>
             </thead>
             <tbody>
-              {data.records.slice(0, 20).map(r => (
+              {data.records.map(r => (
                 <tr key={r.id}>
                   <td>{new Date(r.created_at).toLocaleString("zh-TW")}</td>
                   <td>{r.user}</td>
@@ -1065,6 +1141,12 @@ function AgentUsagePanel() {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            total={data.records_total}
+            offset={data.records_offset}
+            limit={data.records_limit}
+            onPage={offset => { setRecordsOffset(offset); load(period, offset) }}
+          />
         </div>
       )}
       </div>) : (
@@ -1095,16 +1177,21 @@ function AgentMemoryPanel() {
   const [newCategory, setNewCategory] = useState("environment")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const pageSize = 25
 
-  const load = useCallback((q?: string, cat?: string) => {
+  const load = useCallback((q?: string, cat?: string, pageOffset = 0) => {
     setLoading(true)
     setError("")
     const params = new URLSearchParams()
     if (q) params.set("q", q)
     if (cat) params.set("category", cat)
+    params.set("limit", String(pageSize))
+    params.set("offset", String(pageOffset))
     const qs = params.toString()
-    api<{ memories: MemoryItem[] }>(`/api/v1/agent/memories${qs ? "?" + qs : ""}`)
-      .then(r => setMemories(r.memories))
+    api<{ memories: MemoryItem[]; total: number }>(`/api/v1/agent/memories${qs ? "?" + qs : ""}`)
+      .then(r => { setMemories(r.memories); setTotal(r.total); setOffset(pageOffset) })
       .catch(error => setError(errorMessage(error, "載入記憶失敗")))
       .finally(() => setLoading(false))
   }, [])
@@ -1112,7 +1199,7 @@ function AgentMemoryPanel() {
   useEffect(() => { load() }, [load])
 
   const handleSearch = () => {
-    load(searchQuery || undefined, filterCategory || undefined)
+    load(searchQuery || undefined, filterCategory || undefined, 0)
   }
 
   const handleSave = async () => {
@@ -1127,7 +1214,7 @@ function AgentMemoryPanel() {
       })
       setNewKey("")
       setNewValue("")
-      load(searchQuery || undefined, filterCategory || undefined)
+      load(searchQuery || undefined, filterCategory || undefined, 0)
     } catch (error) {
       setError(errorMessage(error, "儲存記憶失敗"))
     } finally {
@@ -1174,7 +1261,7 @@ function AgentMemoryPanel() {
           onChange={e => setSearchQuery(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSearch()}
         />
-        <select className="memory-select" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); load(searchQuery || undefined, e.target.value || undefined); }}>
+        <select className="memory-select" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); load(searchQuery || undefined, e.target.value || undefined, 0); }}>
           <option value="">全部分類</option>
           <option value="user">用戶</option>
           <option value="environment">環境</option>
@@ -1182,7 +1269,7 @@ function AgentMemoryPanel() {
           <option value="preference">偏好</option>
         </select>
         <button className="memory-add-btn" onClick={handleSearch}>🔍 搜索</button>
-        <button className="memory-add-btn" onClick={() => { setSearchQuery(""); setFilterCategory(""); load(); }} style={{ opacity: 0.7 }}>重置</button>
+        <button className="memory-add-btn" onClick={() => { setSearchQuery(""); setFilterCategory(""); load(undefined, undefined, 0); }} style={{ opacity: 0.7 }}>重置</button>
       </div>
 
       {/* Add new memory */}
@@ -1231,6 +1318,12 @@ function AgentMemoryPanel() {
           </div>
         ))
       )}
+      <PaginationControls
+        total={total}
+        offset={offset}
+        limit={pageSize}
+        onPage={pageOffset => load(searchQuery || undefined, filterCategory || undefined, pageOffset)}
+      />
     </div>
   )
 }
@@ -1381,6 +1474,10 @@ function AgentInspectPanel() {
               ))}
             </div>
           )}
+          <details className="agent-raw-response">
+            <summary>完整系統與模型回傳資料（JSON）</summary>
+            <pre>{JSON.stringify(report, null, 2)}</pre>
+          </details>
         </>
       )}
     </div>

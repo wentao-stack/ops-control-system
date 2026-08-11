@@ -7591,6 +7591,74 @@ tbody tr:last-child td { border-bottom: none; }
 .inspect-actions { display: flex; align-items: center; gap: 12px; }
 .inspect-actions label { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
 
+/* Paginated data and complete Agent returns */
+.agent-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.agent-pagination.compact {
+  justify-content: center;
+  margin: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+.agent-pagination button,
+.agent-load-older {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--card);
+  cursor: pointer;
+  font-size: inherit;
+}
+.agent-pagination button:hover:not(:disabled),
+.agent-load-older:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.agent-pagination button:disabled,
+.agent-load-older:disabled { cursor: not-allowed; opacity: .45; }
+.agent-load-older { display: block; width: 100%; margin: 0 0 14px; color: var(--primary); background: var(--bg-secondary); }
+
+.agent-tool-details { border-top: 1px solid var(--border); }
+.agent-tool-details summary,
+.agent-raw-response summary { padding: 8px 12px; color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 600; }
+.agent-tool-details summary:hover,
+.agent-raw-response summary:hover { background: rgba(59, 130, 246, .05); }
+.agent-tool-body,
+.agent-tool-exec-result {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-raw-response {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+.agent-raw-response pre {
+  max-height: 520px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: #0f172a;
+  color: #dbeafe;
+  font: 12px/1.55 var(--mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
   .agent-chat { height: calc(100dvh - var(--topbar-h, 56px) - 48px); min-height: 480px; }
   .agent-sidebar {
@@ -7630,5 +7698,6 @@ tbody tr:last-child td { border-bottom: none; }
   .usage-table { min-width: 560px; }
   .usage-user-breakdown,
   .usage-records { overflow-x: auto; }
+  .agent-pagination { flex-wrap: wrap; justify-content: center; }
   .agent-chat-delete { opacity: 1; }
 }

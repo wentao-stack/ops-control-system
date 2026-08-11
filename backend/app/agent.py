@@ -1609,12 +1609,17 @@ def list_conversations(
     session: Session,
     user: str,
     limit: int = 50,
+    offset: int = 0,
 ) -> AgentConversationListResponse:
     """List conversations for a user with message counts."""
+    total = session.scalar(
+        select(func.count()).select_from(AgentConversation).where(AgentConversation.user == user)
+    ) or 0
     convs = (
         session.query(AgentConversation)
         .filter(AgentConversation.user == user)
         .order_by(AgentConversation.updated_at.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
@@ -1642,7 +1647,12 @@ def list_conversations(
         for c in convs
     ]
 
-    return AgentConversationListResponse(conversations=responses)
+    return AgentConversationListResponse(
+        conversations=responses,
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 def create_conversation(
@@ -1699,14 +1709,18 @@ def get_messages(
     session: Session,
     conv_id: str,
     limit: int = 100,
+    before_id: int | None = None,
 ) -> AgentMessagesListResponse:
-    """Get messages for a conversation."""
+    """Get the newest page of messages, or the page before ``before_id``."""
     # Fetch the latest messages, then restore chronological order for the UI.
     # Ordering ascending before LIMIT returned the oldest messages forever once a
     # long conversation crossed the limit.
+    query = session.query(AgentMessage).filter(AgentMessage.conversation_id == conv_id)
+    total = query.count()
+    if before_id is not None:
+        query = query.filter(AgentMessage.id < before_id)
     msgs = list(reversed(
-        session.query(AgentMessage)
-        .filter(AgentMessage.conversation_id == conv_id)
+        query
         .order_by(AgentMessage.id.desc())
         .limit(limit)
         .all()
@@ -1724,7 +1738,11 @@ def get_messages(
                 created_at=m.created_at,
             )
             for m in msgs
-        ]
+        ],
+        total=total,
+        has_more=bool(msgs and msgs[0].id > session.scalar(
+            select(func.min(AgentMessage.id)).where(AgentMessage.conversation_id == conv_id)
+        )),
     )
 
 
