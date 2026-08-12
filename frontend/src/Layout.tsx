@@ -70,10 +70,16 @@ export function Layout() {
           )}
           <button className="logout-btn" onClick={logout} title={t("layout.logout")}>→</button>
         </div>
-        {!collapsed && (
-          <div className="sidebar-lang">
+      </aside>
+      <div className={`content ${collapsed ? "content--expanded" : ""}`}>
+        <div className="topbar">
+          <div>
+            <div className="topbar-title">{title}</div>
+            <div className="topbar-breadcrumb">{t("layout.breadcrumb")} {NAV_KEYS.find(n => n.to === location.pathname) ? t(NAV_KEYS.find(n => n.to === location.pathname)!.key) : title}</div>
+          </div>
+          <div className="topbar-actions">
             <button
-              className="lang-toggle-btn"
+              className="btn btn-sm"
               onClick={() => {
                 const langs = ["zh-TW", "en", "ja"];
                 const idx = langs.indexOf(i18n.language);
@@ -84,16 +90,6 @@ export function Layout() {
             >
               {t(`lang.${i18n.language}`)}
             </button>
-          </div>
-        )}
-      </aside>
-      <div className={`content ${collapsed ? "content--expanded" : ""}`}>
-        <div className="topbar">
-          <div>
-            <div className="topbar-title">{title}</div>
-            <div className="topbar-breadcrumb">{t("layout.breadcrumb")} {NAV_KEYS.find(n => n.to === location.pathname) ? t(NAV_KEYS.find(n => n.to === location.pathname)!.key) : title}</div>
-          </div>
-          <div className="topbar-actions">
             <button className="btn btn-sm" onClick={() => window.location.reload()}>{t("app.reload")}</button>
           </div>
         </div>
