@@ -171,5 +171,36 @@
     "version": "Version",
     "backend": "Backend",
     "frontend": "Frontend"
+  },
+  "clouds": {
+    "title": "Cloud Management",
+    "subtitle": "Vultr · ConoHa VPS 3.0 · Namecheap DNS",
+    "stats": {
+      "platforms": "Cloud Platforms",
+      "total": "Total Instances",
+      "running": "Running",
+      "domains": "Namecheap Domains"
+    },
+    "account": {
+      "info": "Account Info",
+      "remaining": "Remaining Credit",
+      "balance": "Account Balance",
+      "pending": "Pending Charges",
+      "lastPayment": "Last Payment"
+    },
+    "instances": {
+      "label": "Instances"
+    },
+    "noInstances": "No instances or API connection failed",
+    "api": {
+      "ref": "API Endpoint Quick Reference",
+      "keyError": "API connection failed, check VULTR_API_KEY"
+    },
+    "ssh": {
+      "title": "SSH Connection",
+      "endpoint": "SSH Endpoint",
+      "user": "Default Account",
+      "password": "Credential Password"
+    }
   }
 }

@@ -171,5 +171,36 @@
     "version": "版本",
     "backend": "後端",
     "frontend": "前端"
+  },
+  "clouds": {
+    "title": "雲平台管理",
+    "subtitle": "Vultr · ConoHa VPS 3.0 · Namecheap DNS",
+    "stats": {
+      "platforms": "雲平台數",
+      "total": "總實例數",
+      "running": "運行中",
+      "domains": "Namecheap 域名"
+    },
+    "account": {
+      "info": "帳號資訊",
+      "remaining": "Remaining Credit",
+      "balance": "Account Balance",
+      "pending": "下期待扣",
+      "lastPayment": "上次付款"
+    },
+    "instances": {
+      "label": "實例"
+    },
+    "noInstances": "無實例或 API 連接失敗",
+    "api": {
+      "ref": "API 端點速查",
+      "keyError": "API 連接失敗，請檢查 VULTR_API_KEY"
+    },
+    "ssh": {
+      "title": "SSH 連接方式",
+      "endpoint": "ssh 端點",
+      "user": "預設帳號",
+      "password": "權限密碼"
+    }
   }
 }

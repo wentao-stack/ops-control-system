@@ -171,5 +171,36 @@
     "version": "バージョン",
     "backend": "バックエンド",
     "frontend": "フロントエンド"
+  },
+  "clouds": {
+    "title": "クラウド管理",
+    "subtitle": "Vultr · ConoHa VPS 3.0 · Namecheap DNS",
+    "stats": {
+      "platforms": "クラウドプラットフォーム数",
+      "total": "総インスタンス数",
+      "running": "稼働中",
+      "domains": "Namecheap ドメイン"
+    },
+    "account": {
+      "info": "アカウント情報",
+      "remaining": "残高",
+      "balance": "アカウント残高",
+      "pending": "次回請求予定",
+      "lastPayment": "前回支払い"
+    },
+    "instances": {
+      "label": "インスタンス"
+    },
+    "noInstances": "インスタンスなしまたはAPI接続失敗",
+    "api": {
+      "ref": "APIエンドポイントクイックリファレンス",
+      "keyError": "API接続失敗、VULTR_API_KEYを確認"
+    },
+    "ssh": {
+      "title": "SSH接続方法",
+      "endpoint": "SSHエンドポイント",
+      "user": "デフォルトアカウント",
+      "password": "認証パスワード"
+    }
   }
 }

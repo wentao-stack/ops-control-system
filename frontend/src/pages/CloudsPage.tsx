@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { api } from "../auth"
+import { useTranslation } from "react-i18next"
 
 /* ── Cloud Platform Dashboard ────────────────────────────────────────────────
    Fetches Vultr account balance & instances from API.
@@ -250,6 +251,8 @@ function ApiTable({ endpoints }: { endpoints: { method: string; path: string; de
 /* ── Main Page ─────────────────────────────────────────────────────────────── */
 
 export function CloudsPage() {
+  const { t } = useTranslation()
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [vultrAccount, setVultrAccount] = useState<VultrAccount | null>(null)
   const [vultrInstances, setVultrInstances] = useState<VultrInstance[]>([])
@@ -355,8 +358,8 @@ export function CloudsPage() {
     <>
       <div className="page-header">
         <div>
-          <h1>雲平台管理</h1>
-          <p>Vultr · ConoHa VPS 3.0 · Namecheap DNS</p>
+          <h1>t("clouds.title")</h1>
+          <p>t("clouds.subtitle")</p>
         </div>
       </div>
 
@@ -373,28 +376,28 @@ export function CloudsPage() {
             color: "#991b1b",
           }}
         >
-          ⚠️ {error}
+          ⚠️  {error}
         </div>
       )}
 
       {/* Summary stats */}
       <div className="stats-row">
         <div className="stat-card">
-          <div className="stat-label">雲平台數</div>
+          <div className="stat-label">t("clouds.stats.platforms")</div>
           <div className="stat-value">2</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">總實例數</div>
+          <div className="stat-label">t("clouds.stats.total")</div>
           <div className="stat-value">{loading ? "—" : totalInstances}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">運行中</div>
+          <div className="stat-label">t("clouds.stats.running")</div>
           <div className="stat-value" style={{ color: "var(--success)" }}>
             {loading ? "—" : activeInstances}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Namecheap 域名</div>
+          <div className="stat-label">t("clouds.stats.domains")</div>
           <div className="stat-value" style={{ color: "var(--info)" }}>
             1
           </div>
@@ -415,12 +418,10 @@ export function CloudsPage() {
               <div>
                 <h2 style={{ margin: 0 }}>
                   Vultr
-                  {loading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> (載入中…)</span>}
+                  {loading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> {t("common.loading")}</span>}
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                  {vultrAccount
-                    ? `${vultrAccount.name} (${vultrAccount.email}) · Remaining Credit $${vultrAccount.remaining_credit} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}`
-                    : "API 連接失敗，請檢查 VULTR_API_KEY"}
+                  {vultrAccount ? `${vultrAccount.name} (${vultrAccount.email}) · ${t("clouds.account.remaining")} $${vultrAccount.remaining_credit} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}` : t("clouds.apiKeyError")}
                 </span>
               </div>
             </div>
@@ -440,10 +441,10 @@ export function CloudsPage() {
             {/* Balance detail */}
             {vultrAccount && (
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>帳號資訊</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>t("clouds.account.info")</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Remaining Credit</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.remaining")</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.remaining_credit) > 0 ? "var(--success)" : "var(--danger)" }}>
                       ${vultrAccount.remaining_credit}
                     </div>
@@ -452,15 +453,15 @@ export function CloudsPage() {
                     </div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Account Balance</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.balance")</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>下期待扣</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.pending")</div>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.pending_charges}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>上次付款</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.lastPayment")</div>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.last_payment_amount}</div>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{vultrAccount.last_payment_date?.split("T")[0] ?? ""}</div>
                   </div>
@@ -471,9 +472,9 @@ export function CloudsPage() {
             {/* Instances */}
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                實例 ({vultrInstances.length})
+                t("clouds.instances.label"){vultrInstances.length})
               </h3>
-              {vultrInstances.length === 0 && (loading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>載入中…</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>無實例或 API 連接失敗</p>)}
+              {vultrInstances.length === 0 && (loading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("common.loading")</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("clouds.noInstances")</p>)}
               {vultrInstances.map((inst) => (
                 <VultrInstanceCard key={inst.id} inst={inst} />
               ))}
@@ -482,10 +483,10 @@ export function CloudsPage() {
             {/* API Quick Reference */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600 }}>API 端點速查</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600 }}>t("clouds.api.ref")</h3>
                 <div style={{ display: "flex", gap: 8 }}>
                   <a href="https://www.vultr.com/api/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: "none" }}>
-                    📖 文件
+                    📖 t("common.docs")
                   </a>
                   <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary)", background: "#f1f5f9", padding: "3px 8px", borderRadius: 4 }}>
                     https://api.vultr.com/v2
@@ -497,7 +498,7 @@ export function CloudsPage() {
 
             {/* SSH Info */}
             <div style={{ background: "#1a1b26", borderRadius: 6, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#c0caf5", lineHeight: 1.8 }}>
-              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>SSH 連接方式</div>
+              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>t("clouds.ssh.title")</div>
               {vultrInstances.map((inst) => (
                 <div key={inst.id}>
                   <span style={{ color: "#9ece6a" }}>ssh root@{inst.default_ip}</span>
@@ -520,7 +521,7 @@ export function CloudsPage() {
               <div>
                 <h2 style={{ margin: 0 }}>
                   ConoHa VPS 3.0
-                  {conohaLoading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> (載入中…)</span>}
+                  {conohaLoading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> {t("common.loading")}</span>}
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {conohaError
@@ -546,9 +547,9 @@ export function CloudsPage() {
           <div className="card-body">
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                實例 ({conohaInstances.length})
+                t("clouds.instances.label"){conohaInstances.length})
               </h3>
-              {conohaInstances.length === 0 && (conohaLoading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>載入中…</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>無實例或 API 連接失敗</p>)}
+              {conohaInstances.length === 0 && (conohaLoading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("common.loading")</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("clouds.noInstances")</p>)}
               {conohaInstances.map((inst) => (
                 <ConoHaInstanceCard key={inst.id} inst={inst} />
               ))}
@@ -556,10 +557,10 @@ export function CloudsPage() {
 
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600 }}>API 端點速查</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600 }}>t("clouds.api.ref")</h3>
                 <div style={{ display: "flex", gap: 8 }}>
                   <a href="https://doc.conoha.jp/reference/api-vps3/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: "none" }}>
-                    📖 文件
+                    📖 t("common.docs")
                   </a>
                   <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary)", background: "#f1f5f9", padding: "3px 8px", borderRadius: 4 }}>
                     https://compute.c3j1.conoha.io/v2.1
@@ -570,7 +571,7 @@ export function CloudsPage() {
             </div>
 
             <div style={{ background: "#1a1b26", borderRadius: 6, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#c0caf5", lineHeight: 1.8 }}>
-              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>SSH 連接方式</div>
+              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>t("clouds.ssh.title")</div>
               {conohaInstances.map((inst) => (
                 <div key={inst.id}>
                   <span style={{ color: "#9ece6a" }}>ssh root@{inst.ip}</span>
@@ -611,7 +612,7 @@ export function CloudsPage() {
             <div>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>API 限制</h3>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.8 }}>
-                <p>⚠️ 個人帳號，API 功能有限</p>
+                <p>⚠️  個人帳號，API 功能有限</p>
                 <p>主要支援 DNS 操作（AddHosts / DeleteHosts / GetHosts）</p>
                 <p>受 Cloudflare 保護，瀏覽器自動化不穩定</p>
                 <p>驗證郵箱: caiwentao2823703@gmail.com</p>
