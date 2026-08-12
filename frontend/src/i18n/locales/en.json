@@ -1,0 +1,57 @@
+{
+  "app": {
+    "name": "OPS CONTROL",
+    "loading": "Loading…",
+    "reload": "↻ Refresh"
+  },
+  "nav": {
+    "overview": "Overview",
+    "assets": "Assets",
+    "services": "Services",
+    "monitoring": "Monitoring",
+    "remote": "Terminal",
+    "clouds": "Clouds",
+    "notes": "Notes",
+    "workflow": "Workflow",
+    "agent": "Agent",
+    "comfyui": "Generate",
+    "sequence": "Animation",
+    "code": "Code",
+    "settings": "Settings"
+  },
+  "pageTitle": {
+    "/": "Dashboard Overview",
+    "/assets": "Asset Management",
+    "/services": "Service Overview",
+    "/monitoring": "Host Monitoring",
+    "/remote": "Terminal",
+    "/clouds": "Cloud Management",
+    "/notes": "Notes Management",
+    "/workflow": "Workflow Management",
+    "/agent": "AI Assistant",
+    "/comfyui": "AI Generation",
+    "/sequence-studio": "Animation Studio",
+    "/code": "Code Browser",
+    "/settings": "System Settings"
+  },
+  "layout": {
+    "breadcrumb": "OPS Control System /",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "logout": "Logout"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading"
+  },
+  "lang": {
+    "zh-TW": "繁中",
+    "en": "English",
+    "ja": "日本語"
+  }
+}

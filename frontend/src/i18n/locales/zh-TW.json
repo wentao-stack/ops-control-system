@@ -1,0 +1,57 @@
+{
+  "app": {
+    "name": "OPS CONTROL",
+    "loading": "載入中…",
+    "reload": "↻ 重新整理"
+  },
+  "nav": {
+    "overview": "總覽",
+    "assets": "資產",
+    "services": "服務",
+    "monitoring": "監控",
+    "remote": "終端",
+    "clouds": "雲端",
+    "notes": "筆記",
+    "workflow": "流程",
+    "agent": "助手",
+    "comfyui": "生成",
+    "sequence": "動畫",
+    "code": "代碼",
+    "settings": "設定"
+  },
+  "pageTitle": {
+    "/": "儀表板總覽",
+    "/assets": "資產管理",
+    "/services": "服務總覽",
+    "/monitoring": "主機監控",
+    "/remote": "終端",
+    "/clouds": "雲端管理",
+    "/notes": "筆記管理",
+    "/workflow": "流程管理",
+    "/agent": "AI 助手",
+    "/comfyui": "AI 生成",
+    "/sequence-studio": "動畫工作台",
+    "/code": "代碼瀏覽器",
+    "/settings": "系統設定"
+  },
+  "layout": {
+    "breadcrumb": "OPS Control System /",
+    "collapse": "收縮",
+    "expand": "展開",
+    "logout": "登出"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "刪除",
+    "edit": "編輯",
+    "create": "創建",
+    "search": "搜索",
+    "loading": "載入中"
+  },
+  "lang": {
+    "zh-TW": "繁中",
+    "en": "English",
+    "ja": "日本語"
+  }
+}

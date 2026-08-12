@@ -1,0 +1,57 @@
+{
+  "app": {
+    "name": "OPS CONTROL",
+    "loading": "読み込み中…",
+    "reload": "↻ 再読み込み"
+  },
+  "nav": {
+    "overview": "概要",
+    "assets": "資産",
+    "services": "サービス",
+    "monitoring": "監視",
+    "remote": "ターミナル",
+    "clouds": "クラウド",
+    "notes": "ノート",
+    "workflow": "ワークフロー",
+    "agent": "アシスタント",
+    "comfyui": "生成",
+    "sequence": "アニメーション",
+    "code": "コード",
+    "settings": "設定"
+  },
+  "pageTitle": {
+    "/": "ダッシュボード概要",
+    "/assets": "資産管理",
+    "/services": "サービス概要",
+    "/monitoring": "ホスト監視",
+    "/remote": "ターミナル",
+    "/clouds": "クラウド管理",
+    "/notes": "ノート管理",
+    "/workflow": "ワークフロー管理",
+    "/agent": "AI アシスタント",
+    "/comfyui": "AI 生成",
+    "/sequence-studio": "アニメーションスタジオ",
+    "/code": "コードブラウザ",
+    "/settings": "システム設定"
+  },
+  "layout": {
+    "breadcrumb": "OPS Control System /",
+    "collapse": "折りたたむ",
+    "expand": "展開",
+    "logout": "ログアウト"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "create": "作成",
+    "search": "検索",
+    "loading": "読み込み中"
+  },
+  "lang": {
+    "zh-TW": "繁中",
+    "en": "English",
+    "ja": "日本語"
+  }
+}

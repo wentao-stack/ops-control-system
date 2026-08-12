@@ -1,47 +1,33 @@
 import { useState } from "react"
 import { useAuth } from "./AuthProvider"
 import { Link, useLocation, Outlet } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 
-const NAV = [
-  { to: "/", label: "總覽", icon: "📊" },
-  { to: "/assets", label: "資產", icon: "🖥" },
-  { to: "/services", label: "服務", icon: "🔧" },
-  { to: "/monitoring", label: "監控", icon: "📡" },
-  { to: "/remote", label: "終端", icon: "⌨" },
-  { to: "/clouds", label: "雲端", icon: "☁" },
-  { to: "/notes", label: "筆記", icon: "📝" },
-  { to: "/workflow", label: "流程", icon: "🔄" },
-  { to: "/agent", label: "助手", icon: "🤖" },
-  { to: "/comfyui", label: "生成", icon: "🎨" },
-  { to: "/sequence-studio", label: "動畫", icon: "🎞" },
-  { to: "/code", label: "代碼", icon: "📂" },
-  { to: "/settings", label: "設定", icon: "⚙" },
+const NAV_KEYS = [
+  { to: "/", key: "nav.overview", icon: "📊" },
+  { to: "/assets", key: "nav.assets", icon: "🖥" },
+  { to: "/services", key: "nav.services", icon: "🔧" },
+  { to: "/monitoring", key: "nav.monitoring", icon: "📡" },
+  { to: "/remote", key: "nav.remote", icon: "⌨" },
+  { to: "/clouds", key: "nav.clouds", icon: "☁" },
+  { to: "/notes", key: "nav.notes", icon: "📝" },
+  { to: "/workflow", key: "nav.workflow", icon: "🔄" },
+  { to: "/agent", key: "nav.agent", icon: "🤖" },
+  { to: "/comfyui", key: "nav.comfyui", icon: "🎨" },
+  { to: "/sequence-studio", key: "nav.sequence", icon: "🎞" },
+  { to: "/code", key: "nav.code", icon: "📂" },
+  { to: "/settings", key: "nav.settings", icon: "⚙" },
 ]
-
-const PAGE_TITLES: Record<string, string> = {
-  "/": "儀表板總覽",
-  "/assets": "資產管理",
-  "/services": "服務總覽",
-  "/monitoring": "主機監控",
-  "/remote": "終端",
-  "/clouds": "雲端管理",
-  "/notes": "筆記管理",
-  "/workflow": "流程管理",
-  "/agent": "AI 助手",
-  "/comfyui": "AI 生成",
-  "/sequence-studio": "動畫工作台",
-  "/code": "代碼瀏覽器",
-  "/settings": "系統設定",
-}
 
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const { t, i18n } = useTranslation()
+  const nav = NAV_KEYS.map(item => ({ ...item, label: t(item.key) }))
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "1" } catch { return false }
   })
-  const title = PAGE_TITLES[location.pathname] ?? "OPS Control"
-
+  const title = t(`pageTitle${location.pathname}`) ?? t("app.name")
   const toggle = () => {
     const next = !collapsed
     setCollapsed(next)
@@ -53,23 +39,26 @@ export function Layout() {
       <aside className={`sidebar ${collapsed ? "sidebar--collapsed" : ""}`}>
         <div className="brand">
           <span className="brand-mark">◆</span>
-          {!collapsed && <span>OPS CONTROL</span>}
+          {!collapsed && <span>{t("app.name")}</span>}
         </div>
-        <button className="sidebar-toggle" onClick={toggle} title={collapsed ? "展開" : "收縮"}>
+        <button className="sidebar-toggle" onClick={toggle} title={collapsed ? t("layout.expand") : t("layout.collapse")}>
           {collapsed ? "▶" : "◀"}
         </button>
         <nav>
-          {NAV.map(n => (
-            <Link
-              key={n.to}
-              to={n.to}
-              className={location.pathname === n.to ? "active" : ""}
-              title={collapsed ? n.label : undefined}
-            >
-              <span className="nav-icon">{n.icon}</span>
-              {!collapsed && <span>{n.label}</span>}
-            </Link>
-          ))}
+          {NAV_KEYS.map(n => {
+            const label = t(n.key)
+            return (
+              <Link
+                key={n.to}
+                to={n.to}
+                className={location.pathname === n.to ? "active" : ""}
+                title={collapsed ? label : undefined}
+              >
+                <span className="nav-icon">{n.icon}</span>
+                {!collapsed && <span>{label}</span>}
+              </Link>
+            )
+          })}
         </nav>
         <div className="sidebar-user">
           <div className="user-avatar">{user?.display_name?.[0]?.toUpperCase() ?? "?"}</div>
@@ -79,17 +68,31 @@ export function Layout() {
               <span className="user-role">{user?.role ?? ""}</span>
             </div>
           )}
-          <button className="logout-btn" onClick={logout} title="登出">→</button>
+          <button className="logout-btn" onClick={logout} title={t("layout.logout")}>→</button>
         </div>
+        {!collapsed && (
+          <div className="sidebar-lang">
+            {["zh-TW","en","ja"].map(lg => (
+              <button
+                key={lg}
+                className={`lang-btn ${i18n.language === lg ? "active" : ""}`}
+                onClick={() => i18n.changeLanguage(lg)}
+                title={t(`lang.${lg}`)}
+              >
+                {t(`lang.${lg}`)}
+              </button>
+            ))}
+          </div>
+        )}
       </aside>
       <div className={`content ${collapsed ? "content--expanded" : ""}`}>
         <div className="topbar">
           <div>
             <div className="topbar-title">{title}</div>
-            <div className="topbar-breadcrumb">OPS Control System / {NAV.find(n => n.to === location.pathname)?.label ?? title}</div>
+            <div className="topbar-breadcrumb">{t("layout.breadcrumb")} {NAV_KEYS.find(n => n.to === location.pathname) ? t(NAV_KEYS.find(n => n.to === location.pathname)!.key) : title}</div>
           </div>
           <div className="topbar-actions">
-            <button className="btn btn-sm" onClick={() => window.location.reload()}>↻ 重新整理</button>
+            <button className="btn btn-sm" onClick={() => window.location.reload()}>{t("app.reload")}</button>
           </div>
         </div>
         <div className="page">
