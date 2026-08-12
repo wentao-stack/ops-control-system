@@ -161,8 +161,8 @@ function ComfyOutputCard({
         <div className="comfy-output-actions">
           {url && <a className="comfy-icon-btn" href={url} download={output.filename} title="下載">↓</a>}
           {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title="開啟">↗</a>}
-          <button className="comfy-icon-btn comfy-icon-danger" onClick={remove} disabled={deleting} title="刪除作品">
-            {deleting ? "…" : "⌫"}
+          <button className="comfy-delete-btn" onClick={remove} disabled={deleting} title="永久刪除作品">
+            {deleting ? "刪除中…" : "刪除"}
           </button>
         </div>
       </div>

@@ -7395,6 +7395,9 @@ tbody tr:last-child td { border-bottom: none; }
 .comfy-output-info { display: flex; align-items: center; gap: 8px; padding: 9px 10px; }
 .comfy-output-actions { gap: 4px; padding: 0; background: transparent; }
 .comfy-output-actions .comfy-icon-btn { width: 25px; height: 25px; font-size: 10px; }
+.comfy-delete-btn { min-width: 44px; height: 25px; padding: 0 7px; border: 1px solid #efbdc6; border-radius: 7px; color: #c02f47; background: #fff4f6; font-size: 10px; font-weight: 700; }
+.comfy-delete-btn:hover:not(:disabled) { border-color: #d95a70; background: #ffe8ec; }
+.comfy-delete-btn:disabled { cursor: wait; opacity: .65; }
 .comfy-output-name { color: #69758e; font-size: 9px; }
 .comfy-gallery-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 170px; border: 1px dashed #d8deea; border-radius: 13px; color: #8c98ae; background: #fafbfc; }
 .comfy-gallery-empty > span { color: #826df2; font-size: 25px; }
