@@ -72,16 +72,18 @@ export function Layout() {
         </div>
         {!collapsed && (
           <div className="sidebar-lang">
-            {["zh-TW","en","ja"].map(lg => (
-              <button
-                key={lg}
-                className={`lang-btn ${i18n.language === lg ? "active" : ""}`}
-                onClick={() => i18n.changeLanguage(lg)}
-                title={t(`lang.${lg}`)}
-              >
-                {t(`lang.${lg}`)}
-              </button>
-            ))}
+            <button
+              className="lang-toggle-btn"
+              onClick={() => {
+                const langs = ["zh-TW", "en", "ja"];
+                const idx = langs.indexOf(i18n.language);
+                const next = langs[(idx + 1) % langs.length];
+                i18n.changeLanguage(next);
+              }}
+              title="切换语言"
+            >
+              {t(`lang.${i18n.language}`)}
+            </button>
           </div>
         )}
       </aside>
