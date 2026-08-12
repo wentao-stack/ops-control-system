@@ -47,7 +47,8 @@
     "edit": "編輯",
     "create": "創建",
     "search": "搜索",
-    "loading": "載入中"
+    "loading": "載入中",
+    "loadFailed": "載入失敗"
   },
   "lang": {
     "zh-TW": "繁中",
@@ -125,5 +126,50 @@
       "remote": "⌨ 遠程終端"
     },
     "loadFailed": "無法載入資料"
+  },
+  "monitoring": {
+    "title": "主機監控",
+    "total": "共 {{count}} 台主機",
+    "refresh": "收集全部",
+    "collecting": "收集中",
+    "collectedAt": "收集於",
+    "table": {
+      "hostname": "主機",
+      "status": "狀態",
+      "cpu": "CPU",
+      "mem": "記憶體",
+      "disk": "磁碟",
+      "uptime": "運行時間"
+    },
+    "noHosts": "沒有可監控的遠程主機"
+  },
+  "remote": {
+    "title": "遠程終端",
+    "noHosts": "沒有可連接的主機",
+    "selectHost": "選擇主機",
+    "openTerminal": "打開新終端",
+    "exec": "執行",
+    "history": "命令歷史",
+    "quickCmd": "快速命令"
+  },
+  "services": {
+    "title": "服務總覽",
+    "detect": "服務偵測",
+    "supervisor": "進程管理",
+    "noHosts": "沒有可偵測的遠程主機"
+  },
+  "notes": {
+    "title": "筆記管理",
+    "search": "搜尋標題",
+    "category": "分類",
+    "tags": "標籤",
+    "create": "新增筆記",
+    "empty": "還沒有筆記"
+  },
+  "settings": {
+    "title": "系統設定",
+    "version": "版本",
+    "backend": "後端",
+    "frontend": "前端"
   }
 }

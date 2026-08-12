@@ -47,7 +47,8 @@
     "edit": "Edit",
     "create": "Create",
     "search": "Search",
-    "loading": "Loading"
+    "loading": "Loading",
+    "loadFailed": "Load failed"
   },
   "lang": {
     "zh-TW": "繁中",
@@ -125,5 +126,50 @@
       "remote": "⌨ Remote Terminal"
     },
     "loadFailed": "Failed to load data"
+  },
+  "monitoring": {
+    "title": "Host Monitoring",
+    "total": "{{count}} hosts",
+    "refresh": "Collect All",
+    "collecting": "Collecting",
+    "collectedAt": "Collected at",
+    "table": {
+      "hostname": "Hostname",
+      "status": "Status",
+      "cpu": "CPU",
+      "mem": "Memory",
+      "disk": "Disk",
+      "uptime": "Uptime"
+    },
+    "noHosts": "No remote hosts"
+  },
+  "remote": {
+    "title": "Remote Terminal",
+    "noHosts": "No connectable hosts",
+    "selectHost": "Select host",
+    "openTerminal": "Open terminal",
+    "exec": "Execute",
+    "history": "Command history",
+    "quickCmd": "Quick command"
+  },
+  "services": {
+    "title": "Services Overview",
+    "detect": "Service Detection",
+    "supervisor": "Process Management",
+    "noHosts": "No detectable remote hosts"
+  },
+  "notes": {
+    "title": "Notes Management",
+    "search": "Search title",
+    "category": "Category",
+    "tags": "Tags",
+    "create": "New note",
+    "empty": "No notes yet"
+  },
+  "settings": {
+    "title": "System Settings",
+    "version": "Version",
+    "backend": "Backend",
+    "frontend": "Frontend"
   }
 }

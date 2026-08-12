@@ -349,6 +349,7 @@ function RelatedNotes({ currentId, category, onNavigate }: { currentId: string; 
 /* ── Main Page ─────────────────────────────────────────────────────────────── */
 
 export function NoteDetailPage() {
+
   const { noteId } = useParams<{ noteId: string }>()
   const navigate = useNavigate()
   const [note, setNote] = useState<Note | null>(null)
@@ -426,7 +427,7 @@ export function NoteDetailPage() {
       {loading && (
         <div className="card">
           <div className="card-body" style={{ textAlign: "center", padding: 60 }}>
-            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中...</div>
+            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中…...</div>
           </div>
         </div>
       )}

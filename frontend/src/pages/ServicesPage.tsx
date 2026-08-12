@@ -307,6 +307,7 @@ function SupervisorProcessRow({
 // ── Main page with tabs ─────────────────────────────────────────────────────
 
 export function ServicesPage() {
+
   const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
 
   // ── Service detection state (original) ──
@@ -479,7 +480,7 @@ export function ServicesPage() {
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { void loadSupervisor(false) }} disabled={supCollecting}>
-              {supCollecting ? "⠋ 載入中..." : "↻ 重新載入"}
+              {supCollecting ? "⠋ 載入中..." : "重新載入"}
             </button>
           </div>
 

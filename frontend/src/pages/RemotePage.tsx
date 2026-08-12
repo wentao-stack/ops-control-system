@@ -5,6 +5,7 @@ import { RemoteAsset, RemotePingResult } from "../types"
 import { WebTerminal } from "../components/WebTerminal"
 
 export function RemotePage() {
+
   const { token } = useAuth()
   const [remoteAssets, setRemoteAssets] = useState<RemoteAsset[]>([])
   const [remotePing, setRemotePing] = useState<RemotePingResult[]>([])

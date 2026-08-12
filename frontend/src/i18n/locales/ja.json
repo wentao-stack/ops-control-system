@@ -47,7 +47,8 @@
     "edit": "編集",
     "create": "作成",
     "search": "検索",
-    "loading": "読み込み中"
+    "loading": "読み込み中",
+    "loadFailed": "読み込み失敗"
   },
   "lang": {
     "zh-TW": "繁中",
@@ -125,5 +126,50 @@
       "remote": "⌨ リモートターミナル"
     },
     "loadFailed": "データの読み込みに失敗"
+  },
+  "monitoring": {
+    "title": "ホスト監視",
+    "total": "{{count}} 台ホスト",
+    "refresh": "すべて収集",
+    "collecting": "収集中",
+    "collectedAt": "収集時刻",
+    "table": {
+      "hostname": "ホスト名",
+      "status": "状態",
+      "cpu": "CPU",
+      "mem": "メモリ",
+      "disk": "ディスク",
+      "uptime": "稼働時間"
+    },
+    "noHosts": "監視可能なリモートホストなし"
+  },
+  "remote": {
+    "title": "リモートターミナル",
+    "noHosts": "接続可能なホストなし",
+    "selectHost": "ホスト選択",
+    "openTerminal": "ターミナルを開く",
+    "exec": "実行",
+    "history": "コマンド履歴",
+    "quickCmd": "クイックコマンド"
+  },
+  "services": {
+    "title": "サービス概要",
+    "detect": "サービス検出",
+    "supervisor": "プロセス管理",
+    "noHosts": "検出可能なリモートホストなし"
+  },
+  "notes": {
+    "title": "ノート管理",
+    "search": "タイトル検索",
+    "category": "カテゴリ",
+    "tags": "タグ",
+    "create": "新規ノート",
+    "empty": "まだノートなし"
+  },
+  "settings": {
+    "title": "システム設定",
+    "version": "バージョン",
+    "backend": "バックエンド",
+    "frontend": "フロントエンド"
   }
 }

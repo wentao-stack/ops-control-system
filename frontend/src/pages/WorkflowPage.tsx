@@ -581,7 +581,7 @@ export default function WorkflowPage() {
           <span className="wf-section-count">{templates.length}</span>
         </div>
         {loading ? (
-          <div className="wf-empty-state">載入中...</div>
+          <div className="wf-empty-state">載入中…...</div>
         ) : templates.length === 0 ? (
           <div className="wf-empty-state">暫無流程模板</div>
         ) : (

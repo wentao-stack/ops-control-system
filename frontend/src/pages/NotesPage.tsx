@@ -541,6 +541,7 @@ function Pagination({
 /* ── Main Page ─────────────────────────────────────────────────────────────── */
 
 export function NotesPage() {
+
   const navigate = useNavigate()
   const [notes, setNotes] = useState<Note[]>([])
   const [total, setTotal] = useState(0)
@@ -704,7 +705,7 @@ export function NotesPage() {
       {loading && (
         <div className="card">
           <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中...</div>
+            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中…...</div>
           </div>
         </div>
       )}

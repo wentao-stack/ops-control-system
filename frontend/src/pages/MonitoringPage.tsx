@@ -235,7 +235,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
         {/* Chart */}
         <div style={{ marginBottom: 16, background: "var(--surface)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{metricLabel} 使用率 (%) — {hours}小時</div>
-          {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>載入中...</div> : <MiniChart data={chartData} color={chartColor} />}
+          {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>載入中…...</div> : <MiniChart data={chartData} color={chartColor} />}
         </div>
 
         {/* Recent records table */}
@@ -276,6 +276,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
 const selectStyle: React.CSSProperties = { padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13 }
 
 export function MonitoringPage() {
+
   const [tab, setTab] = useState<"live" | "history">("live")
   const [localMetrics, setLocalMetrics] = useState<HostMetrics | null>(null)
   const [remoteData, setRemoteData] = useState<RemoteHostMetric[]>([])
