@@ -84,9 +84,15 @@ async function fetchThumbnailUrl(output: ComfyOutputItem): Promise<string | null
 function ComfyOutputCard({
   output,
   onDelete,
+  selected,
+  onSelectedChange,
+  batchDeleting,
 }: {
   output: ComfyOutputItem
   onDelete: () => Promise<void>
+  selected: boolean
+  onSelectedChange: (selected: boolean) => void
+  batchDeleting: boolean
 }) {
   const [url, setUrl] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
@@ -134,8 +140,12 @@ function ComfyOutputCard({
   }
 
   return (
-    <article className="comfy-output-card">
+    <article className={`comfy-output-card${selected ? " is-selected" : ""}`}>
       <div className="comfy-output-stage">
+        <label className="comfy-output-select" title="選取作品">
+          <input type="checkbox" checked={selected} onChange={event => onSelectedChange(event.target.checked)} disabled={batchDeleting} />
+          <span>選取</span>
+        </label>
         {failed ? (
           <div className="comfy-output-placeholder">檔案不存在或載入中</div>
         ) : !url && thumbnailUrl ? (
@@ -161,7 +171,7 @@ function ComfyOutputCard({
         <div className="comfy-output-actions">
           {url && <a className="comfy-icon-btn" href={url} download={output.filename} title="下載">↓</a>}
           {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title="開啟">↗</a>}
-          <button className="comfy-delete-btn" onClick={remove} disabled={deleting} title="永久刪除作品">
+          <button className="comfy-delete-btn" onClick={remove} disabled={deleting || batchDeleting} title="永久刪除作品">
             {deleting ? "刪除中…" : "刪除"}
           </button>
         </div>
@@ -297,6 +307,8 @@ export function ComfyUIPage() {
   const [artifacts, setArtifacts] = useState<ComfyArtifact[]>([])
   const [artifactTotal, setArtifactTotal] = useState(0)
   const [artifactPage, setArtifactPage] = useState(1)
+  const [selectedArtifactKeys, setSelectedArtifactKeys] = useState<Set<string>>(() => new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
@@ -556,6 +568,11 @@ export function ComfyUIPage() {
     try {
       await api(`/api/v1/comfyui/artifacts?${query}`, { method: "DELETE" })
       setNotice("作品已刪除")
+      setSelectedArtifactKeys(current => {
+        const next = new Set(current)
+        next.delete(artifactKey(artifact))
+        return next
+      })
       const remainingOnPage = artifacts.length - 1
       const nextPage = remainingOnPage === 0 && artifactPage > 1 ? artifactPage - 1 : artifactPage
       if (nextPage !== artifactPage) setArtifactPage(nextPage)
@@ -566,10 +583,60 @@ export function ComfyUIPage() {
     }
   }
 
+  const artifactKey = (artifact: ComfyArtifact) => `${artifact.type ?? "output"}/${artifact.subfolder ?? ""}/${artifact.filename}`
+  const selectedArtifacts = artifacts.filter(artifact => selectedArtifactKeys.has(artifactKey(artifact)))
+  const allArtifactsSelected = artifacts.length > 0 && selectedArtifacts.length === artifacts.length
+
+  const toggleArtifact = (artifact: ComfyArtifact, selected: boolean) => {
+    setSelectedArtifactKeys(current => {
+      const next = new Set(current)
+      if (selected) next.add(artifactKey(artifact))
+      else next.delete(artifactKey(artifact))
+      return next
+    })
+  }
+
+  const toggleAllArtifacts = () => {
+    setSelectedArtifactKeys(current => {
+      const next = new Set(current)
+      if (allArtifactsSelected) artifacts.forEach(artifact => next.delete(artifactKey(artifact)))
+      else artifacts.forEach(artifact => next.add(artifactKey(artifact)))
+      return next
+    })
+  }
+
+  const handleBatchDeleteArtifacts = async () => {
+    if (!selectedArtifacts.length) return
+    if (!window.confirm(`確定永久刪除已選取的 ${selectedArtifacts.length} 個作品？此操作無法復原。`)) return
+    setBatchDeleting(true)
+    setError("")
+    const results = await Promise.allSettled(selectedArtifacts.map(async artifact => {
+      const query = new URLSearchParams({ filename: artifact.filename, subfolder: artifact.subfolder ?? "" })
+      await api(`/api/v1/comfyui/artifacts?${query}`, { method: "DELETE" })
+    }))
+    const failed = results.filter(result => result.status === "rejected")
+    setSelectedArtifactKeys(current => {
+      const next = new Set(current)
+      selectedArtifacts.forEach((artifact, index) => {
+        if (results[index].status === "fulfilled") next.delete(artifactKey(artifact))
+      })
+      return next
+    })
+    const remainingOnPage = artifacts.length - (selectedArtifacts.length - failed.length)
+    const nextPage = remainingOnPage === 0 && artifactPage > 1 ? artifactPage - 1 : artifactPage
+    if (nextPage !== artifactPage) setArtifactPage(nextPage)
+    await loadArtifacts(nextPage)
+    await loadJobs()
+    if (failed.length) setError(`${failed.length} 個作品刪除失敗，請重試。`)
+    else setNotice(`已刪除 ${selectedArtifacts.length} 個作品`)
+    setBatchDeleting(false)
+  }
+
   const galleryPages = Math.max(1, Math.ceil(artifactTotal / GALLERY_PAGE_SIZE))
   const changeGalleryPage = (nextPage: number) => {
     if (nextPage < 1 || nextPage > galleryPages || nextPage === artifactPage) return
     setArtifactPage(nextPage)
+    setSelectedArtifactKeys(new Set())
     void loadArtifacts(nextPage)
   }
 
@@ -841,6 +908,10 @@ export function ComfyUIPage() {
           <div><span className="comfy-section-kicker">CREATIONS</span><h2>作品庫</h2></div>
           <div className="comfy-gallery-heading-actions">
             <span>{artifactTotal} 個作品</span>
+            {artifacts.length > 0 && <>
+              <button className="comfy-secondary-btn comfy-select-all-btn" onClick={toggleAllArtifacts} disabled={batchDeleting}>{allArtifactsSelected ? "取消全選" : "全選本頁"}</button>
+              {selectedArtifacts.length > 0 && <button className="comfy-delete-btn comfy-batch-delete-btn" onClick={handleBatchDeleteArtifacts} disabled={batchDeleting}>{batchDeleting ? "刪除中…" : `刪除已選 ${selectedArtifacts.length}`}</button>}
+            </>}
             <button className="comfy-icon-btn" onClick={() => loadArtifacts(artifactPage, true)} title="重新掃描 ComfyUI 作品">↻</button>
           </div>
         </div>
@@ -848,7 +919,8 @@ export function ComfyUIPage() {
           <div className="comfy-gallery">
             {artifacts.map(artifact => (
               <ComfyOutputCard key={`${artifact.subfolder ?? ""}/${artifact.filename}`} output={artifact}
-                onDelete={() => handleDeleteArtifact(artifact)} />
+                onDelete={() => handleDeleteArtifact(artifact)} selected={selectedArtifactKeys.has(artifactKey(artifact))}
+                onSelectedChange={selected => toggleArtifact(artifact, selected)} batchDeleting={batchDeleting} />
             ))}
           </div>
         ) : <div className="comfy-gallery-empty"><span>✦</span><strong>還沒有作品</strong><p>ComfyUI output 目錄中的作品會自動顯示在這裡。</p></div>}
