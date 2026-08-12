@@ -202,5 +202,24 @@
       "user": "デフォルトアカウント",
       "password": "認証パスワード"
     }
+  },
+  "agent": {
+    "title": "AIエージェントチャット",
+    "newChat": "新規チャット",
+    "noChat": "会話なし",
+    "send": "送信"
+  },
+  "code": {
+    "title": "コード閲覧",
+    "noFile": "ファイルなし"
+  },
+  "comfyui": {
+    "title": "ComfyUI ダッシュボード",
+    "status": "ステータス",
+    "jobs": "ジョブ"
+  },
+  "sequence": {
+    "title": "Sequence Studio",
+    "noSeq": "シーケンスなし"
   }
 }

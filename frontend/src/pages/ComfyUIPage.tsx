@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api } from "../auth"
+import { useTranslation } from "react-i18next"
 import { prepareComfyWorkflowImage } from "../comfyImage"
 import type {
   ComfyGenerateResponse,
@@ -136,7 +137,7 @@ function ComfyOutputCard({
     <article className="comfy-output-card">
       <div className="comfy-output-stage">
         {failed ? (
-          <div className="comfy-output-placeholder">檔案不存在或無法載入</div>
+          <div className="comfy-output-placeholder">檔案不存在或載入中</div>
         ) : !url && thumbnailUrl ? (
           <button className="comfy-video-thumbnail" onClick={() => setLoadPreview(true)} title="播放影片">
             <img src={thumbnailUrl} alt={`${output.filename} 的縮圖`} loading="lazy" />
@@ -286,6 +287,8 @@ function ParamInput({
 }
 
 export function ComfyUIPage() {
+  const { t } = useTranslation()
+
   const [status, setStatus] = useState<ComfyStatus | null>(null)
   const [templates, setTemplates] = useState<ComfyWorkflowTemplate[]>([])
   const [selectedId, setSelectedId] = useState("")

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { api, getToken } from "../auth"
+import { useTranslation } from "react-i18next"
 import type { ComfyOutputItem, ComfySequence } from "../types"
 
 type ReferenceKey = "first_frame" | "character_ref" | "background_ref"
@@ -178,6 +179,8 @@ function ResultPlayer({ output }: { output: ComfyOutputItem }) {
 }
 
 export function SequenceStudioPage() {
+  const { t } = useTranslation()
+
   const [files, setFiles] = useState<Record<ReferenceKey, File | null>>({
     first_frame: null,
     character_ref: null,

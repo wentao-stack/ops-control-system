@@ -202,5 +202,24 @@
       "user": "預設帳號",
       "password": "權限密碼"
     }
+  },
+  "agent": {
+    "title": "AI Agent 聊天",
+    "newChat": "新對話",
+    "noChat": "尚無對話",
+    "send": "送出"
+  },
+  "code": {
+    "title": "程式碼瀏覽",
+    "noFile": "無檔案"
+  },
+  "comfyui": {
+    "title": "ComfyUI 儀表板",
+    "status": "狀態",
+    "jobs": "工作"
+  },
+  "sequence": {
+    "title": "Sequence Studio",
+    "noSeq": "尚無序列"
   }
 }

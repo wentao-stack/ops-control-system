@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { api } from "../auth"
+import { useTranslation } from "react-i18next"
 import { AgentConversation, AgentMessage, fmtRel } from "../types"
 
 const SUGGESTIONS = [
@@ -167,7 +168,7 @@ function Sidebar({
     <aside className={`agent-sidebar${mobileOpen ? " mobile-open" : ""}`} aria-label="對話歷史">
       <div className="agent-sidebar-header">
         <button className="btn btn-primary" style={{ width: "100%" }} onClick={onNew} disabled={disabled}>
-          ＋ 新對話
+          ＋ "\1"
         </button>
         <button className="agent-sidebar-close" onClick={onClose} aria-label="關閉對話歷史">×</button>
       </div>
@@ -211,7 +212,7 @@ function Sidebar({
         )}
         {!loading && !error && conversations.length === 0 && (
           <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: "var(--text-secondary)" }}>
-            尚無對話歷史
+            "\1"歷史
           </div>
         )}
       </div>
@@ -265,6 +266,8 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
 /* ── main page ───────────────────────────────────────────────────────────── */
 
 export function AgentChatPage() {
+  const { t } = useTranslation()
+
   const [tab, setTab] = useState<"chat" | "usage">("chat")
   const [conversations, setConversations] = useState<AgentConversation[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(true)
@@ -310,7 +313,7 @@ export function AgentChatPage() {
       setConversationsTotal(response.total)
       setConversationOffset(offset)
     } catch (error) {
-      setConversationsError(errorMessage(error, "無法載入對話歷史"))
+      setConversationsError(errorMessage(error, "載入失敗對話歷史"))
     } finally {
       setConversationsLoading(false)
     }
@@ -331,7 +334,7 @@ export function AgentChatPage() {
       }
     } catch (error) {
       if (messageRequestRef.current === requestId) {
-        setMessagesError(errorMessage(error, "無法載入對話內容"))
+        setMessagesError(errorMessage(error, "載入失敗對話內容"))
       }
     } finally {
       if (messageRequestRef.current === requestId) {
@@ -755,7 +758,7 @@ export function AgentChatPage() {
       <div className="agent-main">
         <div className="agent-mobile-toolbar">
           <button type="button" onClick={() => setMobileSidebarOpen(true)}>☰ 對話歷史</button>
-          <button type="button" onClick={handleNew} disabled={streaming}>＋ 新對話</button>
+          <button type="button" onClick={handleNew} disabled={streaming}>＋ "\1"</button>
         </div>
 
         {!healthLoading && health?.status === "error" && (

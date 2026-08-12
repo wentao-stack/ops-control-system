@@ -202,5 +202,24 @@
       "user": "Default Account",
       "password": "Credential Password"
     }
+  },
+  "agent": {
+    "title": "AI Agent Chat",
+    "newChat": "New Chat",
+    "noChat": "No conversations",
+    "send": "Send"
+  },
+  "code": {
+    "title": "Code Browse",
+    "noFile": "No file"
+  },
+  "comfyui": {
+    "title": "ComfyUI Dashboard",
+    "status": "Status",
+    "jobs": "Jobs"
+  },
+  "sequence": {
+    "title": "Sequence Studio",
+    "noSeq": "No sequences"
   }
 }

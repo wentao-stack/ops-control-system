@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../auth';
+import { useTranslation } from 'react-i18next';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
@@ -140,6 +141,8 @@ function TreeNode({
  *   - searchQuery: 搜尋過濾字串
  */
 export function CodeBrowsePage() {
+  const { t } = useTranslation()
+
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [stats, setStats] = useState({ files: 0, dirs: 0 });
   const [selectedFile, setSelectedFile] = useState<FileResponse | null>(null);
