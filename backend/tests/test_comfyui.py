@@ -85,9 +85,112 @@ def test_compile_ui_workflow_supports_named_v1_links():
     assert prompt["2"]["inputs"]["source"] == ["1", 0]
 
 
+def test_compile_ui_workflow_discards_disconnected_canvas_branches():
+    object_info = {
+        "Source": {"input": {"required": {}}, "input_order": {"required": []}},
+        "SaveVideo": {
+            "input": {"required": {"video": ["VIDEO", {}]}},
+            "input_order": {"required": ["video"]},
+        },
+        "Unused": {"input": {"required": {}}, "input_order": {"required": []}},
+    }
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "Source", "mode": 0, "inputs": [], "outputs": [{"name": "VIDEO", "links": [1]}]},
+            {"id": 2, "type": "SaveVideo", "mode": 0, "inputs": [{"name": "video", "link": 1}], "outputs": []},
+            {"id": 3, "type": "Unused", "mode": 0, "inputs": [], "outputs": []},
+        ],
+        "links": [[1, 1, 0, 2, 0, "VIDEO"]],
+    }
+
+    prompt = comfyui.compile_ui_workflow(workflow, object_info)
+
+    assert set(prompt) == {"1", "2"}
+
+
+def test_normalize_workflow_selectors_removes_stale_model_directory():
+    object_info = {
+        "UNETLoader": {
+            "input": {
+                "required": {
+                    "unet_name": [[
+                        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                        "other-model.safetensors",
+                    ], {}]
+                }
+            }
+        }
+    }
+    prompt = {
+        "214": {
+            "class_type": "UNETLoader",
+            "_meta": {"title": "H3 模型"},
+            "inputs": {"unet_name": "Minimax_H3\\\\minimax_h3_fl2va_pruned_int8_convrot.safetensors"},
+        }
+    }
+
+    adjusted, unavailable = comfyui.normalize_workflow_selectors(prompt, object_info)
+
+    assert adjusted == ["H3 模型 · unet_name"]
+    assert unavailable == []
+    assert prompt["214"]["inputs"]["unet_name"] == "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+
+
+def test_repair_unconnected_force_input_uses_unique_matching_output():
+    object_info = {
+        "ReferenceText": {"output": ["STRING", "TE_H3_REFERENCES"]},
+        "Enhancer": {
+            "input": {"required": {"references": ["TE_H3_REFERENCES", {"forceInput": True}]}},
+        },
+    }
+    prompt = {
+        "240": {"class_type": "ReferenceText", "inputs": {}},
+        "253": {"class_type": "Enhancer", "inputs": {}, "_meta": {"title": "增强提示词"}},
+    }
+
+    repairs = comfyui.repair_unconnected_force_inputs(prompt, object_info)
+
+    assert repairs == ["增强提示词 · references"]
+    assert prompt["253"]["inputs"]["references"] == ["240", 1]
+
+
 def test_compile_ui_workflow_rejects_subgraphs():
     with pytest.raises(ValueError, match="包含子圖"):
         comfyui.compile_ui_workflow({"nodes": [], "definitions": {"subgraphs": [{"id": "x"}]}}, OBJECT_INFO)
+
+
+def test_compile_ui_workflow_executes_bypassed_nodes_and_skips_ui_only_nodes():
+    workflow = {
+        "nodes": [
+            {
+                "id": 1,
+                "type": "Source",
+                "mode": 4,
+                "inputs": [{"name": "seed", "widget": {"name": "seed"}, "link": None}],
+                "outputs": [{"name": "MODEL", "links": [1]}],
+                "widgets_values": [42, "fixed"],
+            },
+            {"id": 99, "type": "Label (rgthree)", "mode": 0, "inputs": [], "outputs": []},
+            {
+                "id": 2,
+                "type": "Target",
+                "mode": 4,
+                "inputs": [
+                    {"name": "source", "link": 1},
+                    {"name": "prompt", "widget": {"name": "prompt"}, "link": None},
+                    {"name": "enabled", "widget": {"name": "enabled"}, "link": None},
+                ],
+                "outputs": [],
+                "widgets_values": ["hello", True],
+            },
+        ],
+        "links": [[1, 1, 0, 2, 0, "MODEL"]],
+    }
+
+    prompt = comfyui.compile_ui_workflow(workflow, OBJECT_INFO)
+
+    assert set(prompt) == {"1", "2"}
+    assert prompt["2"]["inputs"]["source"] == ["1", 0]
 
 
 @pytest.mark.parametrize(
@@ -173,6 +276,31 @@ def test_delete_output_file_is_contained(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="無效的作品路徑"):
         comfyui.delete_output_file({"filename": "secret", "subfolder": "../", "type": "output"})
 
+
+def test_list_output_artifacts_discovers_console_outputs(tmp_path, monkeypatch):
+    output_dir = tmp_path / "output"
+    video = output_dir / "console" / "result.mp4"
+    image = output_dir / "image.png"
+    ignored = output_dir / "metadata.json"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"video")
+    image.write_bytes(b"image")
+    ignored.write_text("{}")
+    monkeypatch.setattr(comfyui, "COMFY_OUTPUT_DIR", output_dir)
+
+    artifacts, total = comfyui.list_output_artifacts()
+
+    assert total == 2
+    assert {(item["filename"], item["subfolder"], item["kind"]) for item in artifacts} == {
+        ("result.mp4", "console", "video"),
+        ("image.png", "", "image"),
+    }
+
+    page, total = comfyui.list_output_artifacts(offset=1, limit=1)
+    assert total == 2
+    assert len(page) == 1
+
+
 def test_progress_state_prefers_current_running_node_and_reports_exact_steps(monkeypatch):
     pid = "prompt-running"
     monkeypatch.setitem(comfyui._job_node_titles, pid, {"7": "H3 Sampler"})
@@ -223,4 +351,3 @@ async def test_progress_stream_replays_snapshot_and_broadcasts_to_all_subscriber
     replay = comfyui.stream_progress(pid, timeout=1)
     assert await anext(replay) == event
     await replay.aclose()
-

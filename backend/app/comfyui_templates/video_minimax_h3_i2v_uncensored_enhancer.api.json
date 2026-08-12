@@ -32,6 +32,24 @@
       "title": "MiniMax H3 Turbo 4-step LoRA"
     }
   },
+  "127": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": [
+        "125",
+        0
+      ],
+      "processing_control_value": 0.08,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.9,
+      "mcs": 2,
+      "device": "auto",
+      "cache_depth": 0.75
+    },
+    "_meta": {
+      "title": "TE-Speed MiniMax H3"
+    }
+  },
   "13": {
     "class_type": "CLIPLoader",
     "inputs": {
@@ -135,7 +153,7 @@
     "class_type": "MiniMaxH3MultiRateSamplerEXPT8",
     "inputs": {
       "model": [
-        "125",
+        "127",
         0
       ],
       "av_latent": [

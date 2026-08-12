@@ -79,3 +79,20 @@ def decode_ws_token(token: str) -> str | None:
         return username
     except JWTError:
         return None
+
+
+def is_valid_comfy_media_token(
+    token: str, filename: str, subfolder: str, view_type: str, scope: str = "comfyui:view",
+) -> bool:
+    """Validate the short-lived, single-artifact token used by media elements."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return False
+    return (
+        payload.get("scope") == scope
+        and payload.get("filename") == filename
+        and payload.get("subfolder") == subfolder
+        and payload.get("view_type") == view_type
+        and isinstance(payload.get("sub"), str)
+    )

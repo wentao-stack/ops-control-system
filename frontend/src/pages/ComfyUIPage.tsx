@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { api, getToken } from "../auth"
+import { api } from "../auth"
+import { prepareComfyWorkflowImage } from "../comfyImage"
 import type {
   ComfyGenerateResponse,
+  ComfyArtifact,
   ComfyJob,
   ComfyOutputItem,
   ComfyParamDef,
@@ -21,6 +23,7 @@ const fmtElapsed = (seconds: number) => {
 type LiveProgress = {
   value: number; max: number; node?: string; nodeTitle?: string; status?: string; queuePosition?: number
 }
+const GALLERY_PAGE_SIZE = 8
 
 const fmtDate = (value?: string | number) => {
   if (!value) return "—"
@@ -56,12 +59,22 @@ async function fetchMediaUrl(output: ComfyOutputItem): Promise<string | null> {
     view_type: output.type ?? "output",
   })
   try {
-    const token = getToken()
-    const response = await fetch(`/api/v1/comfyui/view?${query}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!response.ok) return null
-    return URL.createObjectURL(await response.blob())
+    const response = await api<{ url: string }>(`/api/v1/comfyui/media-url?${query}`, { method: "POST" })
+    return response.url
+  } catch {
+    return null
+  }
+}
+
+async function fetchThumbnailUrl(output: ComfyOutputItem): Promise<string | null> {
+  const query = new URLSearchParams({
+    filename: output.filename,
+    subfolder: output.subfolder ?? "",
+    view_type: output.type ?? "output",
+  })
+  try {
+    const response = await api<{ url: string }>(`/api/v1/comfyui/thumbnail-url?${query}`, { method: "POST" })
+    return response.url
   } catch {
     return null
   }
@@ -75,27 +88,39 @@ function ComfyOutputCard({
   onDelete: () => Promise<void>
 }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [loadPreview, setLoadPreview] = useState(output.kind === "image")
 
   useEffect(() => {
+    if (!loadPreview) return
     let active = true
-    let objectUrl: string | null = null
     setFailed(false)
     fetchMediaUrl(output).then(nextUrl => {
-      if (!active) {
-        if (nextUrl) URL.revokeObjectURL(nextUrl)
-        return
-      }
-      objectUrl = nextUrl
+      if (!active) return
       if (nextUrl) setUrl(nextUrl)
       else setFailed(true)
     })
     return () => {
       active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [output.filename, output.subfolder, output.type])
+  }, [output.filename, output.subfolder, output.type, loadPreview])
+
+  useEffect(() => {
+    if (output.kind !== "video" && output.kind !== "gif") return
+    let active = true
+    fetchThumbnailUrl(output).then(nextUrl => {
+      if (active) setThumbnailUrl(nextUrl)
+    })
+    return () => { active = false }
+  }, [output.filename, output.subfolder, output.type, output.kind])
+
+  useEffect(() => {
+    setLoadPreview(output.kind === "image")
+    setUrl(null)
+    setThumbnailUrl(null)
+  }, [output.filename, output.subfolder, output.type, output.kind])
 
   const remove = async () => {
     if (!window.confirm(`確定永久刪除作品「${output.filename}」？`)) return
@@ -112,8 +137,15 @@ function ComfyOutputCard({
       <div className="comfy-output-stage">
         {failed ? (
           <div className="comfy-output-placeholder">檔案不存在或無法載入</div>
+        ) : !url && thumbnailUrl ? (
+          <button className="comfy-video-thumbnail" onClick={() => setLoadPreview(true)} title="播放影片">
+            <img src={thumbnailUrl} alt={`${output.filename} 的縮圖`} loading="lazy" />
+            <span>▶</span>
+          </button>
         ) : !url ? (
-          <div className="comfy-output-placeholder comfy-output-loading">載入作品中…</div>
+          <div className="comfy-output-placeholder comfy-output-loading">
+            {loadPreview ? "載入作品中…" : <button className="comfy-secondary-btn" onClick={() => setLoadPreview(true)}>載入預覽</button>}
+          </div>
         ) : output.kind === "image" ? (
           <img src={url} alt={output.filename} loading="lazy" />
         ) : output.kind === "video" || output.kind === "gif" ? (
@@ -221,7 +253,7 @@ function ParamInput({
         </div>
         <div className="comfy-upload-actions">
           <label className="comfy-secondary-btn">
-            上傳圖片
+            上傳圖片（自動適配）
             <input type="file" accept="image/*" hidden disabled={disabled} onChange={event => {
               const file = event.target.files?.[0]
               if (!file) return
@@ -259,6 +291,9 @@ export function ComfyUIPage() {
   const [selectedId, setSelectedId] = useState("")
   const [params, setParams] = useState<Record<string, unknown>>({})
   const [jobs, setJobs] = useState<ComfyJob[]>([])
+  const [artifacts, setArtifacts] = useState<ComfyArtifact[]>([])
+  const [artifactTotal, setArtifactTotal] = useState(0)
+  const [artifactPage, setArtifactPage] = useState(1)
   const [generating, setGenerating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
@@ -291,6 +326,14 @@ export function ComfyUIPage() {
       setJobs(response.jobs)
     } catch { /* history polling is best effort */ }
   }, [])
+  const loadArtifacts = useCallback(async (page = artifactPage, refresh = false) => {
+    try {
+      const offset = (page - 1) * GALLERY_PAGE_SIZE
+      const response = await api<{ artifacts: ComfyArtifact[]; total: number }>(`/api/v1/comfyui/artifacts?offset=${offset}&limit=${GALLERY_PAGE_SIZE}&refresh=${refresh}`)
+      setArtifacts(response.artifacts)
+      setArtifactTotal(response.total)
+    } catch { /* gallery polling is best effort */ }
+  }, [artifactPage])
   const loadTemplates = useCallback(async (showFeedback = false) => {
     setSyncing(true)
     try {
@@ -311,9 +354,10 @@ export function ComfyUIPage() {
     loadStatus()
     loadTemplates()
     loadJobs()
+    loadArtifacts()
     const timer = window.setInterval(() => { loadStatus(); loadJobs() }, 15_000)
     return () => window.clearInterval(timer)
-  }, [loadStatus, loadTemplates, loadJobs])
+  }, [loadStatus, loadTemplates, loadJobs, loadArtifacts])
 
   useEffect(() => {
     if (!template) return
@@ -361,8 +405,9 @@ export function ComfyUIPage() {
       if (!(upload.file instanceof File)) continue
       setUploading(true)
       try {
+        const prepared = await prepareComfyWorkflowImage(upload.file)
         const form = new FormData()
-        form.append("file", upload.file)
+        form.append("file", prepared)
         const result = await api<{ filename: string }>("/api/v1/comfyui/upload", { method: "POST", body: form })
         finalParams = { ...finalParams, [key]: result.filename }
       } catch (reason) {
@@ -444,6 +489,7 @@ export function ComfyUIPage() {
                 setProgress(event.event === "done" ? { value: 100, max: 100 } : null)
                 if (event.event === "error") setError(event.message || "生成失敗")
                 await loadJobs()
+                if (event.event === "done") await loadArtifacts(artifactPage, true)
               }
             }
           }
@@ -496,9 +542,32 @@ export function ComfyUIPage() {
       await api(`/api/v1/comfyui/jobs/${job.id}/outputs/${outputIndex}`, { method: "DELETE" })
       setNotice("作品已刪除")
       await loadJobs()
+      await loadArtifacts()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     }
+  }
+
+  const handleDeleteArtifact = async (artifact: ComfyArtifact) => {
+    const query = new URLSearchParams({ filename: artifact.filename, subfolder: artifact.subfolder ?? "" })
+    try {
+      await api(`/api/v1/comfyui/artifacts?${query}`, { method: "DELETE" })
+      setNotice("作品已刪除")
+      const remainingOnPage = artifacts.length - 1
+      const nextPage = remainingOnPage === 0 && artifactPage > 1 ? artifactPage - 1 : artifactPage
+      if (nextPage !== artifactPage) setArtifactPage(nextPage)
+      await loadArtifacts(nextPage)
+      await loadJobs()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  const galleryPages = Math.max(1, Math.ceil(artifactTotal / GALLERY_PAGE_SIZE))
+  const changeGalleryPage = (nextPage: number) => {
+    if (nextPage < 1 || nextPage > galleryPages || nextPage === artifactPage) return
+    setArtifactPage(nextPage)
+    void loadArtifacts(nextPage)
   }
 
   const handleRerun = (job: ComfyJob) => {
@@ -510,6 +579,42 @@ export function ComfyUIPage() {
     setSelectedId(job.workflow_id)
     setParams({ ...defaultsOf(target), ...job.params })
     setNotice("已載入上次使用的參數")
+  }
+
+  const handleRenameWorkflow = async () => {
+    if (!template) return
+    const currentName = template.filename?.split("/").pop()?.replace(/\.json$/i, "") ?? template.name
+    const name = window.prompt("輸入新的工作流檔名（可省略 .json）", currentName)
+    if (name === null) return
+    setActionBusy("rename-workflow")
+    setError("")
+    try {
+      const result = await api<{ id: string; filename: string }>(`/api/v1/comfyui/workflows/${template.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      })
+      await loadTemplates()
+      setSelectedId(result.id)
+      setNotice(`工作流已重新命名為 ${result.filename}`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally { setActionBusy("") }
+  }
+
+  const handleDeleteWorkflow = async () => {
+    if (!template) return
+    if (!window.confirm(`確定刪除工作流「${template.name}」？此操作無法復原。`)) return
+    setActionBusy("delete-workflow")
+    setError("")
+    try {
+      await api(`/api/v1/comfyui/workflows/${template.id}`, { method: "DELETE" })
+      setSelectedId("")
+      await loadTemplates()
+      setNotice("工作流已刪除")
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally { setActionBusy("") }
   }
 
   const handleFreeMemory = async () => {
@@ -618,9 +723,13 @@ export function ComfyUIPage() {
                   <div className="comfy-editor-title-row"><span>{template.icon}</span><h2>{template.name}</h2></div>
                   <p>{template.filename} · 更新於 {fmtDate(template.updated_at)}</p>
                 </div>
-                <span className={`comfy-ready-badge ${template.runnable ? "ready" : "blocked"}`}>
-                  {template.runnable ? "READY" : "BLOCKED"}
-                </span>
+                <div className="comfy-editor-actions">
+                  <button className="comfy-icon-btn" onClick={handleRenameWorkflow} disabled={Boolean(actionBusy)} title="重新命名工作流">✎</button>
+                  <button className="comfy-icon-btn comfy-icon-danger" onClick={handleDeleteWorkflow} disabled={Boolean(actionBusy)} title="刪除工作流">⌫</button>
+                  <span className={`comfy-ready-badge ${template.runnable ? "ready" : "blocked"}`}>
+                    {template.runnable ? "READY" : "BLOCKED"}
+                  </span>
+                </div>
               </div>
 
               {!template.runnable ? (
@@ -727,16 +836,26 @@ export function ComfyUIPage() {
       <section className="comfy-gallery-section">
         <div className="comfy-gallery-header">
           <div><span className="comfy-section-kicker">CREATIONS</span><h2>作品庫</h2></div>
-          <span>{doneJobs.reduce((sum, job) => sum + job.outputs.length, 0)} 個作品</span>
-        </div>
-        {doneJobs.length ? (
-          <div className="comfy-gallery">
-            {doneJobs.flatMap(job => job.outputs.map((output, outputIndex) => (
-              <ComfyOutputCard key={`${job.id}-${outputIndex}-${output.filename}`} output={output}
-                onDelete={() => handleDeleteOutput(job, outputIndex)} />
-            )))}
+          <div className="comfy-gallery-heading-actions">
+            <span>{artifactTotal} 個作品</span>
+            <button className="comfy-icon-btn" onClick={() => loadArtifacts(artifactPage, true)} title="重新掃描 ComfyUI 作品">↻</button>
           </div>
-        ) : <div className="comfy-gallery-empty"><span>✦</span><strong>還沒有作品</strong><p>選擇工作流並開始第一次生成。</p></div>}
+        </div>
+        {artifacts.length ? (
+          <div className="comfy-gallery">
+            {artifacts.map(artifact => (
+              <ComfyOutputCard key={`${artifact.subfolder ?? ""}/${artifact.filename}`} output={artifact}
+                onDelete={() => handleDeleteArtifact(artifact)} />
+            ))}
+          </div>
+        ) : <div className="comfy-gallery-empty"><span>✦</span><strong>還沒有作品</strong><p>ComfyUI output 目錄中的作品會自動顯示在這裡。</p></div>}
+        {artifactTotal > GALLERY_PAGE_SIZE && (
+          <nav className="comfy-gallery-pagination" aria-label="作品庫分頁">
+            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage - 1)} disabled={artifactPage === 1}>上一頁</button>
+            <span>第 {artifactPage} / {galleryPages} 頁</span>
+            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage + 1)} disabled={artifactPage === galleryPages}>下一頁</button>
+          </nav>
+        )}
       </section>
     </div>
   )

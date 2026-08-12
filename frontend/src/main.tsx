@@ -18,6 +18,7 @@ import { CodeBrowsePage } from "./pages/CodeBrowsePage"
 import { ComfyUIPage } from "./pages/ComfyUIPage"
 import { SequenceStudioPage } from "./pages/SequenceStudioPage"
 import WorkflowPage from "./pages/WorkflowPage"
+import "./i18n"
 import "./styles.css"
 
 function AppRoutes() {

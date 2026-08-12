@@ -66,7 +66,7 @@
   "7": {
     "class_type": "MiniMaxH3DualClockSamplerT8",
     "inputs": {
-      "model": ["2", 0],
+      "model": ["16", 0],
       "av_latent": ["6", 1],
       "steps": 4,
       "shift_video": 12.0,
@@ -149,5 +149,18 @@
       "image": "726188ea2c-backend.webp"
     },
     "_meta": {"title": "Picture 3 · 场景风格参考"}
+  },
+  "16": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": ["2", 0],
+      "processing_control_value": 0.08,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.9,
+      "mcs": 2,
+      "device": "auto",
+      "cache_depth": 0.75
+    },
+    "_meta": {"title": "TE-Speed MiniMax H3"}
   }
 }

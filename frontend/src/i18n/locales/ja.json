@@ -53,5 +53,77 @@
     "zh-TW": "繁中",
     "en": "English",
     "ja": "日本語"
+  },
+  "health": {
+    "healthy": "正常",
+    "warning": "警告",
+    "critical": "重大",
+    "unknown": "不明"
+  },
+  "criticality": {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "重要"
+  },
+  "env": {
+    "production": "Production",
+    "staging": "Staging",
+    "development": "Development"
+  },
+  "assets": {
+    "title": "資産一覧",
+    "total": "資産 {{count}} 件",
+    "searchPlaceholder": "名前を検索...",
+    "envAll": "全環境",
+    "healthAll": "全状態",
+    "clearFilter": "フィルターをクリア",
+    "loading": "読み込み中…",
+    "empty": "該当する資産なし",
+    "columns": {
+      "name": "名前",
+      "type": "タイプ",
+      "env": "環境",
+      "owner": "担当者",
+      "criticality": "重要度",
+      "status": "状態",
+      "lastSeen": "最終検出"
+    }
+  },
+  "assetDetail": {
+    "title": "資産詳細",
+    "back": "戻る",
+    "basicInfo": "基本情報",
+    "connectInfo": "接続情報",
+    "sshHost": "SSH ホスト",
+    "sshPort": "SSH ポート",
+    "sshUser": "SSH ユーザー",
+    "lastSeen": "最終検出",
+    "owner": "担当者",
+    "criticality": "重要度",
+    "health": "健全性",
+    "relatedServices": "関連サービス",
+    "noServices": "関連サービスなし",
+    "notSet": "未設定",
+    "goRemote": "リモートターミナルへ",
+    "cmd": "コマンド",
+    "notFound": "資産が見つかりません"
+  },
+  "overview": {
+    "title": "システム概要",
+    "subtitle": "インフラ状態をリアルタイムで把握",
+    "totalAssets": "総資産数",
+    "healthy": "正常",
+    "needAttention": "要注目",
+    "unknown": "不明",
+    "envDistribution": "環境分布",
+    "quickLinks": "クイックリンク",
+    "links": {
+      "assets": "🖥 資産一覧",
+      "services": "🔧 サービス概要",
+      "monitoring": "📡 ホスト監視",
+      "remote": "⌨ リモートターミナル"
+    },
+    "loadFailed": "データの読み込みに失敗"
   }
 }

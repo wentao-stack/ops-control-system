@@ -53,5 +53,77 @@
     "zh-TW": "繁中",
     "en": "English",
     "ja": "日本語"
+  },
+  "health": {
+    "healthy": "正常",
+    "warning": "警告",
+    "critical": "嚴重",
+    "unknown": "未知"
+  },
+  "criticality": {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "關鍵"
+  },
+  "env": {
+    "production": "Production",
+    "staging": "Staging",
+    "development": "Development"
+  },
+  "assets": {
+    "title": "資產清單",
+    "total": "共 {{count}} 筆資產",
+    "searchPlaceholder": "搜尋名稱...",
+    "envAll": "所有環境",
+    "healthAll": "所有狀態",
+    "clearFilter": "清除篩選",
+    "loading": "載入中…",
+    "empty": "沒有符合條件的資產",
+    "columns": {
+      "name": "名稱",
+      "type": "類型",
+      "env": "環境",
+      "owner": "負責人",
+      "criticality": "重要度",
+      "status": "狀態",
+      "lastSeen": "最後偵測"
+    }
+  },
+  "assetDetail": {
+    "title": "資產詳情",
+    "back": "返回",
+    "basicInfo": "基本資訊",
+    "connectInfo": "連線資訊",
+    "sshHost": "SSH 主機",
+    "sshPort": "SSH 端口",
+    "sshUser": "SSH 用戶",
+    "lastSeen": "最後偵測",
+    "owner": "負責人",
+    "criticality": "重要度",
+    "health": "健康狀態",
+    "relatedServices": "關聯服務",
+    "noServices": "無關聯服務",
+    "notSet": "此資產未設定",
+    "goRemote": "前往遠程終端",
+    "cmd": "命令",
+    "notFound": "資產不存在"
+  },
+  "overview": {
+    "title": "系統概覽",
+    "subtitle": "即時掌握基礎設施狀態",
+    "totalAssets": "總資產數",
+    "healthy": "正常",
+    "needAttention": "需關注",
+    "unknown": "未知",
+    "envDistribution": "環境分佈",
+    "quickLinks": "快速連結",
+    "links": {
+      "assets": "🖥 資產清單",
+      "services": "🔧 服務總覽",
+      "monitoring": "📡 主機監控",
+      "remote": "⌨ 遠程終端"
+    },
+    "loadFailed": "無法載入資料"
   }
 }

@@ -15,7 +15,7 @@
   "9": {
     "class_type": "BasicScheduler",
     "inputs": {
-      "model": ["6", 0],
+      "model": ["105", 0],
       "scheduler": "simple",
       "steps": 20,
       "denoise": 1.0
@@ -54,7 +54,7 @@
   "16": {
     "class_type": "BasicGuider",
     "inputs": {
-      "model": ["6", 0],
+      "model": ["105", 0],
       "conditioning": ["104", 0]
     }
   },
@@ -106,6 +106,19 @@
       "length": 124,
       "first_frame": ["5", 0]
     }
+  },
+  "105": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": ["6", 0],
+      "processing_control_value": 0.08,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.9,
+      "mcs": 2,
+      "device": "auto",
+      "cache_depth": 0.75
+    },
+    "_meta": {"title": "TE-Speed MiniMax H3"}
   },
   "10": {
     "class_type": "VAEDecode",

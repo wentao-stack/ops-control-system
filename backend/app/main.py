@@ -4,8 +4,9 @@ import asyncio
 import logging
 import time as _time
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
@@ -15,11 +16,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, verify_password
+from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, is_valid_comfy_media_token, verify_password
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
 from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
-from .comfyui_models import ComfyJob  # noqa: F401 — ensure tables are created
+from .comfyui_models import ComfyArtifactRecord, ComfyJob  # noqa: F401 — ensure tables are created
 from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
@@ -66,7 +67,7 @@ import logging
 import os
 import shutil
 from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from . import agent as agent_service
 from .agent_models import AgentConversation, AgentMessage
@@ -86,6 +87,7 @@ from . import clouds as clouds_service
 from . import comfyui as comfyui_service
 from . import comfyui_sequence as comfyui_sequence_service
 from .comfyui_schemas import (
+    ComfyArtifactListResponse,
     ComfyGenerateRequest,
     ComfyGenerateResponse,
     ComfyJobListResponse,
@@ -93,6 +95,7 @@ from .comfyui_schemas import (
     ComfyStatusResponse,
     ComfyUploadResponse,
     ComfyWorkflowListResponse,
+    ComfyWorkflowRenameRequest,
 )
 from .comfyui_sequence_schemas import (
     ComfySequenceCreate,
@@ -1777,6 +1780,40 @@ async def comfyui_workflows(
     return {"templates": workflows}
 
 
+@app.patch("/api/v1/comfyui/workflows/{workflow_id}")
+async def comfyui_rename_workflow(
+    workflow_id: str,
+    body: ComfyWorkflowRenameRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Rename a workflow file in ComfyUI userdata/workflows."""
+    try:
+        workflow = await comfyui_service.rename_workflow(workflow_id, body.name)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"重新命名工作流失敗：{exc}")
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="工作流不存在或已從 ComfyUI 移除")
+    return workflow
+
+
+@app.delete("/api/v1/comfyui/workflows/{workflow_id}", status_code=204)
+async def comfyui_delete_workflow(
+    workflow_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a workflow file from ComfyUI userdata/workflows."""
+    try:
+        deleted = await comfyui_service.delete_workflow(workflow_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"刪除工作流失敗：{exc}")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="工作流不存在或已從 ComfyUI 移除")
+
+
 @app.post("/api/v1/comfyui/generate", response_model=ComfyGenerateResponse)
 async def comfyui_generate(
     body: ComfyGenerateRequest,
@@ -1794,6 +1831,25 @@ async def comfyui_generate(
         raise HTTPException(status_code=422, detail=template.get("disabled_reason") or "工作流目前無法直接執行")
     workflow = json.loads(json.dumps(template["workflow"]))
     comfyui_service.inject_params(workflow, template, body.params)
+    try:
+        _, unavailable_selectors = await comfyui_service.normalize_workflow_selectors_live(workflow)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"無法讀取 ComfyUI 模型清單：{exc}")
+    if unavailable_selectors:
+        raise HTTPException(
+            status_code=422,
+            detail="ComfyUI 目前找不到工作流所需模型或選項：" + "、".join(unavailable_selectors[:3]),
+        )
+    missing_images = []
+    for node in workflow.values():
+        if node.get("class_type") != "LoadImage":
+            continue
+        filename = str((node.get("inputs") or {}).get("image") or "")
+        if filename and not (comfyui_service.COMFY_INPUT_DIR / filename).is_file():
+            missing_images.append(filename)
+    if missing_images:
+        names = "、".join(sorted(set(missing_images)))
+        raise HTTPException(status_code=422, detail=f"請先上傳工作流所需圖片：{names}")
     try:
         prompt_id = await comfyui_service.submit_workflow(workflow)
     except Exception as e:
@@ -2046,6 +2102,87 @@ async def comfyui_free_memory(
     return {"status": "ok"}
 
 
+def _sync_comfy_artifact_index(session: Session) -> int:
+    """Synchronize the persistent artifact index only when an explicit scan is requested."""
+    scanned, _ = comfyui_service.list_output_artifacts(limit=100_000, refresh=True)
+    seen_ids = {item["id"] for item in scanned}
+    existing = {item.id: item for item in session.scalars(select(ComfyArtifactRecord)).all()}
+    for item in scanned:
+        record = existing.get(item["id"])
+        if record is None:
+            record = ComfyArtifactRecord(id=item["id"])
+            session.add(record)
+        record.filename = item["filename"]
+        record.subfolder = item["subfolder"]
+        record.kind = item["kind"]
+        record.file_type = item["type"]
+        record.modified_at = item["modified_at"]
+        record.size_bytes = item["size_bytes"]
+    for artifact_id, record in existing.items():
+        if artifact_id not in seen_ids:
+            session.delete(record)
+    session.commit()
+    return len(scanned)
+
+
+def _artifact_response(record: ComfyArtifactRecord) -> dict[str, Any]:
+    return {
+        "id": record.id,
+        "filename": record.filename,
+        "subfolder": record.subfolder,
+        "type": record.file_type,
+        "kind": record.kind,
+        "modified_at": record.modified_at,
+        "size_bytes": record.size_bytes,
+    }
+
+
+@app.get("/api/v1/comfyui/artifacts", response_model=ComfyArtifactListResponse)
+def comfyui_artifacts(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=100),
+    refresh: bool = False,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """作品庫：正常分頁只查資料庫；首次與手動刷新才掃描 ComfyUI output。"""
+    total = session.scalar(select(func.count()).select_from(ComfyArtifactRecord)) or 0
+    if refresh or total == 0:
+        _sync_comfy_artifact_index(session)
+        total = session.scalar(select(func.count()).select_from(ComfyArtifactRecord)) or 0
+    records = session.scalars(
+        select(ComfyArtifactRecord)
+        .order_by(ComfyArtifactRecord.modified_at.desc(), ComfyArtifactRecord.id.desc())
+        .offset(offset).limit(limit)
+    ).all()
+    return {"artifacts": [_artifact_response(record) for record in records], "total": total, "offset": offset, "limit": limit}
+
+
+@app.delete("/api/v1/comfyui/artifacts")
+def comfyui_delete_artifact(
+    filename: str,
+    subfolder: str = "",
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """刪除作品庫中的單一 output 檔案。"""
+    try:
+        deleted = comfyui_service.delete_output_file({
+            "filename": filename, "subfolder": subfolder, "type": "output",
+        })
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="作品不存在或已被刪除")
+    record = session.scalar(select(ComfyArtifactRecord).where(
+        ComfyArtifactRecord.filename == filename, ComfyArtifactRecord.subfolder == subfolder,
+    ))
+    if record is not None:
+        session.delete(record)
+        session.commit()
+    return {"deleted": True}
+
+
 @app.get("/api/v1/comfyui/jobs", response_model=ComfyJobListResponse)
 def comfyui_jobs(
     limit: int = Query(20, ge=1, le=100),
@@ -2215,6 +2352,81 @@ async def comfyui_view(
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
+
+
+@app.post("/api/v1/comfyui/media-url")
+def comfyui_media_url(
+    filename: str,
+    subfolder: str = "",
+    view_type: str = "output",
+    current_user: User = Depends(get_current_user),
+):
+    """Issue a short-lived URL that native media elements can load and seek."""
+    try:
+        comfyui_service.resolve_view_file(filename, subfolder, view_type)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="檔案不存在")
+    token = create_access_token(
+        {
+            "sub": current_user.username,
+            "scope": "comfyui:view",
+            "filename": filename,
+            "subfolder": subfolder,
+            "view_type": view_type,
+        },
+        expires_delta=timedelta(minutes=30),
+    )
+    return {"url": f"/api/v1/comfyui/media?filename={quote(filename)}&subfolder={quote(subfolder)}&view_type={quote(view_type)}&token={quote(token)}"}
+
+
+@app.get("/api/v1/comfyui/media")
+def comfyui_media(
+    filename: str,
+    subfolder: str = "",
+    view_type: str = "output",
+    token: str = "",
+):
+    """Serve local Comfy output with HTTP range support for instant playback."""
+    if not is_valid_comfy_media_token(token, filename, subfolder, view_type):
+        raise HTTPException(status_code=401, detail="無效或過期的媒體連結")
+    try:
+        file_path = comfyui_service.resolve_view_file(filename, subfolder, view_type)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="檔案不存在")
+    return FileResponse(file_path, headers={"Cache-Control": "private, max-age=1800"})
+
+
+@app.post("/api/v1/comfyui/thumbnail-url")
+def comfyui_thumbnail_url(
+    filename: str,
+    subfolder: str = "",
+    view_type: str = "output",
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a compact video cover and issue a constrained URL for it."""
+    try:
+        comfyui_service.get_video_thumbnail(filename, subfolder, view_type)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="縮圖來源不存在")
+    except RuntimeError:
+        raise HTTPException(status_code=422, detail="無法產生影片縮圖")
+    token = create_access_token(
+        {"sub": current_user.username, "scope": "comfyui:thumbnail", "filename": filename,
+         "subfolder": subfolder, "view_type": view_type},
+        expires_delta=timedelta(minutes=30),
+    )
+    return {"url": f"/api/v1/comfyui/thumbnail?filename={quote(filename)}&subfolder={quote(subfolder)}&view_type={quote(view_type)}&token={quote(token)}"}
+
+
+@app.get("/api/v1/comfyui/thumbnail")
+def comfyui_thumbnail(filename: str, subfolder: str = "", view_type: str = "output", token: str = ""):
+    if not is_valid_comfy_media_token(token, filename, subfolder, view_type, scope="comfyui:thumbnail"):
+        raise HTTPException(status_code=401, detail="無效或過期的縮圖連結")
+    try:
+        thumbnail = comfyui_service.get_video_thumbnail(filename, subfolder, view_type)
+    except (ValueError, FileNotFoundError, RuntimeError):
+        raise HTTPException(status_code=404, detail="縮圖不存在")
+    return FileResponse(thumbnail, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=1800"})
 
 @app.post("/api/v1/comfyui/upload", response_model=ComfyUploadResponse)
 async def comfyui_upload(

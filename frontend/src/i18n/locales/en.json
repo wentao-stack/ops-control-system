@@ -53,5 +53,77 @@
     "zh-TW": "繁中",
     "en": "English",
     "ja": "日本語"
+  },
+  "health": {
+    "healthy": "Healthy",
+    "warning": "Warning",
+    "critical": "Critical",
+    "unknown": "Unknown"
+  },
+  "criticality": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "env": {
+    "production": "Production",
+    "staging": "Staging",
+    "development": "Development"
+  },
+  "assets": {
+    "title": "Assets List",
+    "total": "Total {{count}} assets",
+    "searchPlaceholder": "Search name...",
+    "envAll": "All Environments",
+    "healthAll": "All Statuses",
+    "clearFilter": "Clear Filters",
+    "loading": "Loading…",
+    "empty": "No assets match",
+    "columns": {
+      "name": "Name",
+      "type": "Type",
+      "env": "Environment",
+      "owner": "Owner",
+      "criticality": "Criticality",
+      "status": "Status",
+      "lastSeen": "Last Seen"
+    }
+  },
+  "assetDetail": {
+    "title": "Asset Details",
+    "back": "Back",
+    "basicInfo": "Basic Info",
+    "connectInfo": "Connection Info",
+    "sshHost": "SSH Host",
+    "sshPort": "SSH Port",
+    "sshUser": "SSH User",
+    "lastSeen": "Last Seen",
+    "owner": "Owner",
+    "criticality": "Criticality",
+    "health": "Health",
+    "relatedServices": "Related Services",
+    "noServices": "No related services",
+    "notSet": "Not set",
+    "goRemote": "Go to Remote Terminal",
+    "cmd": "Command",
+    "notFound": "Asset not found"
+  },
+  "overview": {
+    "title": "System Overview",
+    "subtitle": "Real-time infrastructure status",
+    "totalAssets": "Total Assets",
+    "healthy": "Healthy",
+    "needAttention": "Needs Attention",
+    "unknown": "Unknown",
+    "envDistribution": "Environment Distribution",
+    "quickLinks": "Quick Links",
+    "links": {
+      "assets": "🖥 Assets",
+      "services": "🔧 Services",
+      "monitoring": "📡 Monitoring",
+      "remote": "⌨ Remote Terminal"
+    },
+    "loadFailed": "Failed to load data"
   }
 }

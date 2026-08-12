@@ -57,7 +57,7 @@
   "7": {
     "class_type": "MiniMaxH3MultiRateSamplerEXPT8",
     "inputs": {
-      "model": ["2", 0],
+      "model": ["13", 0],
       "av_latent": ["6", 1],
       "video_steps": 4,
       "audio_steps": 10,
@@ -112,5 +112,18 @@
       "pingpong": false,
       "save_output": true
     }
+  },
+  "13": {
+    "class_type": "TESpeedMiniMaxH3",
+    "inputs": {
+      "model": ["2", 0],
+      "processing_control_value": 0.08,
+      "processing_percent_1": 0.1,
+      "processing_percent_2": 0.9,
+      "mcs": 2,
+      "device": "auto",
+      "cache_depth": 0.75
+    },
+    "_meta": {"title": "TE-Speed MiniMax H3"}
   }
 }

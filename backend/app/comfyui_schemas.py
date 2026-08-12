@@ -50,6 +50,12 @@ class ComfyWorkflowListResponse(BaseModel):
     templates: list[ComfyWorkflowTemplate]
 
 
+class ComfyWorkflowRenameRequest(BaseModel):
+    """工作流的新檔名；保留其原本所在的子資料夾。"""
+
+    name: str = Field(min_length=1, max_length=180)
+
+
 class ComfyStatusDevice(BaseModel):
     name: str | None = None
     vram_total: float | None = None
@@ -82,6 +88,21 @@ class ComfyOutputItem(BaseModel):
     type: str = "output"
     kind: str = "image"  # image | gif | video | audio
     node_id: str | None = None
+
+
+class ComfyArtifact(ComfyOutputItem):
+    """output 目錄中發現的作品（包括由 ComfyUI 控制台生成者）。"""
+
+    id: str
+    modified_at: float
+    size_bytes: int = 0
+
+
+class ComfyArtifactListResponse(BaseModel):
+    artifacts: list[ComfyArtifact] = Field(default_factory=list)
+    total: int = 0
+    offset: int = 0
+    limit: int = 24
 
 
 class ComfyJobResponse(BaseModel):

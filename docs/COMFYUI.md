@@ -63,6 +63,8 @@ nvidia-smi
 
 如果 Ollama 的 `llama-server` 占用了大部分显存，应先在确认没有其他推理任务后，通过 Ollama 的正常管理方式卸载模型或停止相关服务，再提交 ComfyUI 任务；不要直接强制终止不明 GPU 进程。
 
+服务已使用 `--disable-async-offload --disable-smart-memory` 启动。这会让 MiniMax H3 在 24 GiB 显存上将模型权重更积极地卸载到内存，以避免 `VRAM grow failed`；代价是生成速度可能略慢。若日志再次出现该错误，先通过页面的“释放显存”操作或重启 `ocs-comfyui`，再重试任务。
+
 ## Ops Control System 集成
 
 后端默认读取以下目录，无需额外配置：

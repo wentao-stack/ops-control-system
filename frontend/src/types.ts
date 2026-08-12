@@ -283,6 +283,10 @@ export type ComfyOutputItem = {
   node_id?: string
 }
 
+export type ComfyArtifact = ComfyOutputItem & {
+  modified_at: number
+}
+
 export type ComfyJob = {
   id: string
   prompt_id?: string

@@ -19,6 +19,8 @@ import logging
 import math
 import os
 import random
+import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -31,8 +33,10 @@ logger = logging.getLogger(__name__)
 
 COMFY_BASE = os.environ.get("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/")
 WS_BASE = COMFY_BASE.replace("http://", "ws://", 1)
+COMFY_INPUT_DIR = Path(os.environ.get("COMFYUI_INPUT_DIR", "/home/wentao/project/ComfyUI/input"))
 COMFY_OUTPUT_DIR = Path(os.environ.get("COMFYUI_OUTPUT_DIR", "/home/wentao/project/ComfyUI/output"))
 COMFY_TEMP_DIR = Path(os.environ.get("COMFYUI_TEMP_DIR", "/home/wentao/project/ComfyUI/temp"))
+COMFY_THUMBNAIL_DIR = Path(os.environ.get("COMFYUI_THUMBNAIL_DIR", "/tmp/ocs-comfy-thumbnails"))
 
 _TIMEOUT = httpx.Timeout(60.0, connect=5.0)
 
@@ -63,16 +67,26 @@ async def _list_workflow_files() -> list[dict[str, Any]]:
         response = await client.get(f"{COMFY_BASE}/userdata", params=params)
         response.raise_for_status()
         files = response.json()
-    return [
-        item for item in files
-        if isinstance(item, dict)
-        and isinstance(item.get("path"), str)
-        and item["path"].lower().endswith(".json")
-    ]
+    if not isinstance(files, list):
+        raise ValueError("ComfyUI 回傳的工作流清單格式無效")
+    # 新版 full_info=true 回傳物件；舊版則回傳純字串路徑。
+    normalized: list[dict[str, Any]] = []
+    for item in files:
+        if isinstance(item, str):
+            path = item
+            info: dict[str, Any] = {"path": path}
+        elif isinstance(item, dict) and isinstance(item.get("path"), str):
+            path = item["path"]
+            info = item
+        else:
+            continue
+        if path.lower().endswith(".json"):
+            normalized.append(info)
+    return normalized
 
 
 async def _read_workflow_file(path: str) -> dict[str, Any]:
-    encoded = quote(f"workflows/{path}", safe="")
+    encoded = quote(_userdata_path(path), safe="")
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         response = await client.get(f"{COMFY_BASE}/userdata/{encoded}")
         response.raise_for_status()
@@ -84,6 +98,41 @@ async def _read_workflow_file(path: str) -> dict[str, Any]:
 
 def _workflow_id(path: str) -> str:
     return f"wf-{hashlib.sha256(path.encode('utf-8')).hexdigest()[:24]}"
+
+
+def _userdata_path(path: str) -> str:
+    """Return a validated public userdata path for a workflow file."""
+    normalized = path.replace("\\", "/").strip("/")
+    parts = normalized.split("/")
+    if (
+        not normalized
+        or any(part in {"", ".", ".."} for part in parts)
+        or not normalized.lower().endswith(".json")
+    ):
+        raise ValueError("無效的工作流路徑")
+    return f"workflows/{normalized}"
+
+
+async def _find_workflow_path(workflow_id: str) -> str | None:
+    for file_info in await _list_workflow_files():
+        path = file_info["path"]
+        if _workflow_id(path) == workflow_id:
+            return path
+    return None
+
+
+def _workflow_rename_path(path: str, new_name: str) -> str:
+    """Build a same-directory target path and reject traversal or extensions other than JSON."""
+    candidate = new_name.strip()
+    if not candidate:
+        raise ValueError("請輸入工作流名稱")
+    if "/" in candidate or "\\" in candidate or candidate in {".", ".."}:
+        raise ValueError("名稱不可包含資料夾或路徑字元")
+    if not candidate.lower().endswith(".json"):
+        candidate += ".json"
+    if not re.fullmatch(r"[^/\\]+\.json", candidate, re.IGNORECASE):
+        raise ValueError("工作流名稱必須以 .json 結尾")
+    return str(Path(path).parent / candidate) if Path(path).parent != Path(".") else candidate
 
 
 def _input_spec(node_info: dict[str, Any], name: str) -> tuple[Any, dict[str, Any], bool] | None:
@@ -114,7 +163,13 @@ def _ordered_input_names(node_info: dict[str, Any]) -> list[str]:
 
 
 def compile_ui_workflow(workflow: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
-    """把不含子圖的 ComfyUI UI workflow 轉成 /prompt 接受的 API 格式。"""
+    """把不含子圖的 ComfyUI UI workflow 轉成 /prompt 接受的 API 格式。
+
+    UI JSON 的 ``mode: 4`` 表示節點在畫布上被 bypass。這個狀態屬於編輯器，
+    而不是 API prompt 的一部分；工作台執行時仍需保留原節點與連線，否則一個
+    被整組 bypass 的工作流會被誤判成不可執行。``mode: 2`` 的靜音節點則不會
+    產生輸出，應略過。
+    """
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list):
         raise ValueError("不是 ComfyUI UI 工作流")
@@ -154,13 +209,20 @@ def compile_ui_workflow(workflow: dict[str, Any], object_info: dict[str, Any]) -
     for node in nodes:
         if not isinstance(node, dict) or node.get("mode", 0) == 2:
             continue
-        if node.get("mode", 0) == 4:
-            raise ValueError("包含 bypass 節點；請先在 ComfyUI 固化連線或匯出 API 格式")
         node_id = str(node.get("id"))
         class_type = str(node.get("type", ""))
         node_info = object_info.get(class_type)
         if not isinstance(node_info, dict):
-            missing_types.add(class_type)
+            # 註解、標籤等純 UI 節點不在 /object_info 中，也沒有資料流；略過它們
+            # 就能讓含 rgthree Label / MarkdownNote 的一般工作流正常執行。
+            inputs = node.get("inputs") or []
+            outputs = node.get("outputs") or []
+            has_input_link = any(isinstance(item, dict) and item.get("link") is not None for item in inputs)
+            has_output_link = any(
+                isinstance(item, dict) and bool(item.get("links")) for item in outputs
+            )
+            if has_input_link or has_output_link:
+                missing_types.add(class_type)
             continue
 
         node_inputs = node.get("inputs") or []
@@ -210,7 +272,37 @@ def compile_ui_workflow(workflow: dict[str, Any], object_info: dict[str, Any]) -
         raise ValueError(f"ComfyUI 缺少節點：{missing}")
     if not prompt:
         raise ValueError("工作流沒有可執行節點")
-    return prompt
+    return _keep_output_dependencies(prompt)
+
+
+_OUTPUT_NODE_TYPES = {"SaveImage", "SaveVideo", "VHS_VideoCombine", "PreviewImage", "PreviewAny"}
+
+
+def _keep_output_dependencies(prompt: dict[str, Any]) -> dict[str, Any]:
+    """Discard UI-only and inactive branches that do not feed an output node.
+
+    A ComfyUI canvas can contain several experimental branches.  The API does
+    not carry canvas bypass state, so submitting every node accidentally asks
+    ComfyUI to validate branches that are not part of the rendered video.
+    """
+    output_ids = {
+        node_id for node_id, node in prompt.items()
+        if str(node.get("class_type")) in _OUTPUT_NODE_TYPES
+    }
+    if not output_ids:
+        return prompt
+    required = set(output_ids)
+    pending = list(output_ids)
+    while pending:
+        node_id = pending.pop()
+        inputs = (prompt.get(node_id) or {}).get("inputs") or {}
+        for value in inputs.values():
+            if isinstance(value, list) and len(value) == 2 and str(value[0]) in prompt:
+                source_id = str(value[0])
+                if source_id not in required:
+                    required.add(source_id)
+                    pending.append(source_id)
+    return {node_id: node for node_id, node in prompt.items() if node_id in required}
 
 
 def _is_api_workflow(workflow: dict[str, Any]) -> bool:
@@ -323,6 +415,139 @@ def _extract_params(prompt: dict[str, Any], object_info: dict[str, Any]) -> list
     return _normalize_duration_params(params, prompt)
 
 
+def _missing_required_inputs(prompt: dict[str, Any], object_info: dict[str, Any]) -> list[str]:
+    """Return unconnected ``forceInput`` values that a UI conversion cannot supply.
+
+    ComfyUI marks some widget-backed fields as ``required`` even when their
+    empty/default value is valid.  Only ``forceInput`` means a literal link is
+    mandatory and cannot be filled in by this page's parameter form.
+    """
+    missing: list[str] = []
+    for node_id, node in prompt.items():
+        node_info = object_info.get(str(node.get("class_type"))) or {}
+        required = (node_info.get("input") or {}).get("required") or {}
+        inputs = node.get("inputs") or {}
+        for input_name, spec in required.items():
+            config = spec[1] if isinstance(spec, list) and len(spec) > 1 and isinstance(spec[1], dict) else {}
+            if config.get("forceInput") and input_name not in inputs:
+                title = (node.get("_meta") or {}).get("title") or node.get("class_type") or node_id
+                missing.append(f"{title} · {input_name}")
+    return missing
+
+
+def repair_unconnected_force_inputs(prompt: dict[str, Any], object_info: dict[str, Any]) -> list[str]:
+    """Connect a unique compatible producer for a dangling forceInput.
+
+    A few saved TE MAN workflows contain the companion ``TE_prompt_text`` node
+    but omit its second output link to the enhancer.  The node schema makes
+    that link mandatory.  This generic, conservative repair only acts when
+    exactly one output in the prompt has the required Comfy type.
+    """
+    repairs: list[str] = []
+    outputs: dict[str, list[tuple[str, int]]] = {}
+    for source_id, source in prompt.items():
+        source_info = object_info.get(str(source.get("class_type"))) or {}
+        for output_index, output_type in enumerate(source_info.get("output") or []):
+            if isinstance(output_type, str):
+                outputs.setdefault(output_type, []).append((str(source_id), output_index))
+
+    for node_id, node in prompt.items():
+        node_info = object_info.get(str(node.get("class_type"))) or {}
+        required = (node_info.get("input") or {}).get("required") or {}
+        inputs = node.setdefault("inputs", {})
+        for input_name, spec in required.items():
+            config = spec[1] if isinstance(spec, list) and len(spec) > 1 and isinstance(spec[1], dict) else {}
+            input_type = spec[0] if isinstance(spec, list) and spec else None
+            if not config.get("forceInput") or input_name in inputs or not isinstance(input_type, str):
+                continue
+            candidates = [candidate for candidate in outputs.get(input_type, []) if candidate[0] != str(node_id)]
+            if len(candidates) == 1:
+                inputs[input_name] = [candidates[0][0], candidates[0][1]]
+                title = (node.get("_meta") or {}).get("title") or node.get("class_type") or node_id
+                repairs.append(f"{title} · {input_name}")
+    return repairs
+
+
+def _selector_options(spec: tuple[Any, dict[str, Any], bool] | None) -> list[Any]:
+    """Return the current enum values exposed by a ComfyUI input schema."""
+    if spec is None:
+        return []
+    input_type, config, _ = spec
+    if isinstance(input_type, list):
+        return input_type
+    options = config.get("options")
+    return options if isinstance(options, list) else []
+
+
+def _selector_basename(value: str) -> str:
+    """Normalize old Windows/Comfy model paths to a comparable filename."""
+    return value.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+
+
+def normalize_workflow_selectors(
+    prompt: dict[str, Any], object_info: dict[str, Any]
+) -> tuple[list[str], list[str]]:
+    """Adapt saved model selectors to the ComfyUI instance currently in use.
+
+    Workflows are often shared between machines and may retain a directory
+    prefix (for example ``Minimax_H3\\model.safetensors``).  ComfyUI validates
+    these selectors against its live list and rejects the whole prompt when it
+    only exposes ``model.safetensors``.  Match a unique basename automatically;
+    report genuinely unavailable values before submitting instead of returning a
+    cryptic HTTP 400.
+    """
+    adjusted: list[str] = []
+    unavailable: list[str] = []
+    for node_id, node in prompt.items():
+        class_type = str(node.get("class_type") or "")
+        node_info = object_info.get(class_type) or {}
+        inputs = node.get("inputs") or {}
+        for input_name, value in inputs.items():
+            # A two-item list pointing at another prompt node is a graph link,
+            # not a COMBO value.
+            if isinstance(value, list) and len(value) == 2 and str(value[0]) in prompt:
+                continue
+            if not isinstance(value, str):
+                continue
+            spec = _input_spec(node_info, input_name)
+            # LoadImage is an upload field.  A missing saved image is handled by
+            # the form/preflight below, so it must not make the whole template
+            # unavailable before the user has a chance to provide a new file.
+            if class_type == "LoadImage" and input_name == "image":
+                continue
+            options = _selector_options(spec)
+            string_options = [option for option in options if isinstance(option, str)]
+            if not string_options or value in string_options:
+                continue
+            matched = [option for option in string_options if _selector_basename(option) == _selector_basename(value)]
+            if not matched:
+                # Some saved UI values combine the enum code with a translated
+                # label ("I2VA — 图生音视频"), while other nodes now expose a
+                # shorter filename ("mmproj-BF16.gguf").  Accept either only
+                # when it identifies one live option unambiguously.
+                normalized = _selector_basename(value)
+                code = re.split(r"\s|—|－|-", normalized, maxsplit=1)[0]
+                matched = [option for option in string_options if _selector_basename(option) == code]
+                if not matched:
+                    matched = [
+                        option for option in string_options
+                        if normalized.endswith(_selector_basename(option))
+                        or _selector_basename(option).endswith(normalized)
+                    ]
+            title = (node.get("_meta") or {}).get("title") or class_type or node_id
+            if len(matched) == 1:
+                inputs[input_name] = matched[0]
+                adjusted.append(f"{title} · {input_name}")
+            else:
+                unavailable.append(f"{title} · {input_name}（{value}）")
+    return adjusted, unavailable
+
+
+async def normalize_workflow_selectors_live(prompt: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Normalize against a freshly cached live schema immediately before queueing."""
+    return normalize_workflow_selectors(prompt, await _get_object_info())
+
+
 def _workflow_frame_rate(prompt: dict[str, Any]) -> float:
     """Find the FPS used by the workflow's video output, with a safe fallback."""
     preferred_classes = ("CreateVideo", "VHS_VideoCombine")
@@ -408,6 +633,28 @@ async def _build_workflow(file_info: dict[str, Any], object_info: dict[str, Any]
         runnable = False
         disabled_reason = str(exc)
 
+    if runnable:
+        _, unavailable_selectors = normalize_workflow_selectors(prompt, object_info)
+        if unavailable_selectors:
+            runnable = False
+            disabled_reason = "ComfyUI 目前找不到工作流所需模型或選項：" + "、".join(unavailable_selectors[:3])
+
+    if runnable:
+        repair_unconnected_force_inputs(prompt, object_info)
+        missing_inputs = _missing_required_inputs(prompt, object_info)
+        if missing_inputs:
+            runnable = False
+            disabled_reason = "工作流缺少必要連線：" + "、".join(missing_inputs[:3])
+
+    params = _extract_params(prompt, object_info) if runnable else []
+    for param in params:
+        if param["type"] != "image" or not param.get("default"):
+            continue
+        image_path = COMFY_INPUT_DIR / str(param["default"])
+        if not image_path.is_file():
+            param["default"] = ""
+            param["help"] = "原本的圖片檔已不存在，請重新上傳圖片。"
+
     output_kind, icon, model = _workflow_presentation(prompt)
     modified = file_info.get("modified")
     return {
@@ -418,7 +665,7 @@ async def _build_workflow(file_info: dict[str, Any], object_info: dict[str, Any]
         "icon": icon,
         "model": model,
         "output_kind": output_kind,
-        "params": _extract_params(prompt, object_info) if runnable else [],
+        "params": params,
         "filename": path,
         "workflow_format": workflow_format,
         "node_count": len(prompt) if runnable else len(raw.get("nodes") or []),
@@ -462,6 +709,41 @@ async def get_workflow(workflow_id: str) -> dict[str, Any] | None:
         if _workflow_id(file_info["path"]) == workflow_id:
             return await _build_workflow(file_info, object_info)
     return None
+
+
+async def rename_workflow(workflow_id: str, new_name: str) -> dict[str, Any] | None:
+    """Rename one existing workflow through ComfyUI userdata without changing its contents."""
+    path = await _find_workflow_path(workflow_id)
+    if path is None:
+        return None
+    target = _workflow_rename_path(path, new_name)
+    if target == path:
+        raise ValueError("工作流名稱沒有變更")
+    source_path = quote(_userdata_path(path), safe="")
+    target_path = quote(_userdata_path(target), safe="")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(
+            f"{COMFY_BASE}/userdata/{source_path}/move/{target_path}",
+            params={"overwrite": "false"},
+        )
+        if response.status_code == 409:
+            raise FileExistsError("同名工作流已存在")
+        response.raise_for_status()
+    return {"id": _workflow_id(target), "filename": target}
+
+
+async def delete_workflow(workflow_id: str) -> bool:
+    """Delete an existing workflow through ComfyUI userdata."""
+    path = await _find_workflow_path(workflow_id)
+    if path is None:
+        return False
+    encoded = quote(_userdata_path(path), safe="")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.delete(f"{COMFY_BASE}/userdata/{encoded}")
+        if response.status_code == 404:
+            return False
+        response.raise_for_status()
+    return True
 
 
 # ── 參數注入 ──────────────────────────────────────────────────────────────
@@ -550,7 +832,9 @@ async def submit_workflow(workflow: dict[str, Any]) -> str:
     payload = {"prompt": workflow, "client_id": _WS_CLIENT_ID}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         r = await client.post(f"{COMFY_BASE}/prompt", json=payload)
-        r.raise_for_status()
+        if r.is_error:
+            detail = r.text.strip().replace("\n", " ")[:1_000]
+            raise ValueError(f"ComfyUI 拒絕工作流（HTTP {r.status_code}）：{detail or '未提供詳細原因'}")
         prompt_id = r.json()["prompt_id"]
     _job_node_titles[prompt_id] = {
         str(node_id): str((node.get("_meta") or {}).get("title") or node.get("class_type") or f"節點 {node_id}")
@@ -611,6 +895,51 @@ _KIND_BY_EXT = {
     ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image",
     ".wav": "audio", ".mp3": "audio", ".flac": "audio", ".aac": "audio", ".ogg": "audio",
 }
+_output_artifact_cache: tuple[float, list[dict[str, Any]]] | None = None
+_OUTPUT_ARTIFACT_CACHE_TTL = 60.0
+
+
+def list_output_artifacts(
+    offset: int = 0, limit: int = 24, refresh: bool = False,
+) -> tuple[list[dict[str, Any]], int]:
+    """列出 ComfyUI output 目錄中的作品，分頁時重用短期檔案索引避免重複掃盤。"""
+    global _output_artifact_cache
+    cached = _output_artifact_cache
+    now = time.monotonic()
+    if not refresh and cached and now - cached[0] < _OUTPUT_ARTIFACT_CACHE_TTL:
+        artifacts = cached[1]
+        return artifacts[offset:offset + limit], len(artifacts)
+    root = COMFY_OUTPUT_DIR.resolve()
+    if not root.is_dir():
+        return [], 0
+    artifacts: list[dict[str, Any]] = []
+    for candidate in root.rglob("*"):
+        try:
+            resolved = candidate.resolve()
+            relative = resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if not resolved.is_file():
+            continue
+        kind = _KIND_BY_EXT.get(resolved.suffix.lower())
+        if not kind:
+            continue
+        try:
+            modified_at = resolved.stat().st_mtime
+        except OSError:
+            continue
+        artifacts.append({
+            "id": hashlib.sha256(relative.as_posix().encode("utf-8")).hexdigest()[:32],
+            "filename": relative.name,
+            "subfolder": relative.parent.as_posix() if relative.parent != Path(".") else "",
+            "type": "output",
+            "kind": kind,
+            "modified_at": modified_at,
+            "size_bytes": resolved.stat().st_size,
+        })
+    artifacts.sort(key=lambda item: item["modified_at"], reverse=True)
+    _output_artifact_cache = (now, artifacts)
+    return artifacts[offset:offset + limit], len(artifacts)
 
 
 def parse_outputs(history: dict[str, Any]) -> list[dict[str, Any]]:
@@ -704,7 +1033,54 @@ def delete_output_file(output: dict[str, Any]) -> bool:
     if not target.is_file():
         return False
     target.unlink()
+    global _output_artifact_cache
+    _output_artifact_cache = None
     return True
+
+
+def resolve_view_file(filename: str, subfolder: str = "", view_type: str = "output") -> Path:
+    """Resolve a gallery media file while preventing path traversal."""
+    root = {"output": COMFY_OUTPUT_DIR, "temp": COMFY_TEMP_DIR}.get(view_type)
+    if root is None or not filename or Path(filename).name != filename:
+        raise ValueError("無效的作品檔案")
+    if Path(subfolder).is_absolute() or ".." in Path(subfolder).parts:
+        raise ValueError("無效的作品路徑")
+    resolved_root = root.resolve()
+    target = (resolved_root / subfolder / filename).resolve()
+    try:
+        target.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError("作品路徑超出允許目錄") from exc
+    if not target.is_file():
+        raise FileNotFoundError(filename)
+    return target
+
+
+def get_video_thumbnail(filename: str, subfolder: str = "", view_type: str = "output") -> Path:
+    """Create or reuse a small first-frame JPEG for a gallery video."""
+    source = resolve_view_file(filename, subfolder, view_type)
+    if _KIND_BY_EXT.get(source.suffix.lower()) not in {"video", "gif"}:
+        raise ValueError("此作品沒有影片縮圖")
+    stat = source.stat()
+    cache_key = hashlib.sha256(
+        f"{source}:{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8")
+    ).hexdigest()
+    target = COMFY_THUMBNAIL_DIR / f"{cache_key}.jpg"
+    if target.is_file():
+        return target
+    COMFY_THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp.jpg")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", "0", "-i", str(source), "-frames:v", "1", "-vf", "scale=480:-2", "-q:v", "4", str(temporary)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            check=True, timeout=15,
+        )
+        temporary.replace(target)
+    except (OSError, subprocess.SubprocessError) as exc:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError("無法產生影片縮圖") from exc
+    return target
 
 
 # ── 永續 WebSocket + 事件分發 ────────────────────────────────────────────
