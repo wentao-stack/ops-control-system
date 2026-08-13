@@ -257,7 +257,7 @@ export function CodeBrowsePage() {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
   });
 
-  /** 複製程式碼到剪貼簿 */
+  /** {t("code.copy")}到剪貼簿 */
   const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -323,7 +323,7 @@ export function CodeBrowsePage() {
       {/* 錯誤提示列 — 點擊可關閉 */}
       {error && (
         <div className="alert alert--error" onClick={() => setError(null)}>
-          ❌ {error}
+          ❌ {t("common.error")}: {error}
         </div>
       )}
 
@@ -358,7 +358,7 @@ export function CodeBrowsePage() {
           </div>
           <div className="code-browse__tree-content">
           {loading ? (
-            <div className="loading">載入中...</div>
+            <div className="loading">{t("common.loading")}</div>
           ) : (
             filteredTree.map((item) => (
               <TreeNode
@@ -378,7 +378,7 @@ export function CodeBrowsePage() {
         {/* 右欄：程式碼檢視器 */}
         <div className="code-browse__viewer">
           {fileLoading ? (
-            <div className="loading">載入檔案...</div>
+            <div className="loading">{t("code.loadingFile")}</div>
           ) : selectedFile ? (
             <div className="code-browse__file">
               <div className={`code-browse__file-header ${isDark && !isMarkdown ? 'code-browse__file-header--dark' : ''}`}>
@@ -394,15 +394,15 @@ export function CodeBrowsePage() {
                   <button
                     className={`btn btn--sm code-browse__copy-btn ${copyFeedback ? 'code-browse__copy-btn--active' : ''}`}
                     onClick={() => copyToClipboard(selectedFile.content)}
-                    title="複製程式碼"
+                    title={t("code.copy")}
                   >
-                    {copyFeedback ? '✅ 已複製' : '📋 複製'}
+                    {copyFeedback ? "✅ " + t("code.copied") : "📋 " + t("code.copy")}
                   </button>
                   {!isMarkdown && (
                     <button
                       className="btn btn--sm code-browse__theme-btn"
                       onClick={() => setIsDark(d => !d)}
-                      title={isDark ? '切換亮色主題' : '切換暗色主題'}
+                      title={isDark ? t("code.switchLight") : t("code.switchDark")}
                     >
                       {isDark ? '☀️' : '🌙'}
                     </button>

@@ -224,7 +224,16 @@
     "noFile": "ファイルなし",
     "dirs": "ディレクトリ",
     "files": "ファイル",
-    "selectFile": "左側のツリーからファイルを選択して内容を表示"
+    "selectFile": "左側のツリーからファイルを選択して内容を表示",
+    "search": "ファイルを検索",
+    "refresh": "更新",
+    "expandAll": "すべて展開",
+    "collapseAll": "すべて折りたたむ",
+    "copy": "コードをコピー",
+    "copied": "コピー済み",
+    "loadingFile": "ファイル読み込み中",
+    "switchLight": "ライトテーマに切替",
+    "switchDark": "ダークテーマに切替"
   },
   "comfyui": {
     "title": "ComfyUI ワークフロースタジオ",

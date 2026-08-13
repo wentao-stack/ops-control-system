@@ -224,7 +224,16 @@
     "noFile": "無檔案",
     "dirs": "目錄",
     "files": "檔案",
-    "selectFile": "從左側樹形結構選擇檔案查看內容"
+    "selectFile": "從左側樹形結構選擇檔案查看內容",
+    "search": "搜尋檔案",
+    "refresh": "重新整理",
+    "expandAll": "全部展開",
+    "collapseAll": "全部收縮",
+    "copy": "複製程式碼",
+    "copied": "已複製",
+    "loadingFile": "載入檔案",
+    "switchLight": "切換亮色主題",
+    "switchDark": "切換暗色主題"
   },
   "comfyui": {
     "title": "ComfyUI 工作流工作台",

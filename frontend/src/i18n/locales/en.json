@@ -224,7 +224,16 @@
     "noFile": "No file",
     "dirs": "dirs",
     "files": "files",
-    "selectFile": "Select a file from the left tree to view content"
+    "selectFile": "Select a file from the left tree to view content",
+    "search": "Search files",
+    "refresh": "Refresh",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "copy": "Copy code",
+    "copied": "Copied",
+    "loadingFile": "Loading file",
+    "switchLight": "Switch to light theme",
+    "switchDark": "Switch to dark theme"
   },
   "comfyui": {
     "title": "ComfyUI Workflow Console",
