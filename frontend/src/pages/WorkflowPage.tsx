@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { api } from "../auth"
 import type {
   WorkflowTemplate,
@@ -48,6 +49,7 @@ const NOTE_APIS = [
 
 /* ── Execution Detail Drawer ─────────────────────────────────────────── */
 function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }) {
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<WorkflowExecutionDetail | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -63,7 +65,7 @@ function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }
       <div className="wf-drawer" onClick={e => e.stopPropagation()}>
         <div className="wf-drawer-header">
           <div>
-            <h3>執行 #{detail.id}</h3>
+            <h3>{t("workflow.execTitle", { id: detail.id })}</h3>
             <p className="wf-drawer-subtitle">{detail.template_name}</p>
           </div>
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
@@ -71,38 +73,38 @@ function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }
         <div className="wf-drawer-body">
           <div className="wf-exec-meta-grid">
             <div className="wf-meta-chip">
-              <span className="wf-meta-label">狀態</span>
+              <span className="wf-meta-label">{t("workflow.statusLabel")}</span>
               <span className="wf-chip-status" style={{ background: STATUS_BG[detail.status] || "#f1f5f9", color: STATUS_COLORS[detail.status] }}>
-                {STATUS_LABELS[detail.status] || detail.status}
+                {t(`workflow.status.${detail.status}`)}
               </span>
             </div>
             <div className="wf-meta-chip">
-              <span className="wf-meta-label">使用者</span>
+              <span className="wf-meta-label">{t("workflow.user")}</span>
               <span>{detail.user}</span>
             </div>
             <div className="wf-meta-chip">
-              <span className="wf-meta-label">開始</span>
+              <span className="wf-meta-label">{t("workflow.start")}</span>
               <span>{new Date(detail.started_at).toLocaleString("zh-Hant")}</span>
             </div>
             {detail.completed_at && (
               <div className="wf-meta-chip">
-                <span className="wf-meta-label">完成</span>
+                <span className="wf-meta-label">{t("workflow.complete")}</span>
                 <span>{new Date(detail.completed_at).toLocaleString("zh-Hant")}</span>
               </div>
             )}
             <div className="wf-meta-chip">
-              <span className="wf-meta-label">耗時</span>
+              <span className="wf-meta-label">{t("workflow.duration")}</span>
               <span>{detail.duration_seconds.toFixed(1)}s</span>
             </div>
           </div>
           {Object.keys(detail.parameters).length > 0 && (
             <div className="wf-detail-block">
-              <h4>輸入參數</h4>
+              <h4>{t("workflow.inputParams")}</h4>
               <pre className="wf-code">{JSON.stringify(detail.parameters, null, 2)}</pre>
             </div>
           )}
           <div className="wf-detail-block">
-            <h4>步驟日志</h4>
+            <h4>{t("workflow.stepLog")}</h4>
             <div className="wf-steps-timeline">
               {detail.steps.map((sr, i) => (
                 <div key={i} className="wf-timeline-step">
@@ -111,25 +113,25 @@ function ExecDrawer({ execId, onClose }: { execId: number; onClose: () => void }
                     <div className="wf-timeline-header">
                       <span className="wf-timeline-name">{sr.step}</span>
                       <span className="wf-chip-status" style={{ background: STATUS_BG[sr.status] || "#f1f5f9", color: STATUS_COLORS[sr.status] }}>
-                        {STATUS_LABELS[sr.status] || sr.status}
+                        {t(`workflow.status.${sr.status}`)}
                       </span>
                     </div>
                     {sr.error && <div className="wf-step-err">{sr.error}</div>}
                     {sr.result && Object.keys(sr.result).length > 0 && (
                       <details className="wf-step-detail">
-                        <summary>查看結果</summary>
+                        <summary>{t("workflow.viewResult")}</summary>
                         <pre className="wf-code">{JSON.stringify(sr.result, null, 2)}</pre>
                       </details>
                     )}
                   </div>
                 </div>
               ))}
-              {detail.steps.length === 0 && <p className="wf-hint">沒有步驟記錄</p>}
+              {detail.steps.length === 0 && <p className="wf-hint">{t("workflow.noStepLog")}</p>}
             </div>
           </div>
           {detail.error && (
             <div className="wf-detail-block wf-err-block">
-              <h4>錯誤</h4>
+              <h4>{t("workflow.error")}</h4>
               <pre className="wf-code wf-code-err">{detail.error}</pre>
             </div>
           )}
@@ -162,6 +164,7 @@ function extractDynParams(steps: WorkflowStep[]) {
 
 /* ── Run Modal ──────────────────────────────────────────────────────── */
 function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: Record<string, any>) => void; onClose: () => void }) {
+  const { t } = useTranslation()
   const dynParams = extractDynParams(tpl.steps)
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
@@ -187,7 +190,7 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
     <div className="wf-modal-overlay" onClick={onClose}>
       <div className="wf-modal" onClick={e => e.stopPropagation()}>
         <div className="wf-modal-header">
-          <h3>▶ 執行: {tpl.name}</h3>
+          <h3>{t("workflow.runWorkflow")}: {tpl.name}</h3>
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="wf-modal-body">
@@ -200,12 +203,12 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
                 <input className="wf-field-input" placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               )}
             </div>
-          )) : <p className="wf-hint">此流程不需要參數</p>}
+          )) : <p className="wf-hint">{t("workflow.noParams")}</p>}
         </div>
         <div className="wf-modal-footer">
-          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn" onClick={onClose}>{t("common.cancel")}</button>
           <button className="btn btn-primary" onClick={submit} disabled={running}>
-            {running ? "⏳ 執行中..." : "▶ 確認執行"}
+            {running ? t("workflow.running") : t("workflow.confirmRun")}
           </button>
         </div>
       </div>
@@ -215,6 +218,7 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
 
 /* ── Step Config Editor ─────────────────────────────────────────────── */
 function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s: WorkflowStep) => void }) {
+  const { t } = useTranslation()
   const [stepType, setStepType] = useState(step.type)
   const [shellCmd, setShellCmd] = useState((step.config as any)?.command || "")
   const [noteApiIdx, setNoteApiIdx] = useState(() => {
@@ -260,18 +264,18 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
   return (
     <div className="wf-step-config">
       <div className="wf-step-type-row">
-        <span className="wf-step-type-label">類型</span>
+        <span className="wf-step-type-label">{t("workflow.type")}</span>
         <select className="wf-field-input wf-field-sm" value={stepType} onChange={e => handleTypeChange(e.target.value)}>
-          <option value="shell">🐚 Shell 指令</option>
-          <option value="note_api">📝 Note API</option>
+          <option value="shell">{t("workflow.shell")}</option>
+          <option value="note_api">{t("workflow.noteApiOption")}</option>
         </select>
       </div>
 
       {stepType === "shell" && (
         <div className="wf-step-fields">
           <div className="wf-field">
-            <label>指令</label>
-            <textarea className="wf-field-input wf-code" rows={3} placeholder="例如: systemctl restart nginx" value={shellCmd} onChange={e => {
+            <label>{t("workflow.command")}</label>
+            <textarea className="wf-field-input wf-code" rows={3} placeholder={t("workflow.commandPlaceholder")} value={shellCmd} onChange={e => {
               setShellCmd(e.target.value)
               onChange({ type: "shell", name: step.name, config: { command: e.target.value } })
             }} />
@@ -282,7 +286,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
       {stepType === "note_api" && (
         <div className="wf-step-fields">
           <div className="wf-field">
-            <label>API 類型</label>
+            <label>{t("workflow.apiType")}</label>
             <select className="wf-field-input" value={noteApiIdx} onChange={e => handleNoteApiChange(parseInt(e.target.value))}>
               {NOTE_APIS.map((a, i) => (
                 <option key={i} value={i}>{a.method} {a.path} — {a.label}</option>
@@ -314,6 +318,7 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
 
 /* ── Edit Modal ─────────────────────────────────────────────────────── */
 function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (data: any) => void; onClose: () => void }) {
+  const { t } = useTranslation()
   const [name, setName] = useState(tpl.name)
   const [desc, setDesc] = useState(tpl.description)
   const [steps, setSteps] = useState<WorkflowStep[]>([...tpl.steps])
@@ -323,7 +328,7 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
   const updateStep = (i: number, s: WorkflowStep) => { const n = [...steps]; n[i] = s; setSteps(n) }
 
   const save = () => {
-    if (!name) return alert("請填寫名稱")
+    if (!name) return alert(t("workflow.fillName"))
     onSave({ name, description: desc, parameters: [], steps })
   }
 
@@ -331,36 +336,35 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
     <div className="wf-modal-overlay" onClick={onClose}>
       <div className="wf-modal wf-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="wf-modal-header">
-          <h3>✏️ 編輯流程</h3>
+          <h3>{t("workflow.editWorkflow")}</h3>
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="wf-modal-body wf-scroll-body">
           {/* Basic Info */}
           <div className="wf-edit-block">
-            <h4>基本資訊</h4>
+            <h4>{t("workflow.basicInfo")}</h4>
             <div className="wf-field">
-              <label>名稱 <span className="wf-req">*</span></label>
+              <label>{t("workflow.name")} <span className="wf-req">*</span></label>
               <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} />
             </div>
             <div className="wf-field">
-              <label>描述</label>
+              <label>{t("workflow.description")}</label>
               <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} />
             </div>
           </div>
 
-
           {/* Steps */}
           <div className="wf-edit-block">
             <div className="wf-edit-section-header">
-              <h4>執行步驟 ({steps.length})</h4>
-              <button className="btn btn-sm" onClick={addStep}>+ 新增步驟</button>
+              <h4>{t("workflow.steps")} ({steps.length})</h4>
+              <button className="btn btn-sm" onClick={addStep}>{t("workflow.newStep")}</button>
             </div>
-            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增。步驟詳細配置在建立後可以編輯。</p>}
+            {steps.length === 0 && <p className="wf-hint">{t("workflow.noSteps")}</p>}
             {steps.map((s, i) => (
               <div className="wf-edit-step" key={i}>
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
-                  <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
+                  <input className="wf-field-input wf-field-sm" placeholder={t("workflow.stepNamePlaceholder")} value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
                 <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
@@ -369,8 +373,8 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
           </div>
         </div>
         <div className="wf-modal-footer">
-          <button className="btn" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={save}>💾 儲存</button>
+          <button className="btn" onClick={onClose}>{t("common.cancel")}</button>
+          <button className="btn btn-primary" onClick={save}>{t("workflow.save")}</button>
         </div>
       </div>
     </div>
@@ -379,9 +383,10 @@ function EditModal({ tpl, onSave, onClose }: { tpl: WorkflowTemplate; onSave: (d
 
 /* ── Execution Timeline Item ────────────────────────────────────────── */
 function ExecItem({ exec, tplName, onClick }: { exec: WorkflowExecution; tplName: string; onClick: () => void }) {
+  const { t } = useTranslation()
   const color = STATUS_COLORS[exec.status] || "#8b97a8"
   const bg = STATUS_BG[exec.status] || "#f1f5f9"
-  const label = STATUS_LABELS[exec.status] || exec.status
+  const label = t(`workflow.status.${exec.status}`)
   const dur = exec.completed_at
     ? (((new Date(exec.completed_at).getTime() - new Date(exec.started_at).getTime()) / 1000).toFixed(1) + "s")
     : "--"
@@ -407,6 +412,7 @@ function ExecItem({ exec, tplName, onClick }: { exec: WorkflowExecution; tplName
 
 /* ── Create Modal ───────────────────────────────────────────────────── */
 function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose: () => void }) {
+  const { t } = useTranslation()
   const [name, setName] = useState("")
   const [desc, setDesc] = useState("")
   const [steps, setSteps] = useState<WorkflowStep[]>([])
@@ -416,7 +422,7 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
   const updateStep = (i: number, s: WorkflowStep) => { const n = [...steps]; n[i] = s; setSteps(n) }
 
   const save = () => {
-    if (!name) return alert("請填寫名稱")
+    if (!name) return alert(t("workflow.fillName"))
     onSave({ name, description: desc, parameters: [], steps })
   }
 
@@ -424,32 +430,32 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
     <div className="wf-modal-overlay" onClick={onClose}>
       <div className="wf-modal wf-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="wf-modal-header">
-          <h3>+ 新增流程</h3>
+          <h3>{t("workflow.newWorkflowTitle")}</h3>
           <button className="wf-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="wf-modal-body wf-scroll-body">
           <div className="wf-edit-block">
-            <h4>基本資訊</h4>
+            <h4>{t("workflow.basicInfo")}</h4>
             <div className="wf-field">
-              <label>名稱 <span className="wf-req">*</span></label>
-              <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} placeholder="例如: 部署更新" />
+              <label>{t("workflow.name")} <span className="wf-req">*</span></label>
+              <input className="wf-field-input" value={name} onChange={e => setName(e.target.value)} placeholder={t("workflow.namePlaceholder")} />
             </div>
             <div className="wf-field">
-              <label>描述</label>
-              <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} placeholder="簡述流程用途" />
+              <label>{t("workflow.description")}</label>
+              <textarea className="wf-field-input" rows={2} value={desc} onChange={e => setDesc(e.target.value)} placeholder={t("workflow.descPlaceholder")} />
             </div>
           </div>
           <div className="wf-edit-block">
             <div className="wf-edit-section-header">
-              <h4>執行步驟 ({steps.length})</h4>
-              <button className="btn btn-sm" onClick={addStep}>+ 新增步驟</button>
+              <h4>{t("workflow.steps")} ({steps.length})</h4>
+              <button className="btn btn-sm" onClick={addStep}>{t("workflow.newStep")}</button>
             </div>
-            {steps.length === 0 && <p className="wf-hint">沒有步驟，請新增</p>}
+            {steps.length === 0 && <p className="wf-hint">{t("workflow.noSteps")}</p>}
             {steps.map((s, i) => (
               <div className="wf-edit-step" key={i}>
                 <div className="wf-edit-step-header">
                   <span className="wf-step-num">#{i + 1}</span>
-                  <input className="wf-field-input wf-field-sm" placeholder="步驟名稱" value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
+                  <input className="wf-field-input wf-field-sm" placeholder={t("workflow.stepNamePlaceholder")} value={s.name} onChange={e => updateStep(i, { ...s, name: e.target.value })} style={{ flex: 1 }} />
                   <button className="wf-icon-btn" onClick={() => removeStep(i)}>✕</button>
                 </div>
                 <StepConfigEditor step={s} onChange={s2 => updateStep(i, s2)} />
@@ -458,8 +464,8 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
           </div>
         </div>
         <div className="wf-modal-footer">
-          <button className="btn" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={save}>💾 建立</button>
+          <button className="btn" onClick={onClose}>{t("common.cancel")}</button>
+          <button className="btn btn-primary" onClick={save}>{t("workflow.createWorkflow")}</button>
         </div>
       </div>
     </div>
@@ -468,6 +474,7 @@ function CreateModal({ onSave, onClose }: { onSave: (data: any) => void; onClose
 
 /* ── Template Row ───────────────────────────────────────────────────── */
 function TplRow({ tpl, onRun, onEdit, onDelete }: { tpl: WorkflowTemplate; onRun: (t: WorkflowTemplate) => void; onEdit: (t: WorkflowTemplate) => void; onDelete: (id: string) => void }) {
+  const { t } = useTranslation()
   return (
     <div className="wf-tpl-row">
       <div className="wf-tpl-row-icon">⚡</div>
@@ -484,9 +491,9 @@ function TplRow({ tpl, onRun, onEdit, onDelete }: { tpl: WorkflowTemplate; onRun
         ))}
       </div>
       <div className="wf-tpl-row-actions">
-        <button className="btn btn-primary btn-sm" onClick={() => onRun(tpl)}>▶ 執行</button>
-        <button className="btn btn-sm" onClick={() => onEdit(tpl)}>✏️ 編輯</button>
-        <button className="btn btn-sm btn-danger" onClick={() => onDelete(tpl.id)}>🗑 刪除</button>
+        <button className="btn btn-primary btn-sm" onClick={() => onRun(tpl)}>{t("workflow.runWorkflow")}</button>
+        <button className="btn btn-sm" onClick={() => onEdit(tpl)}>{t("workflow.editWorkflowBtn")}</button>
+        <button className="btn btn-sm btn-danger" onClick={() => onDelete(tpl.id)}>{t("workflow.deleteWorkflow")}</button>
       </div>
     </div>
   )
@@ -494,6 +501,7 @@ function TplRow({ tpl, onRun, onEdit, onDelete }: { tpl: WorkflowTemplate; onRun
 
 /* ── Main Page ──────────────────────────────────────────────────────── */
 export default function WorkflowPage() {
+  const { t } = useTranslation()
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
   const [executions, setExecutions] = useState<WorkflowExecution[]>([])
   const [runTpl, setRunTpl] = useState<WorkflowTemplate | null>(null)
@@ -524,15 +532,15 @@ export default function WorkflowPage() {
       })
       setShowCreate(false)
       fetchAll()
-    } catch (e) { alert("建立失敗: " + (e as Error).message) }
+    } catch (e) { alert(t("workflow.createFailed") + (e as Error).message) }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("確定刪除此流程？")) return
+    if (!confirm(t("workflow.confirmDelete"))) return
     try {
       await api(`/api/v1/workflows/templates/${id}`, { method: "DELETE" })
       fetchAll()
-    } catch (e) { alert("刪除失敗: " + (e as Error).message) }
+    } catch (e) { alert(t("workflow.deleteFailed") + (e as Error).message) }
   }
 
   const handleRun = async (params: Record<string, any>) => {
@@ -544,7 +552,7 @@ export default function WorkflowPage() {
       })
       setRunTpl(null)
       fetchAll()
-    } catch (e) { alert("執行失敗: " + (e as Error).message) }
+    } catch (e) { alert(t("workflow.runFailed") + (e as Error).message) }
   }
 
   const handleEdit = async (data: any) => {
@@ -556,17 +564,17 @@ export default function WorkflowPage() {
       })
       setEditTpl(null)
       fetchAll()
-    } catch (e) { alert("儲存失敗: " + (e as Error).message) }
+    } catch (e) { alert(t("workflow.saveFailed") + (e as Error).message) }
   }
 
   return (
     <div className="page wf-page">
       <div className="wf-page-header">
         <div>
-          <h1 className="wf-page-title">流程</h1>
-          <p className="wf-page-subtitle">自動化流程管理</p>
+          <h1 className="wf-page-title">{t("workflow.pageTitle")}</h1>
+          <p className="wf-page-subtitle">{t("workflow.pageSubtitle")}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ 新增流程</button>
+        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>{t("workflow.newWorkflow")}</button>
       </div>
 
       {/* Create Modal */}
@@ -577,17 +585,17 @@ export default function WorkflowPage() {
       {/* Template List */}
       <div className="wf-section">
         <div className="wf-section-header">
-          <h2 className="wf-section-title">流程模板</h2>
+          <h2 className="wf-section-title">{t("workflow.templateList")}</h2>
           <span className="wf-section-count">{templates.length}</span>
         </div>
         {loading ? (
-          <div className="wf-empty-state">載入中…...</div>
+          <div className="wf-empty-state">{t("workflow.loading")}</div>
         ) : templates.length === 0 ? (
-          <div className="wf-empty-state">暫無流程模板</div>
+          <div className="wf-empty-state">{t("workflow.noTemplates")}</div>
         ) : (
           <div className="wf-tpl-list">
-            {templates.map(t => (
-              <TplRow key={t.id} tpl={t} onRun={setRunTpl} onEdit={setEditTpl} onDelete={handleDelete} />
+            {templates.map(tpl => (
+              <TplRow key={tpl.id} tpl={tpl} onRun={setRunTpl} onEdit={setEditTpl} onDelete={handleDelete} />
             ))}
           </div>
         )}
@@ -596,11 +604,11 @@ export default function WorkflowPage() {
       {/* Execution History */}
       <div className="wf-section">
         <div className="wf-section-header">
-          <h2 className="wf-section-title">執行記錄</h2>
+          <h2 className="wf-section-title">{t("workflow.executionHistory")}</h2>
           <span className="wf-section-count">{executions.length}</span>
         </div>
         {executions.length === 0 ? (
-          <div className="wf-empty-state">暫無執行記錄</div>
+          <div className="wf-empty-state">{t("workflow.noExecutions")}</div>
         ) : (
           <div className="wf-exec-timeline">
             {executions.map(ex => (
