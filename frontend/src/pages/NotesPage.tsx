@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 
 /* ── Notes / Knowledge Base ──────────────────────────────────────────────────
@@ -542,7 +543,8 @@ function Pagination({
 
 export function NotesPage() {
 
-  const navigate = useNavigate()
+    const { t } = useTranslation()
+const navigate = useNavigate()
   const [notes, setNotes] = useState<Note[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -652,11 +654,11 @@ export function NotesPage() {
     <>
       <div className="page-header">
         <div>
-          <h1>筆記</h1>
+          <h1>{t("notes.title")}</h1>
           <p>知識管理 · 貼文 · 待辦 · 共 {total} 篇</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>
-          ＋ 新增
+          ＋ {t("notes.create")}
         </button>
       </div>
 
@@ -665,7 +667,7 @@ export function NotesPage() {
         <input
           className="search-input"
           type="text"
-          placeholder="搜尋標題、內容..."
+          placeholder={t("notes.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -718,7 +720,7 @@ export function NotesPage() {
               <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
                 <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                  {total === 0 ? "還沒有筆記，點擊「＋ 新增」開始" : "沒有符合條件的筆記"}
+                  {total === 0 ? "還沒有筆記，點擊「＋ " + t("notes.create") + "」開始" : t("notes.empty")}
                 </div>
               </div>
             </div>

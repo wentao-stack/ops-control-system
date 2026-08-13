@@ -168,7 +168,7 @@ function Sidebar({
     <aside className={`agent-sidebar${mobileOpen ? " mobile-open" : ""}`} aria-label="對話歷史">
       <div className="agent-sidebar-header">
         <button className="btn btn-primary" style={{ width: "100%" }} onClick={onNew} disabled={disabled}>
-          ＋ "\1"
+          ＋ 新建對話
         </button>
         <button className="agent-sidebar-close" onClick={onClose} aria-label="關閉對話歷史">×</button>
       </div>
@@ -212,7 +212,7 @@ function Sidebar({
         )}
         {!loading && !error && conversations.length === 0 && (
           <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: "var(--text-secondary)" }}>
-            "\1"歷史
+            尚無歷史
           </div>
         )}
       </div>
@@ -758,7 +758,7 @@ export function AgentChatPage() {
       <div className="agent-main">
         <div className="agent-mobile-toolbar">
           <button type="button" onClick={() => setMobileSidebarOpen(true)}>☰ 對話歷史</button>
-          <button type="button" onClick={handleNew} disabled={streaming}>＋ "\1"</button>
+          <button type="button" onClick={handleNew} disabled={streaming}>＋ 新建對話</button>
         </div>
 
         {!healthLoading && health?.status === "error" && (

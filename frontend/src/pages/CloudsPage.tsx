@@ -358,8 +358,8 @@ export function CloudsPage() {
     <>
       <div className="page-header">
         <div>
-          <h1>t("clouds.title")</h1>
-          <p>t("clouds.subtitle")</p>
+          <h1>{t("clouds.title")}</h1>
+          <p>{t("clouds.subtitle")}</p>
         </div>
       </div>
 
@@ -383,21 +383,21 @@ export function CloudsPage() {
       {/* Summary stats */}
       <div className="stats-row">
         <div className="stat-card">
-          <div className="stat-label">t("clouds.stats.platforms")</div>
+          <div className="stat-label">{t("clouds.stats.platforms")}</div>
           <div className="stat-value">2</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">t("clouds.stats.total")</div>
+          <div className="stat-label">{t("clouds.stats.total")}</div>
           <div className="stat-value">{loading ? "—" : totalInstances}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">t("clouds.stats.running")</div>
+          <div className="stat-label">{t("clouds.stats.running")}</div>
           <div className="stat-value" style={{ color: "var(--success)" }}>
             {loading ? "—" : activeInstances}
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">t("clouds.stats.domains")</div>
+          <div className="stat-label">{t("clouds.stats.domains")}</div>
           <div className="stat-value" style={{ color: "var(--info)" }}>
             1
           </div>
@@ -441,10 +441,10 @@ export function CloudsPage() {
             {/* Balance detail */}
             {vultrAccount && (
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>t("clouds.account.info")</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("clouds.account.info")}</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.remaining")</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clouds.account.remaining")}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.remaining_credit) > 0 ? "var(--success)" : "var(--danger)" }}>
                       ${vultrAccount.remaining_credit}
                     </div>
@@ -453,15 +453,15 @@ export function CloudsPage() {
                     </div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.balance")</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clouds.account.balance")}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(vultrAccount.balance) < 0 ? "var(--danger)" : "var(--success)" }}>${vultrAccount.balance}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.pending")</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clouds.account.pending")}</div>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.pending_charges}</div>
                   </div>
                   <div style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>t("clouds.account.lastPayment")</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clouds.account.lastPayment")}</div>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>${vultrAccount.last_payment_amount}</div>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{vultrAccount.last_payment_date?.split("T")[0] ?? ""}</div>
                   </div>
@@ -472,9 +472,9 @@ export function CloudsPage() {
             {/* Instances */}
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                t("clouds.instances.label"){vultrInstances.length})
+                {t("clouds.instances.label")} ({vultrInstances.length})
               </h3>
-              {vultrInstances.length === 0 && (loading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("common.loading")</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("clouds.noInstances")</p>)}
+              {vultrInstances.length === 0 && (loading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t("common.loading")}</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t("clouds.noInstances")}</p>)}
               {vultrInstances.map((inst) => (
                 <VultrInstanceCard key={inst.id} inst={inst} />
               ))}
@@ -483,7 +483,7 @@ export function CloudsPage() {
             {/* API Quick Reference */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600 }}>t("clouds.api.ref")</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600 }}>{t("clouds.api.ref")}</h3>
                 <div style={{ display: "flex", gap: 8 }}>
                   <a href="https://www.vultr.com/api/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: "none" }}>
                     📖 t("common.docs")
@@ -498,7 +498,7 @@ export function CloudsPage() {
 
             {/* SSH Info */}
             <div style={{ background: "#1a1b26", borderRadius: 6, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#c0caf5", lineHeight: 1.8 }}>
-              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>t("clouds.ssh.title")</div>
+              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>{t("clouds.ssh.title")}</div>
               {vultrInstances.map((inst) => (
                 <div key={inst.id}>
                   <span style={{ color: "#9ece6a" }}>ssh root@{inst.default_ip}</span>
@@ -547,9 +547,9 @@ export function CloudsPage() {
           <div className="card-body">
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                t("clouds.instances.label"){conohaInstances.length})
+                {t("clouds.instances.label")} ({conohaInstances.length})
               </h3>
-              {conohaInstances.length === 0 && (conohaLoading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("common.loading")</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>t("clouds.noInstances")</p>)}
+              {conohaInstances.length === 0 && (conohaLoading ? <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t("common.loading")}</p> : <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t("clouds.noInstances")}</p>)}
               {conohaInstances.map((inst) => (
                 <ConoHaInstanceCard key={inst.id} inst={inst} />
               ))}
@@ -557,7 +557,7 @@ export function CloudsPage() {
 
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 600 }}>t("clouds.api.ref")</h3>
+                <h3 style={{ fontSize: 13, fontWeight: 600 }}>{t("clouds.api.ref")}</h3>
                 <div style={{ display: "flex", gap: 8 }}>
                   <a href="https://doc.conoha.jp/reference/api-vps3/" target="_blank" rel="noreferrer" className="btn btn-sm" style={{ textDecoration: "none" }}>
                     📖 t("common.docs")
@@ -571,7 +571,7 @@ export function CloudsPage() {
             </div>
 
             <div style={{ background: "#1a1b26", borderRadius: 6, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#c0caf5", lineHeight: 1.8 }}>
-              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>t("clouds.ssh.title")</div>
+              <div style={{ color: "#7aa2f7", marginBottom: 4 }}>{t("clouds.ssh.title")}</div>
               {conohaInstances.map((inst) => (
                 <div key={inst.id}>
                   <span style={{ color: "#9ece6a" }}>ssh root@{inst.ip}</span>

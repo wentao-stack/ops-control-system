@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { Link } from "react-router-dom"
 import { api } from "../auth"
 import { GPUMetric, SupervisorProcess, SupervisorHostStatus, SupervisorAllStatus, SupervisorLogSource } from "../types"
@@ -308,7 +309,8 @@ function SupervisorProcessRow({
 
 export function ServicesPage() {
 
-  const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
+    const { t } = useTranslation()
+const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
 
   // ── Service detection state (original) ──
   const [detectData, setDetectData] = useState<HostServices[]>([])
@@ -419,7 +421,7 @@ export function ServicesPage() {
       <div className="page-header">
         <div>
           <h1>服務總覽</h1>
-          <p>遠程主機服務偵測與 Supervisor 進程管理</p>
+          <p>遠程主機{t("services.detect")}與 Supervisor {t("services.supervisor")}</p>
         </div>
       </div>
 
@@ -441,7 +443,7 @@ export function ServicesPage() {
             fontSize: 14,
           }}
         >
-          Supervisor 進程管理
+          Supervisor {t("services.supervisor")}
         </button>
         <button
           onClick={() => setTab("detect")}
@@ -456,7 +458,7 @@ export function ServicesPage() {
             fontSize: 14,
           }}
         >
-          服務偵測
+          {t("services.detect")}
         </button>
       </div>
 
@@ -570,7 +572,7 @@ export function ServicesPage() {
           {detectLoading && <div className="empty">載入中…</div>}
 
           {detectData.length === 0 && !detectLoading && (
-            <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>沒有可偵測的遠程主機</p></div></div>
+            <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{t("services.noHosts")}</p></div></div>
           )}
 
           <div style={{ display: "grid", gap: 16 }}>

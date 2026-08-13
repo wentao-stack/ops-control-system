@@ -129,19 +129,29 @@
   },
   "monitoring": {
     "title": "ホスト監視",
-    "total": "{{count}} 台ホスト",
-    "refresh": "すべて収集",
+    "local": "ローカル",
+    "remote": "リモート",
+    "remoteHosts": "リモートホスト",
+    "backend": "バックエンドサーバー",
+    "uptime": "稼働時間",
+    "day": "日",
+    "hour": "時間",
+    "gpu": "GPU",
+    "devices": "装置",
+    "tabs": {
+      "live": "リアルタイム",
+      "history": "履歴"
+    },
+    "collectLocal": "ローカル",
+    "collectAll": "すべて収集",
     "collecting": "収集中",
-    "collectedAt": "収集時刻",
+    "noHosts": "監視可能なリモートホストなし",
     "table": {
-      "hostname": "ホスト名",
-      "status": "状態",
       "cpu": "CPU",
       "mem": "メモリ",
       "disk": "ディスク",
       "uptime": "稼働時間"
-    },
-    "noHosts": "監視可能なリモートホストなし"
+    }
   },
   "remote": {
     "title": "リモートターミナル",
@@ -214,12 +224,55 @@
     "noFile": "ファイルなし"
   },
   "comfyui": {
-    "title": "ComfyUI ダッシュボード",
-    "status": "ステータス",
-    "jobs": "ジョブ"
+    "title": "ComfyUI ワークフロースタジオ",
+    "status": {
+      "running": "実行中",
+      "ready": "準備完了",
+      "error": "エラー",
+      "offline": "オフライン"
+    },
+    "jobs": "ジョブ",
+    "sidebar": {
+      "templates": "テンプレート",
+      "workflows": "ワークフローテンプレート"
+    },
+    "tabs": {
+      "workflow": "ワークフロー",
+      "params": "パラメータ",
+      "log": "ログ"
+    },
+    "loadingTemplates": "テンプレート読み込み中…",
+    "run": "実行",
+    "pause": "一時停止",
+    "stop": "停止",
+    "noTemplates": "テンプレートなし",
+    "selectTemplate": "テンプレート選択"
   },
   "sequence": {
     "title": "Sequence Studio",
     "noSeq": "シーケンスなし"
+  },
+  "showcase": {
+    "title": "公開展示ウォール",
+    "subtitle": "承認済みコンテンツ展示",
+    "allCategories": "全カテゴリ",
+    "category": {
+      "animation": "アニメーション",
+      "blog": "ブログ",
+      "image": "画像",
+      "document": "ドキュメント"
+    },
+    "searchPlaceholder": "コンテンツを検索...",
+    "empty": "コンテンツなし"
+  },
+  "workflow": {
+    "title": "ワークフロー管理",
+    "templates": "テンプレート",
+    "create": "作成",
+    "run": "実行",
+    "edit": "編集",
+    "delete": "削除",
+    "params": "パラメータ",
+    "log": "ログ"
   }
 }

@@ -129,19 +129,29 @@
   },
   "monitoring": {
     "title": "主機監控",
-    "total": "共 {{count}} 台主機",
-    "refresh": "收集全部",
+    "local": "本機",
+    "remote": "遠程",
+    "remoteHosts": "遠程主機",
+    "backend": "後端伺服器",
+    "uptime": "運行時間",
+    "day": "天",
+    "hour": "小時",
+    "gpu": "GPU",
+    "devices": "裝置",
+    "tabs": {
+      "live": "即時",
+      "history": "歷史"
+    },
+    "collectLocal": "本機",
+    "collectAll": "收集全部",
     "collecting": "收集中",
-    "collectedAt": "收集於",
+    "noHosts": "沒有可監控的遠程主機",
     "table": {
-      "hostname": "主機",
-      "status": "狀態",
       "cpu": "CPU",
       "mem": "記憶體",
       "disk": "磁碟",
       "uptime": "運行時間"
-    },
-    "noHosts": "沒有可監控的遠程主機"
+    }
   },
   "remote": {
     "title": "遠程終端",
@@ -214,12 +224,55 @@
     "noFile": "無檔案"
   },
   "comfyui": {
-    "title": "ComfyUI 儀表板",
-    "status": "狀態",
-    "jobs": "工作"
+    "title": "ComfyUI 工作流工作台",
+    "status": {
+      "running": "執行中",
+      "ready": "就緒",
+      "error": "錯誤",
+      "offline": "未連線"
+    },
+    "jobs": "工作",
+    "sidebar": {
+      "templates": "模板",
+      "workflows": "工作流模板"
+    },
+    "tabs": {
+      "workflow": "工作流",
+      "params": "參數",
+      "log": "日誌"
+    },
+    "loadingTemplates": "載入模板…",
+    "run": "執行",
+    "pause": "暫停",
+    "stop": "停止",
+    "noTemplates": "無模板",
+    "selectTemplate": "選擇模板"
   },
   "sequence": {
     "title": "Sequence Studio",
     "noSeq": "尚無序列"
+  },
+  "showcase": {
+    "title": "公共展示墙",
+    "subtitle": "已审批通过的内容展示",
+    "allCategories": "全部分类",
+    "category": {
+      "animation": "动画",
+      "blog": "博客",
+      "image": "图片",
+      "document": "文档"
+    },
+    "searchPlaceholder": "搜索内容...",
+    "empty": "暂无内容"
+  },
+  "workflow": {
+    "title": "工作流管理",
+    "templates": "模板",
+    "create": "建立",
+    "run": "執行",
+    "edit": "編輯",
+    "delete": "刪除",
+    "params": "參數",
+    "log": "日誌"
   }
 }

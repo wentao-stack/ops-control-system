@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { useNavigate, useParams } from "react-router-dom"
 
 /* ── Note Detail Page ────────────────────────────────────────────────────────
@@ -350,7 +351,8 @@ function RelatedNotes({ currentId, category, onNavigate }: { currentId: string; 
 
 export function NoteDetailPage() {
 
-  const { noteId } = useParams<{ noteId: string }>()
+    const { t } = useTranslation()
+const { noteId } = useParams<{ noteId: string }>()
   const navigate = useNavigate()
   const [note, setNote] = useState<Note | null>(null)
   const [loading, setLoading] = useState(true)

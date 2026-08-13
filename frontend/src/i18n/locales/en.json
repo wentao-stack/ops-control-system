@@ -129,19 +129,29 @@
   },
   "monitoring": {
     "title": "Host Monitoring",
-    "total": "{{count}} hosts",
-    "refresh": "Collect All",
+    "local": "Local",
+    "remote": "Remote",
+    "remoteHosts": "Remote Hosts",
+    "backend": "Backend Server",
+    "uptime": "Uptime",
+    "day": "days",
+    "hour": "hours",
+    "gpu": "GPU",
+    "devices": "devices",
+    "tabs": {
+      "live": "Live",
+      "history": "History"
+    },
+    "collectLocal": "Local",
+    "collectAll": "Collect All",
     "collecting": "Collecting",
-    "collectedAt": "Collected at",
+    "noHosts": "No remote hosts to monitor",
     "table": {
-      "hostname": "Hostname",
-      "status": "Status",
       "cpu": "CPU",
       "mem": "Memory",
       "disk": "Disk",
       "uptime": "Uptime"
-    },
-    "noHosts": "No remote hosts"
+    }
   },
   "remote": {
     "title": "Remote Terminal",
@@ -214,12 +224,55 @@
     "noFile": "No file"
   },
   "comfyui": {
-    "title": "ComfyUI Dashboard",
-    "status": "Status",
-    "jobs": "Jobs"
+    "title": "ComfyUI Workflow Console",
+    "status": {
+      "running": "Running",
+      "ready": "Ready",
+      "error": "Error",
+      "offline": "Offline"
+    },
+    "jobs": "Jobs",
+    "sidebar": {
+      "templates": "Templates",
+      "workflows": "Workflow Templates"
+    },
+    "tabs": {
+      "workflow": "Workflow",
+      "params": "Parameters",
+      "log": "Log"
+    },
+    "loadingTemplates": "Loading templates…",
+    "run": "Run",
+    "pause": "Pause",
+    "stop": "Stop",
+    "noTemplates": "No templates",
+    "selectTemplate": "Select template"
   },
   "sequence": {
     "title": "Sequence Studio",
     "noSeq": "No sequences"
+  },
+  "showcase": {
+    "title": "Public Showcase",
+    "subtitle": "Approved Content Showcase",
+    "allCategories": "All Categories",
+    "category": {
+      "animation": "Animation",
+      "blog": "Blog",
+      "image": "Image",
+      "document": "Document"
+    },
+    "searchPlaceholder": "Search content...",
+    "empty": "No content"
+  },
+  "workflow": {
+    "title": "Workflow Management",
+    "templates": "Templates",
+    "create": "Create",
+    "run": "Run",
+    "edit": "Edit",
+    "delete": "Delete",
+    "params": "Parameters",
+    "log": "Log"
   }
 }

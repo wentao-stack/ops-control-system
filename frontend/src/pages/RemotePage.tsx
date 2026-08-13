@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { api } from "../auth"
 import { useAuth } from "../AuthProvider"
 import { RemoteAsset, RemotePingResult } from "../types"
@@ -6,7 +7,8 @@ import { WebTerminal } from "../components/WebTerminal"
 
 export function RemotePage() {
 
-  const { token } = useAuth()
+    const { t } = useTranslation()
+const { token } = useAuth()
   const [remoteAssets, setRemoteAssets] = useState<RemoteAsset[]>([])
   const [remotePing, setRemotePing] = useState<RemotePingResult[]>([])
   const [selectedRemote, setSelectedRemote] = useState("")
@@ -110,7 +112,7 @@ export function RemotePage() {
           className={`tab-btn ${activeTab === "command" ? "active" : ""}`}
           onClick={() => setActiveTab("command")}
         >
-          ⚡ 快速命令
+          ⚡ {t("remote.quickCmd")}
         </button>
       </div>
 
@@ -168,7 +170,7 @@ export function RemotePage() {
               ))}
               {openTerminals.size === 0 && (
                 <div className="empty" style={{ minHeight: 400 }}>
-                  {remoteAssets.length === 0 ? "沒有可連接的主機" : "選擇或打開一個終端"}
+                  {remoteAssets.length === 0 ? t("remote.noHosts") : "選擇或打開一個終端"}
                 </div>
               )}
             </div>
@@ -183,12 +185,12 @@ export function RemotePage() {
             <div className="card-body">
               <div className="remote-controls">
                 <select value={selectedRemote} onChange={e => setSelectedRemote(e.target.value)}>
-                  <option value="">選擇主機...</option>
+                  <option value="">{t("remote.selectHost")}...</option>
                   {remoteAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
-                <input className="remote-cmd-input" value={remoteCmd} onChange={e => setRemoteCmd(e.target.value)} placeholder="輸入命令 (例如: uptime, df -h, ls -la)" onKeyDown={e => { if (e.key === "Enter") void executeRemote() }} />
+                <input className="remote-cmd-input" value={remoteCmd} onChange={e => setRemoteCmd(e.target.value)} placeholder="輸入命令" onKeyDown={e => { if (e.key === "Enter") void executeRemote() }} />
                 <button className="remote-exec-btn" onClick={() => void executeRemote()} disabled={!selectedRemote || !remoteCmd.trim() || remoteLoading}>
-                  {remoteLoading ? "⠋ 執行中..." : "▶ 執行"}
+                  {remoteLoading ? "⠋ " + t("remote.exec") + "中..." : "▶ " + t("remote.exec")}
                 </button>
               </div>
             </div>
@@ -207,7 +209,7 @@ export function RemotePage() {
 
           {remoteHistory.length > 0 && (
             <div className="remote-history">
-              <h3>命令歷史</h3>
+              <h3>{t("remote.history")}</h3>
               {remoteHistory.map((h, i) => (
                 <div className="history-item" key={i}>
                   <span className="history-cmd">$ {h.cmd}</span>

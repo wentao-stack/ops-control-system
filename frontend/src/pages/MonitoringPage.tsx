@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import { Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { api } from "../auth"
 import { HostMetrics, RemoteHostMetric, RemoteHostsMetrics } from "../types"
 
@@ -276,7 +277,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
 const selectStyle: React.CSSProperties = { padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13 }
 
 export function MonitoringPage() {
-
+  const { t } = useTranslation()
   const [tab, setTab] = useState<"live" | "history">("live")
   const [localMetrics, setLocalMetrics] = useState<HostMetrics | null>(null)
   const [remoteData, setRemoteData] = useState<RemoteHostMetric[]>([])
@@ -334,29 +335,29 @@ export function MonitoringPage() {
     <>
       <div className="page-header">
         <div>
-          <h1>主機監控</h1>
+          <h1>{t("monitoring.title")}</h1>
           <p>
-            本機: {localMetrics?.hostname ?? "—"} · 遠程: {remoteData.length} 台主機
+            {t("monitoring.local")}: {localMetrics?.hostname ?? "—"} · {t("monitoring.remote")}: {remoteData.length} 台主機
             {collectedAt && ` · 收集於 ${collectedAt}`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ display: "flex", background: "var(--surface)", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
-            <button className="btn btn-sm" style={{ background: tab === "live" ? "var(--primary)" : "transparent", color: tab === "live" ? "#fff" : "var(--text)", border: "none", padding: "6px 14px" }} onClick={() => setTab("live")}>即時</button>
-            <button className="btn btn-sm" style={{ background: tab === "history" ? "var(--primary)" : "transparent", color: tab === "history" ? "#fff" : "var(--text)", border: "none", borderLeft: "1px solid var(--border)", padding: "6px 14px" }} onClick={() => setTab("history")}>歷史</button>
+            <button className="btn btn-sm" style={{ background: tab === "live" ? "var(--primary)" : "transparent", color: tab === "live" ? "#fff" : "var(--text)", border: "none", padding: "6px 14px" }} onClick={() => setTab("live")}>{t("monitoring.tabs.live")}</button>
+            <button className="btn btn-sm" style={{ background: tab === "history" ? "var(--primary)" : "transparent", color: tab === "history" ? "#fff" : "var(--text)", border: "none", borderLeft: "1px solid var(--border)", padding: "6px 14px" }} onClick={() => setTab("history")}>{t("monitoring.tabs.history")}</button>
           </div>
           {tab === "live" && (
             <>
-              <button className="btn btn-sm" onClick={() => { void loadLocal() }} disabled={collecting}>↻ 本機</button>
+              <button className="btn btn-sm" onClick={() => { void loadLocal() }} disabled={collecting}>↻ {t("monitoring.collectLocal")}</button>
               <button className="btn btn-primary btn-sm" onClick={() => { void loadRemote(false) }} disabled={collecting}>
-                {collecting ? "⠋ 收集中..." : "↻ 收集全部"}
+                {collecting ? t("monitoring.collecting") : t("monitoring.collectAll")}
               </button>
             </>
           )}
         </div>
       </div>
 
-      {loading && <div className="empty">載入中…</div>}
+      {loading && <div className="empty">{t("common.loading")}</div>}
 
       {/* Local host metrics */}
       {localMetrics && (
@@ -365,8 +366,8 @@ export function MonitoringPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--success)", boxShadow: "0 0 6px rgba(34,197,94,.4)" }} />
               <div>
-                <h2 style={{ margin: 0 }}>本機 — {localMetrics.hostname}</h2>
-                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>後端伺服器</span>
+                <h2 style={{ margin: 0 }}>{t("monitoring.local")} — {localMetrics.hostname}</h2>
+                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.backend")}</span>
               </div>
             </div>
           </div>
@@ -387,14 +388,14 @@ export function MonitoringPage() {
               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{(localMetrics.disk_used_mb / 1024 / 1024).toFixed(1)} / {(localMetrics.disk_total_mb / 1024 / 1024).toFixed(1)} TiB</div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>運行時間</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.uptime")}</div>
               <div style={{ fontSize: 24, fontWeight: 700 }}>{localMetrics.uptime_seconds > 86400 ? (localMetrics.uptime_seconds / 86400).toFixed(0) + " 天" : (localMetrics.uptime_seconds / 3600).toFixed(0) + " 小時"}</div>
             </div>
           </div>
           {localMetrics.gpus.length > 0 && (
             <div style={{ borderTop: "1px solid var(--border)", padding: "16px 20px" }}>
               <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                GPU — {localMetrics.gpus.length} 裝置
+                {t("monitoring.gpu")} — {localMetrics.gpus.length} {t("monitoring.devices")}
               </h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
                 {localMetrics.gpus.map((gpu, i) => (
@@ -417,7 +418,7 @@ export function MonitoringPage() {
 
       {/* Remote hosts */}
       <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-        遠程主機
+        {t("monitoring.remoteHosts")}
       </h2>
 
       {loading && (
@@ -428,7 +429,7 @@ export function MonitoringPage() {
       )}
 
       {remoteData.length === 0 && !loading && (
-        <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>沒有可監控的遠程主機</p></div></div>
+        <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{t("monitoring.noHosts")}</p></div></div>
       )}
 
       <div style={{ display: "grid", gap: 12 }}>
