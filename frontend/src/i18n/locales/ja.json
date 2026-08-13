@@ -221,7 +221,9 @@
   },
   "code": {
     "title": "コード閲覧",
-    "noFile": "ファイルなし"
+    "noFile": "ファイルなし",
+    "dirs": "ディレクトリ",
+    "files": "ファイル"
   },
   "comfyui": {
     "title": "ComfyUI ワークフロースタジオ",

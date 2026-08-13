@@ -312,11 +312,11 @@ export function CodeBrowsePage() {
     <div className="code-browse">
       {/* 頁面標題 + 統計資訊 */}
       <div className="code-browse__header">
-        <h2>📂 原始碼瀏覽器</h2>
+        <h2>{t("code.title")}</h2>
         <div className="code-browse__stats">
-          <span>{stats.dirs} 目錄</span>
+          <span>{stats.dirs} {t("code.dirs")}</span>
           <span>·</span>
-          <span>{stats.files} 檔案</span>
+          <span>{stats.files} {t("code.files")}</span>
         </div>
       </div>
 

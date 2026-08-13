@@ -221,7 +221,9 @@
   },
   "code": {
     "title": "程式碼瀏覽",
-    "noFile": "無檔案"
+    "noFile": "無檔案",
+    "dirs": "目錄",
+    "files": "檔案"
   },
   "comfyui": {
     "title": "ComfyUI 工作流工作台",
