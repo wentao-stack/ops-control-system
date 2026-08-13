@@ -223,7 +223,8 @@
     "title": "コード閲覧",
     "noFile": "ファイルなし",
     "dirs": "ディレクトリ",
-    "files": "ファイル"
+    "files": "ファイル",
+    "selectFile": "左側のツリーからファイルを選択して内容を表示"
   },
   "comfyui": {
     "title": "ComfyUI ワークフロースタジオ",

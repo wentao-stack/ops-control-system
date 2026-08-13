@@ -223,7 +223,8 @@
     "title": "Code Browse",
     "noFile": "No file",
     "dirs": "dirs",
-    "files": "files"
+    "files": "files",
+    "selectFile": "Select a file from the left tree to view content"
   },
   "comfyui": {
     "title": "ComfyUI Workflow Console",

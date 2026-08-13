@@ -451,7 +451,7 @@ export function CodeBrowsePage() {
           ) : (
             <div className="code-browse__empty">
               <div className="code-browse__empty-icon">📄</div>
-              <p>從左側樹形結構選擇檔案查看內容</p>
+              <p>{t("code.selectFile")}</p>
             </div>
           )}
         </div>
