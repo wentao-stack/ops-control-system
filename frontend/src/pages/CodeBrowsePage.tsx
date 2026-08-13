@@ -1,8 +1,8 @@
 /**
- * CodeBrowsePage — 程式碼瀏覽器頁面
+ * CodeBrowsePage — Code browser page
  *
- * 功能: 左側檔案樹 + 右側程式碼檢視器
- * 資料流程: 掛載時載入檔案樹 → 點擊檔案載入內容 → 顯示行號
+ * Features: Left file tree + right code viewer
+ * Data flow: Load file tree on mount → Click file to load content → Display line numbers
  */
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../auth';
@@ -14,7 +14,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-gist.css';
 
-/** 檔案樹節點：檔案或資料夾 */
+/** Tree node: file or directory */
 interface TreeItem {
   name: string;
   path: string;
@@ -23,14 +23,14 @@ interface TreeItem {
   children?: TreeItem[];
 }
 
-/** 檔案樹 API 回應 */
+/** File tree API response */
 interface TreeResponse {
   tree: TreeItem[];
   total_files: number;
   total_dirs: number;
 }
 
-/** 單一檔案 API 回應 */
+/** Single file API response */
 interface FileResponse {
   path: string;
   content: string;
@@ -39,8 +39,8 @@ interface FileResponse {
 }
 
 /**
- * 根據副檔名回傳對應的 emoji 圖示
- * 用於檔案樹和檔案標題的視覺識別
+ * Returns the corresponding emoji icon based on file extension
+ * Used for visual identification in file tree and file headers
  */
 function fileIcon(name: string): string {
   if (name.endsWith('.tsx') || name.endsWith('.jsx')) return '⚛️';
@@ -58,7 +58,7 @@ function fileIcon(name: string): string {
   return '📄';
 }
 
-/** 將位元數轉換為人類可讀的檔案大小字串 (B/KB/MB) */
+/** Convert bytes to human-readable file size string (B/KB/MB) */
 function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + 'B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
@@ -66,11 +66,11 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * TreeNode — 遞迴檔案樹節點組件
+ * TreeNode — Recursive file tree node component
  *
- * 每個節點顯示圖示、名稱和大小（檔案）。
- * 資料夾可展開/收縮，檔案可點擊載入內容。
- * 使用 depth 參數控制縮排深度。
+ * Each node displays icon, name, and size (for files).
+ * Directories can be expanded/collapsed, files can be clicked to load content.
+ * Uses depth parameter to control indentation level.
  */
 function TreeNode({
   item,
@@ -132,13 +132,13 @@ function TreeNode({
 }
 
 /**
- * CodeBrowsePage — 主頁面組件
+ * CodeBrowsePage — Main page component
  *
- * 狀態管理:
- *   - tree: 完整檔案樹資料
- *   - selectedFile/selectedPath: 目前選取的檔案
- *   - expandedPaths: 已展開的資料夾路徑集合
- *   - searchQuery: 搜尋過濾字串
+ * State management:
+ *   - tree: Complete file tree data
+ *   - selectedFile/selectedPath: Currently selected file
+ *   - expandedPaths: Set of expanded directory paths
+ *   - searchQuery: Search filter string
  */
 export function CodeBrowsePage() {
   const { t } = useTranslation()
@@ -154,7 +154,7 @@ export function CodeBrowsePage() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [copyFeedback, setCopyFeedback] = useState(false);
 
-  /** 遞迴收集所有資料夾路徑 — 用於「全部展開」功能 */
+  /** Recursively collect all directory paths — used for "expand all" feature */
   const getAllDirPaths = useCallback((items: TreeItem[]): string[] => {
     const dirs: string[] = [];
     for (const item of items) {
@@ -166,18 +166,18 @@ export function CodeBrowsePage() {
     return dirs;
   }, []);
 
-  /** 展開所有資料夾 */
+  /** Expand all folders */
   const expandAll = useCallback(() => {
     const allDirs = getAllDirPaths(tree);
     setExpandedPaths(new Set(allDirs));
   }, [tree, getAllDirPaths]);
 
-  /** 收縮所有資料夾 */
+  /** Collapse all folders */
   const collapseAll = useCallback(() => {
     setExpandedPaths(new Set());
   }, []);
 
-  /** 從後端載入完整檔案樹 — 組件掛載時自動執行 */
+  /** Load full file tree from backend — runs automatically on mount */
   const loadTree = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -185,7 +185,7 @@ export function CodeBrowsePage() {
       const data = await api<TreeResponse>('/api/v1/code/tree');
       setTree(data.tree);
       setStats({ files: data.total_files, dirs: data.total_dirs });
-      // 預設展開第一層資料夾，方便使用者快速瀏覽
+      // Expand first-level folders by default for quick browsing
       const initialExpanded = new Set<string>();
       for (const item of data.tree) {
         if (item.type === 'dir') initialExpanded.add(item.path);
@@ -202,7 +202,7 @@ export function CodeBrowsePage() {
     loadTree();
   }, [loadTree]);
 
-  /** 點擊檔案時呼叫：從後端載入檔案內容 */
+  /** Called when clicking a file: load file content from backend */
   const loadFile = useCallback(
     async (path: string) => {
       setSelectedPath(path);
@@ -220,7 +220,7 @@ export function CodeBrowsePage() {
     []
   );
 
-  /** 切換資料夾展開/收縮狀態 — 使用 Set 管理已展開路徑 */
+  /** Toggle folder expand/collapse state — uses Set to manage expanded paths */
   const toggleDir = (path: string) => {
     setExpandedPaths((prev) => {
       const next = new Set(prev);
@@ -230,7 +230,7 @@ export function CodeBrowsePage() {
     });
   };
 
-  /** 遞迴過濾檔案樹 — 根據搜尋字串過濾檔案和資料夾 */
+  /** Recursively filter file tree — filter files and folders by search string */
   function filterTree(items: TreeItem[], query: string): TreeItem[] {
     if (!query) return items;
     const q = query.toLowerCase();
@@ -249,15 +249,15 @@ export function CodeBrowsePage() {
 
   const filteredTree = filterTree(tree, searchQuery);
 
-  /** 將檔案內容分割為行陣列，用於前端逐行顯示行號 */
+  /** Split file content into line array for displaying line numbers */
   const lines = selectedFile?.content.split('\n') ?? [];
 
-  /** 偵測系統是否偏好深色模式 + 手動切換 */
+  /** Detect system dark mode preference + manual toggle */
   const [isDark, setIsDark] = useState(() => {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
   });
 
-  /** {t("code.copy")}到剪貼簿 */
+  /** Copy to clipboard */
   const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -269,10 +269,10 @@ export function CodeBrowsePage() {
     }
   }, []);
 
-  /** 判斷是否為 Markdown 檔案 */
+  /** Check if file is Markdown */
   const isMarkdown = selectedFile?.language === 'markdown';
 
-  /** 語法著色語言映射 — 後端回傳的 language 對應到 Prism 支援的語言 */
+  /** Syntax highlighting language mapping — backend language to Prism-supported language */
   const highlightLang = useMemo(() => {
     if (!selectedFile) return undefined;
     const lang = selectedFile.language.toLowerCase();
@@ -310,7 +310,7 @@ export function CodeBrowsePage() {
 
   return (
     <div className="code-browse">
-      {/* 頁面標題 + 統計資訊 */}
+      {/* Page title + stats */}
       <div className="code-browse__header">
         <h2>{t("code.title")}</h2>
         <div className="code-browse__stats">
@@ -320,14 +320,14 @@ export function CodeBrowsePage() {
         </div>
       </div>
 
-      {/* 錯誤提示列 — 點擊可關閉 */}
+      {/* Error alert — click to dismiss */}
       {error && (
         <div className="alert alert--error" onClick={() => setError(null)}>
           ❌ {t("common.error")}: {error}
         </div>
       )}
 
-      {/* 搜尋列 + 重新整理按鈕 */}
+      {/* Search bar + refresh button */}
       <div className="code-browse__search">
         <input
           type="text"
@@ -341,12 +341,12 @@ export function CodeBrowsePage() {
         </button>
       </div>
 
-      {/* 雙欄布局：左側檔案樹 + 右側程式碼檢視器 */}
+      {/* Two-column layout: left file tree + right code viewer */}
       <div className="code-browse__layout">
-        {/* 左欄：檔案樹 */}
+        {/* Left column: file tree */}
         <div className="code-browse__tree">
           <div className="code-browse__tree-header">
-            <span className="code-browse__tree-title">📁 {t("code.fileTree") || "檔案樹"}</span>
+            <span className="code-browse__tree-title">📁 {t("code.fileTree")}</span>
             <div className="code-browse__tree-actions">
               <button className="btn btn--sm" onClick={expandAll} title={t("code.expandAll")}>
                 🔽
@@ -375,7 +375,7 @@ export function CodeBrowsePage() {
           </div>
         </div>
 
-        {/* 右欄：程式碼檢視器 */}
+        {/* Right column: code viewer */}
         <div className="code-browse__viewer">
           {fileLoading ? (
             <div className="loading">{t("code.loadingFile")}</div>
@@ -410,7 +410,7 @@ export function CodeBrowsePage() {
                 </div>
               </div>
               {isMarkdown ? (
-                /* Markdown 檔案：渲染為格式化 HTML */
+                /* Markdown file: render as formatted HTML */
                 <div className="code-browse__markdown">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -420,7 +420,7 @@ export function CodeBrowsePage() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                /* 程式碼檔案：語法著色 */
+                /* Code file: syntax highlighting */
                 <div className={`code-browse__code ${isDark ? 'code-browse__code--dark' : 'code-browse__code--light'}`}>
                   <SyntaxHighlighter
                     language={highlightLang}

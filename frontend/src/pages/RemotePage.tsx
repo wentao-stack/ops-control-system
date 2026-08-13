@@ -84,10 +84,10 @@ const { token } = useAuth()
     <>
       <div className="page-header">
         <div>
-          <h1>終端</h1>
-          <p>SSH 遠程管理 · {remoteAssets.length} 台主機</p>
+          <h1>{t("remote.title")}</h1>
+          <p>{t("remote.subtitle", { count: remoteAssets.length })}</p>
         </div>
-        <button className="btn btn-sm" onClick={() => { void pingAll(); void loadAssets() }}>↻ Ping 全部</button>
+        <button className="btn btn-sm" onClick={() => { void pingAll(); void loadAssets() }}>↻ {t("remote.pingAll")}</button>
       </div>
 
       {/* Host status chips */}
@@ -106,7 +106,7 @@ const { token } = useAuth()
           className={`tab-btn ${activeTab === "terminal" ? "active" : ""}`}
           onClick={() => setActiveTab("terminal")}
         >
-          ⌨ 互動終端
+          t("remote.interactiveTerminal")
         </button>
         <button
           className={`tab-btn ${activeTab === "command" ? "active" : ""}`}
@@ -131,7 +131,7 @@ const { token } = useAuth()
                 <button
                   className="terminal-tab-close"
                   onClick={(e) => { e.stopPropagation(); closeTerminal(id) }}
-                  title="關閉"
+                  title={t("remote.close")}
                 >
                   ×
                 </button>
@@ -142,9 +142,9 @@ const { token } = useAuth()
               className="terminal-new-select"
               value=""
               onChange={(e) => { if (e.target.value) openTerminal(e.target.value) }}
-              title="打開新終端"
+              title={t("remote.openNewTerminal")}
             >
-              <option value="">+ 新終端</option>
+              <option value="">+ {t("remote.newTerminal")}</option>
               {remoteAssets
                 .filter(a => !openTerminals.has(a.id))
                 .map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -170,7 +170,7 @@ const { token } = useAuth()
               ))}
               {openTerminals.size === 0 && (
                 <div className="empty" style={{ minHeight: 400 }}>
-                  {remoteAssets.length === 0 ? t("remote.noHosts") : "選擇或打開一個終端"}
+                  {remoteAssets.length === 0 ? t("remote.noHosts") : t("remote.selectOrOpenTerminal")}
                 </div>
               )}
             </div>
@@ -188,9 +188,9 @@ const { token } = useAuth()
                   <option value="">{t("remote.selectHost")}...</option>
                   {remoteAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
-                <input className="remote-cmd-input" value={remoteCmd} onChange={e => setRemoteCmd(e.target.value)} placeholder="輸入命令" onKeyDown={e => { if (e.key === "Enter") void executeRemote() }} />
+                <input className="remote-cmd-input" value={remoteCmd} onChange={e => setRemoteCmd(e.target.value)} placeholder={t("remote.inputCommand")} onKeyDown={e => { if (e.key === "Enter") void executeRemote() }} />
                 <button className="remote-exec-btn" onClick={() => void executeRemote()} disabled={!selectedRemote || !remoteCmd.trim() || remoteLoading}>
-                  {remoteLoading ? "⠋ " + t("remote.exec") + "中..." : "▶ " + t("remote.exec")}
+                  {remoteLoading ? "⠋ " + t("remote.executing") : "▶ " + t("remote.exec")}
                 </button>
               </div>
             </div>

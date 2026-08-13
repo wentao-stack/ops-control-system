@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 
 /* ── Notes / Knowledge Base ──────────────────────────────────────────────────
    API-backed knowledge base with pagination, click-to-detail, and editor.
-   Categories: 筆記 · 知識 · 貼文 · 待辦
+   Categories: note · knowledge · post · todo
    ─────────────────────────────────────────────────────────────────────────── */
 
 type Category = "筆記" | "知識" | "貼文" | "待辦"
@@ -123,6 +123,7 @@ function NoteEditor({
   onSave: (data: { title: string; category: string; content: string; tags: string[]; pinned: boolean }) => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [title, setTitle] = useState(note?.title ?? "")
   const [category, setCategory] = useState<Category>(note?.category ?? "筆記")
   const [content, setContent] = useState(note?.content ?? "")
@@ -175,14 +176,14 @@ function NoteEditor({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="card-header">
-          <h2>{note ? "編輯" : "新增"}{note ? ` — ${note.category}` : ""}</h2>
+          <h2>{note ? t("notes.edit") : t("notes.new")}{note ? ` — ${note.category}` : ""}</h2>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="card-body">
           <div style={{ marginBottom: 12 }}>
             <input
               type="text"
-              placeholder="標題..."
+              placeholder={t("notes.titlePlaceholder")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               style={{
@@ -220,7 +221,7 @@ function NoteEditor({
             <div style={{ display: "flex", gap: 4, alignItems: "center", flex: 1 }}>
               <input
                 type="text"
-                placeholder="標籤 (Enter 新增)"
+                placeholder={t("notes.tagsPlaceholder")}
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
@@ -268,10 +269,10 @@ function NoteEditor({
             }}
           >
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              支援 Markdown：# 標題 **粗體** *斜體* `程式碼` - 列表
+              {t("notes.markdownHint")}
             </span>
             <button className="btn btn-sm" onClick={() => setPreview(!preview)}>
-              {preview ? "編輯" : "預覽"}
+              {preview ? t("notes.edit") : t("notes.preview")}
             </button>
           </div>
 
@@ -293,7 +294,7 @@ function NoteEditor({
                 ref={textareaRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="開始寫..."
+                placeholder={t("notes.startWriting")}
                 style={{
                   width: "100%",
                   minHeight: 300,
@@ -313,14 +314,14 @@ function NoteEditor({
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
             <button className="btn" onClick={onClose}>
-              取消
+              {t("notes.cancel")}
             </button>
             <button
               className="btn btn-primary"
               onClick={handleSave}
               disabled={!title.trim() || saving}
             >
-              {saving ? "儲存中..." : note ? "儲存" : "發布"}
+              {saving ? t("notes.saving") : note ? t("notes.save") : t("notes.publish")}
             </button>
           </div>
         </div>
@@ -344,6 +345,7 @@ function NoteCard({
   onTogglePin: (e: React.MouseEvent) => void
   onView: () => void
 }) {
+  const { t } = useTranslation()
   const preview = note.content.replace(/[#*`_\[\]]/g, "").slice(0, 150)
 
   return (
@@ -388,7 +390,7 @@ function NoteCard({
             >
               {categoryIcon[note.category]} {note.category}
             </span>
-            {note.pinned && <span style={{ color: "#f59e0b" }} title="置頂">★</span>}
+            {note.pinned && <span style={{ color: "#f59e0b" }} title={t("notes.pin")}>★</span>}
             <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{note.title}</h3>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
@@ -398,7 +400,7 @@ function NoteCard({
                 e.stopPropagation()
                 onTogglePin(e)
               }}
-              title={note.pinned ? "取消置頂" : "置頂"}
+              title={note.pinned ? t("notes.unpin") : t("notes.pin")}
               style={{ color: note.pinned ? "#f59e0b" : undefined }}
             >
               {note.pinned ? "★" : "☆"}
@@ -409,7 +411,7 @@ function NoteCard({
                 e.stopPropagation()
                 onEdit(e)
               }}
-              title="編輯"
+              title={t("notes.edit")}
             >
               ✎
             </button>
@@ -419,7 +421,7 @@ function NoteCard({
                 e.stopPropagation()
                 onDelete(e)
               }}
-              title="刪除"
+              title={t("notes.deleteNote")}
               style={{ color: "var(--danger)" }}
             >
               🗑
@@ -459,7 +461,7 @@ function NoteCard({
           }}
         >
           <span>{note.author} · {formatDate(note.created_at)}</span>
-          <span>更新 {formatDate(note.updated_at)}</span>
+          <span>{t("notes.updated")} {formatDate(note.updated_at)}</span>
         </div>
       </div>
     </div>
@@ -479,6 +481,7 @@ function Pagination({
   totalItems: number
   onPageChange: (page: number) => void
 }) {
+  const { t } = useTranslation()
   if (totalPages <= 1) return null
 
   const pages: (number | string)[] = []
@@ -493,7 +496,7 @@ function Pagination({
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 20 }}>
       <span style={{ fontSize: 13, color: "var(--text-secondary)", marginRight: 8 }}>
-        共 {totalItems} 篇
+        {t("notes.totalItems", { count: totalItems })}
       </span>
       <button
         className="btn btn-sm"
@@ -501,7 +504,7 @@ function Pagination({
         onClick={() => onPageChange(currentPage - 1)}
         style={{ opacity: currentPage === 1 ? 0.4 : 1 }}
       >
-        ‹ 上一頁
+        {t("notes.prevPage")}
       </button>
       {pages.map((p, idx) =>
         typeof p === "string" ? (
@@ -533,7 +536,7 @@ function Pagination({
         onClick={() => onPageChange(currentPage + 1)}
         style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}
       >
-        下一頁 ›
+        {t("notes.nextPage")}
       </button>
     </div>
   )
@@ -606,17 +609,17 @@ const navigate = useNavigate()
       setEditorNote(null)
       fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
     } catch (e: any) {
-      alert("儲存失敗：" + e.message)
+      alert(t("notes.saveFailed", { message: e.message }))
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("確定刪除此筆記？")) {
+    if (confirm(t("notes.confirmDelete"))) {
       try {
         await deleteNoteApi(id)
         fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
       } catch (e: any) {
-        alert("刪除失敗：" + e.message)
+        alert(t("notes.deleteFailed", { message: e.message }))
       }
     }
   }
@@ -626,7 +629,7 @@ const navigate = useNavigate()
       await updateNoteApi(note.id, { pinned: !note.pinned })
       fetchNotes(page, filter === "全部" ? undefined : filter, search || undefined)
     } catch (e: any) {
-      alert("操作失敗：" + e.message)
+      alert(t("notes.operationFailed", { message: e.message }))
     }
   }
 
@@ -655,7 +658,7 @@ const navigate = useNavigate()
       <div className="page-header">
         <div>
           <h1>{t("notes.title")}</h1>
-          <p>知識管理 · 貼文 · 待辦 · 共 {total} 篇</p>
+          <p>{t("notes.subtitle", { count: total })}</p>
         </div>
         <button className="btn btn-primary" onClick={openNew}>
           ＋ {t("notes.create")}
@@ -689,7 +692,7 @@ const navigate = useNavigate()
                 : {}
             }
           >
-            {c !== "全部" && categoryIcon[c]} {c}
+            {c !== "全部" && categoryIcon[c]} {c === "全部" ? t("notes.categoryAll") : c}
           </button>
         ))}
       </div>
@@ -707,7 +710,7 @@ const navigate = useNavigate()
       {loading && (
         <div className="card">
           <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中…...</div>
+            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>{t("notes.loading")}</div>
           </div>
         </div>
       )}
@@ -720,7 +723,7 @@ const navigate = useNavigate()
               <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
                 <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>
-                  {total === 0 ? "還沒有筆記，點擊「＋ " + t("notes.create") + "」開始" : t("notes.empty")}
+                  {total === 0 ? t("notes.noNotesYet", { create: t("notes.create") }) : t("notes.empty")}
                 </div>
               </div>
             </div>

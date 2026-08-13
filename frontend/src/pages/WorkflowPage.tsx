@@ -21,29 +21,29 @@ const STATUS_BG: Record<string, string> = {
 
 /* ── Note API definitions ──────────────────────────────────────────── */
 const NOTE_APIS = [
-  { method: "POST", path: "/api/v1/notes", label: "建立筆記", fields: [
-    { key: "title", label: "標題", required: true, type: "str" },
-    { key: "category", label: "分類", required: true, type: "str" },
-    { key: "content", label: "內容", required: false, type: "text" },
-    { key: "tags", label: "標籤", required: false, type: "str" },
+  { method: "POST", path: "/api/v1/notes", label: "createNote", fields: [
+    { key: "title", label: "title", required: true, type: "str" },
+    { key: "category", label: "category", required: true, type: "str" },
+    { key: "content", label: "content", required: false, type: "text" },
+    { key: "tags", label: "tags", required: false, type: "str" },
   ]},
-  { method: "GET", path: "/api/v1/notes", label: "列出筆記", fields: [
-    { key: "page", label: "頁碼", required: false, type: "int" },
-    { key: "page_size", label: "每頁數量", required: false, type: "int" },
-    { key: "category", label: "分類篩選", required: false, type: "str" },
+  { method: "GET", path: "/api/v1/notes", label: "listNotes", fields: [
+    { key: "page", label: "page", required: false, type: "int" },
+    { key: "page_size", label: "pageSize", required: false, type: "int" },
+    { key: "category", label: "categoryFilter", required: false, type: "str" },
   ]},
-  { method: "GET", path: "/api/v1/notes/{id}", label: "查看筆記", fields: [
-    { key: "id", label: "筆記 ID", required: true, type: "str" },
+  { method: "GET", path: "/api/v1/notes/{id}", label: "viewNote", fields: [
+    { key: "id", label: "noteId", required: true, type: "str" },
   ]},
-  { method: "PUT", path: "/api/v1/notes/{id}", label: "更新筆記", fields: [
-    { key: "id", label: "筆記 ID", required: true, type: "str" },
-    { key: "title", label: "標題", required: false, type: "str" },
-    { key: "category", label: "分類", required: false, type: "str" },
-    { key: "content", label: "內容", required: false, type: "text" },
-    { key: "tags", label: "標籤", required: false, type: "str" },
+  { method: "PUT", path: "/api/v1/notes/{id}", label: "updateNote", fields: [
+    { key: "id", label: "noteId", required: true, type: "str" },
+    { key: "title", label: "title", required: false, type: "str" },
+    { key: "category", label: "category", required: false, type: "str" },
+    { key: "content", label: "content", required: false, type: "text" },
+    { key: "tags", label: "tags", required: false, type: "str" },
   ]},
-  { method: "DELETE", path: "/api/v1/notes/{id}", label: "刪除筆記", fields: [
-    { key: "id", label: "筆記 ID", required: true, type: "str" },
+  { method: "DELETE", path: "/api/v1/notes/{id}", label: "deleteNote", fields: [
+    { key: "id", label: "noteId", required: true, type: "str" },
   ]},
 ]
 
@@ -198,9 +198,9 @@ function RunModal({ tpl, onRun, onClose }: { tpl: WorkflowTemplate; onRun: (p: R
             <div className="wf-field" key={p.key}>
               <label>{p.label}</label>
               {p.type === "text" ? (
-                <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
+                <textarea className="wf-field-input" rows={3} placeholder={t("workflow.input", { label: p.label })} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               ) : (
-                <input className="wf-field-input" placeholder={`輸入 ${p.label}`} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
+                <input className="wf-field-input" placeholder={t("workflow.input", { label: p.label })} value={values[p.key] || ""} onChange={e => setValues({ ...values, [p.key]: e.target.value })} />
               )}
             </div>
           )) : <p className="wf-hint">{t("workflow.noParams")}</p>}
@@ -304,9 +304,9 @@ function StepConfigEditor({ step, onChange }: { step: WorkflowStep; onChange: (s
             <div className="wf-field" key={f.key}>
               <label>{f.label}</label>
               {f.type === "text" ? (
-                <textarea className="wf-field-input" rows={3} placeholder={`輸入 ${f.label}`} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
+                <textarea className="wf-field-input" rows={3} placeholder={t("workflow.input", { label: f.label })} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
               ) : (
-                <input className="wf-field-input" placeholder={`輸入 ${f.label}`} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
+                <input className="wf-field-input" placeholder={t("workflow.input", { label: f.label })} value={noteFields[f.key] || ""} onChange={e => handleNoteFieldChange(f.key, e.target.value)} />
               )}
             </div>
           ))}

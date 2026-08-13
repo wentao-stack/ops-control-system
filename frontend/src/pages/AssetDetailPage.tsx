@@ -58,7 +58,7 @@ export function AssetDetailPage() {
                 <dd style={{ fontSize: 12 }}>{fmt(asset.last_seen_at)}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
-                <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>資產 ID</dt>
+                <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>{t("assets.assetId")}</dt>
                 <dd style={{ fontSize: 12, fontFamily: "monospace" }}>{asset.id}</dd>
               </div>
             </dl>

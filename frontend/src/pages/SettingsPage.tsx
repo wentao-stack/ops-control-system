@@ -8,9 +8,9 @@ return (
       </div>
       <div className="card">
         <div className="card-body" style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.8 }}>
-          <p><strong style={{ color: "var(--text)" }}>OPS Control System</strong> — 基礎設施運維管理控制台</p>
+          <p><strong style={{ color: "var(--text)" }}>OPS Control System</strong> — {t("settings.subtitle")}</p>
           <p style={{ marginTop: 8 }}>{t("settings.backend")}: FastAPI + SQLite · {t("settings.frontend")}: React + Vite + React Router</p>
-          <p style={{ marginTop: 8 }}>功能模組: 資產管理 / 主機監控 / 遠程終端控制</p>
+          <p style={{ marginTop: 8 }}>{t("settings.modules")}</p>
         </div>
       </div>
     </>

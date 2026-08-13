@@ -28,7 +28,7 @@ function MetricBar({ label, value, max, unit, pct }: { label: string; value: str
   )
 }
 
-function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expanded: boolean; onToggle: () => void }) {
+function HostCard({ host, expanded, onToggle, t }: { host: RemoteHostMetric; expanded: boolean; onToggle: () => void; t: (key: string) => string }) {
   const memGB = (mb: number) => (mb / 1024).toFixed(1)
   const diskGB = (mb: number) => (mb / 1024 / 1024).toFixed(1)
 
@@ -39,7 +39,7 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: host.reachable ? "var(--success)" : "var(--danger)", boxShadow: host.reachable ? "0 0 6px rgba(34,197,94,.4)" : "none", flexShrink: 0 }} />
           <div>
             <h2 style={{ margin: 0 }}>{host.name}</h2>
-            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{host.hostname || host.asset_id} · {host.reachable ? "連線正常" : host.error || "無法連線"}</span>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{host.hostname || host.asset_id} · {host.reachable ? t("monitoring.reachable") : host.error || t("monitoring.unreachable")}</span>
           </div>
         </div>
         <span style={{ color: "var(--text-secondary)", fontSize: 12, transition: "transform .2s", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
@@ -52,12 +52,11 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
           <div style={{ fontSize: 20, fontWeight: 700, color: barColor(host.cpu_percent) }}>{host.cpu_percent.toFixed(0)}%</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>記憶體</div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.mem")}</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: barColor(host.mem_percent) }}>{host.mem_percent.toFixed(0)}%</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>磁碟</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: barColor(host.disk_percent) }}>{host.disk_percent.toFixed(0)}%</div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.disk")}</div>
         </div>
       </div>
 
@@ -66,19 +65,19 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
         <div className="card-body">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             <div>
-              <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>系統資源</h3>
-              <MetricBar label="CPU 使用率" value={`${host.cpu_percent.toFixed(0)}%`} pct={host.cpu_percent} />
-              <MetricBar label="CPU 核心數" value={`${host.cpu_count}`} />
+              <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("monitoring.systemResources")}</h3>
+              <MetricBar label={t("monitoring.cpuUsage")} value={`${host.cpu_percent.toFixed(0)}%`} pct={host.cpu_percent} />
+              <MetricBar label={t("monitoring.cpuCores")} value={`${host.cpu_count}`} />
               <MetricBar label="Load Average" value={`${host.load_avg_1.toFixed(2)} / ${host.load_avg_5.toFixed(2)} / ${host.load_avg_15.toFixed(2)}`} />
-              <MetricBar label="記憶體" value={`${memGB(host.mem_used_mb)} / ${memGB(host.mem_total_mb)} GB`} pct={host.mem_percent} />
+              <MetricBar label={t("monitoring.mem")} value={`${memGB(host.mem_used_mb)} / ${memGB(host.mem_total_mb)} GB`} pct={host.mem_percent} />
               <MetricBar label="Swap" value={`${memGB(host.swap_used_mb)} / ${memGB(host.swap_total_mb)} GB`} pct={host.swap_percent} />
             </div>
             <div>
-              <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>磁碟空間</h3>
-              <MetricBar label="已使用" value={`${diskGB(host.disk_used_mb)} GB`} />
-              <MetricBar label="總容量" value={`${diskGB(host.disk_total_mb)} GB`} />
-              <MetricBar label="剩餘" value={`${diskGB(host.disk_free_mb)} GB`} />
-              <MetricBar label="使用率" value={`${host.disk_percent.toFixed(0)}%`} pct={host.disk_percent} />
+              <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("monitoring.diskSpace")}</h3>
+              <MetricBar label={t("monitoring.used")} value={`${diskGB(host.disk_used_mb)} GB`} />
+              <MetricBar label={t("monitoring.total")} value={`${diskGB(host.disk_total_mb)} GB`} />
+              <MetricBar label={t("monitoring.remaining")} value={`${diskGB(host.disk_free_mb)} GB`} />
+              <MetricBar label={t("monitoring.usage")} value={`${host.disk_percent.toFixed(0)}%`} pct={host.disk_percent} />
             </div>
           </div>
 
@@ -86,18 +85,18 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
           {host.gpus.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                GPU — {host.gpus.length} 裝置
+                {t("monitoring.gpu")} — {host.gpus.length} {t("monitoring.devices")}
               </h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
                 {host.gpus.map((gpu, i) => (
                   <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14 }}>
                     <strong style={{ fontSize: 13 }}>{gpu.name}</strong>
                     <div style={{ marginTop: 8 }}>
-                      <MetricBar label="溫度" value={`${gpu.temperature_c}°C`} />
-                      <MetricBar label="使用率" value={`${gpu.utilization_gpu}%`} pct={gpu.utilization_gpu} />
+                      <MetricBar label={t("monitoring.temperature")} value={`${gpu.temperature_c}°C`} />
+                      <MetricBar label={t("monitoring.usage")} value={`${gpu.utilization_gpu}%`} pct={gpu.utilization_gpu} />
                       <MetricBar label="VRAM" value={`${gpu.memory_used_mb} / ${gpu.memory_total_mb} MiB`} pct={gpu.memory_total_mb > 0 ? (gpu.memory_used_mb / gpu.memory_total_mb) * 100 : 0} />
-                      <MetricBar label="功耗" value={`${gpu.power_draw_w.toFixed(0)} W`} />
-                      <MetricBar label="風扇" value={`${gpu.fan_speed}%`} />
+                      <MetricBar label={t("monitoring.power")} value={`${gpu.power_draw_w.toFixed(0)} W`} />
+                      <MetricBar label={t("monitoring.fan")} value={`${gpu.fan_speed}%`} />
                     </div>
                   </div>
                 ))}
@@ -106,8 +105,8 @@ function HostCard({ host, expanded, onToggle }: { host: RemoteHostMetric; expand
           )}
 
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">📋 資產詳情</Link>
-            <Link to="/remote" className="btn btn-sm">⌨ 終端</Link>
+            <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">📋 {t("monitoring.assetDetail")}</Link>
+            <Link to="/remote" className="btn btn-sm">⌨ {t("monitoring.terminal")}</Link>
           </div>
         </div>
       )}
@@ -153,8 +152,8 @@ type HistoryRecord = {
   gpus: any[]; collected_at: string;
 }
 
-function MiniChart({ data, color, height = 60 }: { data: ChartPoint[]; color: string; height?: number }) {
-  if (data.length < 2) return <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", fontSize: 12 }}>資料不足</div>
+function MiniChart({ data, color, height = 60, t }: { data: ChartPoint[]; color: string; height?: number; t: (key: string) => string }) {
+  if (data.length < 2) return <div style={{ height, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", fontSize: 12 }}>{t("monitoring.insufficientData")}</div>
   const maxV = Math.max(...data.map(d => d.v), 100)
   const w = 400
   const pts = data.map((d, i) => `${(i / (data.length - 1)) * w},${height - (d.v / maxV) * (height - 4)}`).join(" ")
@@ -167,7 +166,7 @@ function MiniChart({ data, color, height = 60 }: { data: ChartPoint[]; color: st
   )
 }
 
-function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
+function MetricsHistoryPanel({ assets, t }: { assets: RemoteHostMetric[]; t: (key: string) => string }) {
   const [assetId, setAssetId] = useState(assets[0]?.asset_id || "")
   const [metric, setMetric] = useState<"cpu" | "mem" | "disk" | "swap">("cpu")
   const [hours, setHours] = useState(24)
@@ -199,7 +198,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
   useEffect(() => { void loadChart() }, [loadChart])
   useEffect(() => { void loadRecords() }, [loadRecords])
 
-  const METRIC_LABELS: Record<string, string> = { cpu: "CPU", mem: "記憶體", disk: "磁碟", swap: "Swap" }
+  const METRIC_LABELS: Record<string, string> = { cpu: "CPU", mem: t("monitoring.mem"), disk: t("monitoring.disk"), swap: "Swap" }
   const CHART_COLORS: Record<string, string> = { cpu: "#3b82f6", mem: "#f59e0b", disk: "#10b981", swap: "#8b5cf6" }
   const metricLabel = METRIC_LABELS[metric]
   const chartColor = CHART_COLORS[metric]
@@ -207,7 +206,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card-header">
-        <span style={{ fontSize: 14, fontWeight: 600 }}>📈 歷史監控數據</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>📈 {t("monitoring.historyData")}</span>
       </div>
       <div className="card-body">
         {/* Controls */}
@@ -221,22 +220,22 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
             ))}
           </div>
           <select value={hours} onChange={e => setHours(Number(e.target.value))} style={selectStyle}>
-            <option value={1}>1 小時</option>
-            <option value={6}>6 小時</option>
-            <option value={12}>12 小時</option>
-            <option value={24}>24 小時</option>
-            <option value={48}>48 小時</option>
-            <option value={168}>7 天</option>
+            <option value={1}>{t("monitoring.range1h")}</option>
+            <option value={6}>{t("monitoring.range6h")}</option>
+            <option value={12}>{t("monitoring.range12h")}</option>
+            <option value={24}>{t("monitoring.range24h")}</option>
+            <option value={48}>{t("monitoring.range48h")}</option>
+            <option value={168}>{t("monitoring.range7d")}</option>
           </select>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-            共 {stats.total} 筆 · {stats.earliest ? new Date(stats.earliest).toLocaleDateString("zh-Hant") : "—"} ~ {stats.latest ? new Date(stats.latest).toLocaleDateString("zh-Hant") : "—"}
+            {t("monitoring.totalRecords")} ${stats.total} · {stats.earliest ? new Date(stats.earliest).toLocaleDateString("zh-Hant") : "—"} ~ {stats.latest ? new Date(stats.latest).toLocaleDateString("zh-Hant") : "—"}
           </span>
         </div>
 
         {/* Chart */}
         <div style={{ marginBottom: 16, background: "var(--surface)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{metricLabel} 使用率 (%) — {hours}小時</div>
-          {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>載入中…...</div> : <MiniChart data={chartData} color={chartColor} />}
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{metricLabel} {t("monitoring.usageRate")} — {hours}{t("monitoring.hourUnit")}</div>
+          {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>{t("common.loading")}</div> : <MiniChart data={chartData} color={chartColor} t={t} />}
         </div>
 
         {/* Recent records table */}
@@ -244,10 +243,10 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <th style={{ textAlign: "left", padding: "6px 8px" }}>時間</th>
+                <th style={{ textAlign: "left", padding: "6px 8px" }}>{t("monitoring.time")}</th>
                 <th style={{ textAlign: "right", padding: "6px 8px" }}>CPU%</th>
-                <th style={{ textAlign: "right", padding: "6px 8px" }}>記憶體%</th>
-                <th style={{ textAlign: "right", padding: "6px 8px" }}>磁碟%</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>{t("monitoring.mem")}%</th>
+                <th style={{ textAlign: "right", padding: "6px 8px" }}>{t("monitoring.disk")}%</th>
                 <th style={{ textAlign: "right", padding: "6px 8px" }}>Swap%</th>
                 <th style={{ textAlign: "left", padding: "6px 8px" }}>Load</th>
               </tr>
@@ -264,7 +263,7 @@ function MetricsHistoryPanel({ assets }: { assets: RemoteHostMetric[] }) {
                 </tr>
               ))}
               {records.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: "var(--text-secondary)" }}>暫無歷史數據（每次收集監控數據時自動保存）</td></tr>
+                <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: "var(--text-secondary)" }}>{t("monitoring.noHistoryData")}</td></tr>
               )}
             </tbody>
           </table>
@@ -337,8 +336,8 @@ export function MonitoringPage() {
         <div>
           <h1>{t("monitoring.title")}</h1>
           <p>
-            {t("monitoring.local")}: {localMetrics?.hostname ?? "—"} · {t("monitoring.remote")}: {remoteData.length} 台主機
-            {collectedAt && ` · 收集於 ${collectedAt}`}
+            {t("monitoring.local")}: {localMetrics?.hostname ?? "—"} · {t("monitoring.remote")}: {remoteData.length} {t("monitoring.hostUnit")}
+            {collectedAt && ` · ${t("monitoring.collectedAt")} ${collectedAt}`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -375,21 +374,21 @@ export function MonitoringPage() {
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>CPU</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: barColor(localMetrics.cpu_percent) }}>{localMetrics.cpu_percent.toFixed(0)}%</div>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{localMetrics.cpu_count} 核心 · load {localMetrics.load_avg_1.toFixed(2)}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{localMetrics.cpu_count} {t("monitoring.coreUnit")} · load {localMetrics.load_avg_1.toFixed(2)}</div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>記憶體</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.mem")}</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: barColor(localMetrics.mem_percent) }}>{localMetrics.mem_percent.toFixed(0)}%</div>
               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{(localMetrics.mem_used_mb / 1024).toFixed(1)} / {(localMetrics.mem_total_mb / 1024).toFixed(1)} GiB</div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>磁碟</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.disk")}</div>
               <div style={{ fontSize: 24, fontWeight: 700, color: barColor(localMetrics.disk_percent) }}>{localMetrics.disk_percent.toFixed(0)}%</div>
               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{(localMetrics.disk_used_mb / 1024 / 1024).toFixed(1)} / {(localMetrics.disk_total_mb / 1024 / 1024).toFixed(1)} TiB</div>
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.uptime")}</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{localMetrics.uptime_seconds > 86400 ? (localMetrics.uptime_seconds / 86400).toFixed(0) + " 天" : (localMetrics.uptime_seconds / 3600).toFixed(0) + " 小時"}</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{localMetrics.uptime_seconds > 86400 ? (localMetrics.uptime_seconds / 86400).toFixed(0) + t("monitoring.day") : (localMetrics.uptime_seconds / 3600).toFixed(0) + t("monitoring.hour")}</div>
             </div>
           </div>
           {localMetrics.gpus.length > 0 && (
@@ -402,11 +401,11 @@ export function MonitoringPage() {
                   <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14 }}>
                     <strong style={{ fontSize: 13 }}>{gpu.name}</strong>
                     <div style={{ marginTop: 8 }}>
-                      <MetricBar label="溫度" value={`${gpu.temperature_c}°C`} />
-                      <MetricBar label="使用率" value={`${gpu.utilization_gpu}%`} pct={gpu.utilization_gpu} />
+                      <MetricBar label={t("monitoring.temperature")} value={`${gpu.temperature_c}°C`} />
+                      <MetricBar label={t("monitoring.usage")} value={`${gpu.utilization_gpu}%`} pct={gpu.utilization_gpu} />
                       <MetricBar label="VRAM" value={`${gpu.memory_used_mb} / ${gpu.memory_total_mb} MiB`} pct={gpu.memory_total_mb > 0 ? (gpu.memory_used_mb / gpu.memory_total_mb) * 100 : 0} />
-                      <MetricBar label="功耗" value={`${gpu.power_draw_w.toFixed(0)} W`} />
-                      <MetricBar label="風扇" value={`${gpu.fan_speed}%`} />
+                      <MetricBar label={t("monitoring.power")} value={`${gpu.power_draw_w.toFixed(0)} W`} />
+                      <MetricBar label={t("monitoring.fan")} value={`${gpu.fan_speed}%`} />
                     </div>
                   </div>
                 ))}
@@ -439,10 +438,11 @@ export function MonitoringPage() {
             host={host}
             expanded={expandedId === host.asset_id}
             onToggle={() => setExpandedId(expandedId === host.asset_id ? null : host.asset_id)}
+            t={t}
           />
         ))}
       </div>
-      {tab === "history" && <MetricsHistoryPanel assets={remoteData} />}
+      {tab === "history" && <MetricsHistoryPanel assets={remoteData} t={t} />}
     </>
   )
 }

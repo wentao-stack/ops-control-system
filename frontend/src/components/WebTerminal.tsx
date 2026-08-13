@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 import "xterm/css/xterm.css"
@@ -12,6 +13,7 @@ interface WebTerminalProps {
 }
 
 export function WebTerminal({ assetId, assetName, token, active = true, onDisconnect }: WebTerminalProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -245,17 +247,17 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
           {assetName}
         </span>
         <span className="terminal-status">
-          {status === "connecting" && "连接中..."}
-          {status === "ready" && "已连接"}
-          {status === "error" && `错误: ${errorMsg}`}
-          {status === "closed" && "已断开"}
+          {status === "connecting" && t("terminal.connecting")}
+          {status === "ready" && t("terminal.connected")}
+          {status === "error" && `${t("terminal.error")}: ${errorMsg}`}
+          {status === "closed" && t("terminal.disconnected")}
         </span>
         <div className="terminal-actions">
           {status !== "ready" && status !== "connecting" && (
             <button
               className="btn btn-sm terminal-btn"
               onClick={reconnect}
-              title="重新连接"
+              title={t("terminal.reconnect")}
             >
               ↻
             </button>
@@ -264,7 +266,7 @@ export function WebTerminal({ assetId, assetName, token, active = true, onDiscon
             <button
               className="btn btn-sm terminal-btn"
               onClick={reconnect}
-              title="重新连接"
+              title={t("terminal.reconnect")}
             >
               ↻
             </button>

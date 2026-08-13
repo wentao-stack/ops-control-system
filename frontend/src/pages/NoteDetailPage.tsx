@@ -136,6 +136,7 @@ function NoteEditor({
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const { t } = useTranslation()
   const CATEGORIES: Category[] = ["筆記", "知識", "貼文", "待辦"]
 
   const addTag = () => {
@@ -175,14 +176,14 @@ function NoteEditor({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="card-header">
-          <h2>{note ? "編輯" : "新增"}</h2>
+          <h2>{note ? t("notes.edit") : t("notes.new")}</h2>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
         </div>
         <div className="card-body">
           <div style={{ marginBottom: 12 }}>
             <input
               type="text"
-              placeholder="標題..."
+              placeholder={t("notes.titleInputPlaceholder")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               style={{
@@ -218,7 +219,7 @@ function NoteEditor({
             <div style={{ display: "flex", gap: 4, alignItems: "center", flex: 1 }}>
               <input
                 type="text"
-                placeholder="標籤 (Enter 新增)"
+                placeholder={t("notes.tagInputPlaceholder")}
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
@@ -254,10 +255,10 @@ function NoteEditor({
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              支援 Markdown：# 標題 **粗體** *斜體* `程式碼` - 列表
+              {t("notes.markdownHint")}
             </span>
             <button className="btn btn-sm" onClick={() => setPreview(!preview)}>
-              {preview ? "編輯" : "預覽"}
+              {preview ? t("notes.edit") : t("notes.preview")}
             </button>
           </div>
 
@@ -268,7 +269,7 @@ function NoteEditor({
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="開始寫..."
+                placeholder={t("notes.startWriting")}
                 style={{
                   width: "100%",
                   minHeight: 300,
@@ -287,9 +288,9 @@ function NoteEditor({
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-            <button className="btn" onClick={onClose}>取消</button>
+            <button className="btn" onClick={onClose}>{t("notes.cancel")}</button>
             <button className="btn btn-primary" onClick={handleSave} disabled={!title.trim() || saving}>
-              {saving ? "儲存中..." : "儲存"}
+              {saving ? t("notes.saving") : t("notes.save")}
             </button>
           </div>
         </div>
@@ -301,6 +302,7 @@ function NoteEditor({
 /* ── Related Notes Sidebar ─────────────────────────────────────────────────── */
 
 function RelatedNotes({ currentId, category, onNavigate }: { currentId: string; category: Category; onNavigate: (id: string) => void }) {
+  const { t } = useTranslation()
   const [related, setRelated] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -316,11 +318,11 @@ function RelatedNotes({ currentId, category, onNavigate }: { currentId: string; 
   return (
     <div className="card" style={{ position: "sticky", top: 80 }}>
       <div className="card-header">
-        <h3 style={{ fontSize: 14 }}>同分類筆記</h3>
+        <h3 style={{ fontSize: 14 }}>{t("notes.sameCategoryNotes")}</h3>
       </div>
       <div className="card-body" style={{ padding: 8 }}>
         {related.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--text-secondary)", padding: "12px 8px" }}>暫無其他筆記</div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", padding: "12px 8px" }}>{t("notes.noOtherNotes")}</div>
         ) : (
           related.map((n) => (
             <div
@@ -384,18 +386,18 @@ const { noteId } = useParams<{ noteId: string }>()
       setShowEditor(false)
       fetchNote()
     } catch (e: any) {
-      alert("儲存失敗：" + e.message)
+      alert(t("notes.saveFailed", { message: e.message }))
     }
   }
 
   const handleDelete = async () => {
     if (!note) return
-    if (confirm("確定刪除此筆記？")) {
+    if (confirm(t("notes.confirmDelete"))) {
       try {
         await deleteNoteApi(note.id)
         navigate("/notes")
       } catch (e: any) {
-        alert("刪除失敗：" + e.message)
+        alert(t("notes.deleteFailed", { message: e.message }))
       }
     }
   }
@@ -406,7 +408,7 @@ const { noteId } = useParams<{ noteId: string }>()
       await updateNoteApi(note.id, { pinned: !note.pinned })
       fetchNote()
     } catch (e: any) {
-      alert("操作失敗：" + e.message)
+      alert(t("notes.operationFailed", { message: e.message }))
     }
   }
 
@@ -422,14 +424,14 @@ const { noteId } = useParams<{ noteId: string }>()
         onClick={() => navigate("/notes")}
         style={{ marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 4 }}
       >
-        ← 返回筆記列表
+        {t("notes.backToList")}
       </button>
 
       {/* Loading */}
       {loading && (
         <div className="card">
           <div className="card-body" style={{ textAlign: "center", padding: 60 }}>
-            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>載入中…...</div>
+            <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>{t("notes.loading")}</div>
           </div>
         </div>
       )}
@@ -440,7 +442,7 @@ const { noteId } = useParams<{ noteId: string }>()
           <div className="card-body" style={{ padding: 20, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <div style={{ color: "var(--danger)", marginBottom: 12 }}>{error}</div>
-            <button className="btn" onClick={() => navigate("/notes")}>返回列表</button>
+            <button className="btn" onClick={() => navigate("/notes")}>{t("notes.returnToList")}</button>
           </div>
         </div>
       )}
@@ -468,20 +470,20 @@ const { noteId } = useParams<{ noteId: string }>()
                       {categoryIcon[note.category]} {note.category}
                     </span>
                     {note.pinned && (
-                      <span style={{ color: "#f59e0b", fontSize: 16 }} title="置頂">★</span>
+                      <span style={{ color: "#f59e0b", fontSize: 16 }} title={t("notes.pin")}>★</span>
                     )}
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button
                       className="btn btn-sm"
                       onClick={handleTogglePin}
-                      title={note.pinned ? "取消置頂" : "置頂"}
+                      title={note.pinned ? t("notes.unpin") : t("notes.pin")}
                       style={{ color: note.pinned ? "#f59e0b" : undefined }}
                     >
-                      {note.pinned ? "★ 取消置頂" : "☆ 置頂"}
+                      {note.pinned ? `★ ${t("notes.unpin")}` : `☆ ${t("notes.pin")}`}
                     </button>
-                    <button className="btn btn-sm" onClick={() => setShowEditor(true)} title="編輯">✎ 編輯</button>
-                    <button className="btn btn-sm" onClick={handleDelete} title="刪除" style={{ color: "var(--danger)" }}>🗑 刪除</button>
+                    <button className="btn btn-sm" onClick={() => setShowEditor(true)} title={t("notes.edit")}>✎ {t("notes.edit")}</button>
+                    <button className="btn btn-sm" onClick={handleDelete} title={t("notes.deleteNote")} style={{ color: "var(--danger)" }}>🗑 {t("notes.deleteNote")}</button>
                   </div>
                 </div>
 
@@ -499,13 +501,13 @@ const { noteId } = useParams<{ noteId: string }>()
 
                 {/* Meta */}
                 <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
-                  <span>作者：{note.author}</span>
+                  <span>{t("notes.author", { name: note.author })}</span>
                   <span style={{ margin: "0 8px" }}>·</span>
-                  <span>建立：{formatDate(note.created_at)}</span>
+                  <span>{t("notes.created", { date: formatDate(note.created_at) })}</span>
                   <span style={{ margin: "0 8px" }}>·</span>
-                  <span>更新：{formatDate(note.updated_at)}</span>
+                  <span>{t("notes.updatedAt", { date: formatDate(note.updated_at) })}</span>
                   <span style={{ margin: "0 8px" }}>·</span>
-                  <span>版本：v{note.version}</span>
+                  <span>{t("notes.version", { version: note.version })}</span>
                 </div>
 
                 {/* Content */}
@@ -520,10 +522,10 @@ const { noteId } = useParams<{ noteId: string }>()
             {/* Navigation between notes */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
               <button className="btn btn-sm" onClick={() => navigate("/notes")}>
-                ← 返回列表
+                {t("notes.returnToList")}
               </button>
               <button className="btn btn-sm" onClick={() => setShowEditor(true)}>
-                ✎ 編輯此文
+                {t("notes.editThisNote")}
               </button>
             </div>
           </div>

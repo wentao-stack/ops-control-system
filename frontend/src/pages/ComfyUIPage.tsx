@@ -45,13 +45,13 @@ const defaultsOf = (workflow: ComfyWorkflowTemplate): Record<string, unknown> =>
   return defaults
 }
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  queued: { label: "排隊中", cls: "comfy-st-queued" },
-  running: { label: "生成中", cls: "comfy-st-running" },
-  done: { label: "已完成", cls: "comfy-st-done" },
-  error: { label: "失敗", cls: "comfy-st-error" },
-  cancelled: { label: "已取消", cls: "comfy-st-cancelled" },
-}
+const STATUS_META = (t: (key: string) => string): Record<string, { label: string; cls: string }> => ({
+  queued: { label: t("comfyui.status.queued"), cls: "comfy-st-queued" },
+  running: { label: t("comfyui.status.generating"), cls: "comfy-st-running" },
+  done: { label: t("comfyui.status.completed"), cls: "comfy-st-done" },
+  error: { label: t("comfyui.status.failed"), cls: "comfy-st-error" },
+  cancelled: { label: t("comfyui.status.cancelled"), cls: "comfy-st-cancelled" },
+})
 
 async function fetchMediaUrl(output: ComfyOutputItem): Promise<string | null> {
   const query = new URLSearchParams({
@@ -94,6 +94,7 @@ function ComfyOutputCard({
   onSelectedChange: (selected: boolean) => void
   batchDeleting: boolean
 }) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -130,7 +131,7 @@ function ComfyOutputCard({
   }, [output.filename, output.subfolder, output.type, output.kind])
 
   const remove = async () => {
-    if (!window.confirm(`確定永久刪除作品「${output.filename}」？`)) return
+    if (!window.confirm(t("comfyui.card.confirmDelete"))) return
     setDeleting(true)
     try {
       await onDelete()
@@ -142,20 +143,20 @@ function ComfyOutputCard({
   return (
     <article className={`comfy-output-card${selected ? " is-selected" : ""}`}>
       <div className="comfy-output-stage">
-        <label className="comfy-output-select" title="選取作品">
+        <label className="comfy-output-select" title={t("comfyui.card.selectTitle")}>
           <input type="checkbox" checked={selected} onChange={event => onSelectedChange(event.target.checked)} disabled={batchDeleting} />
-          <span>選取</span>
+          <span>{t("comfyui.card.select")}</span>
         </label>
         {failed ? (
-          <div className="comfy-output-placeholder">檔案不存在或載入中</div>
+          <div className="comfy-output-placeholder">{t("comfyui.card.fileNotFound")}</div>
         ) : !url && thumbnailUrl ? (
-          <button className="comfy-video-thumbnail" onClick={() => setLoadPreview(true)} title="播放影片">
-            <img src={thumbnailUrl} alt={`${output.filename} 的縮圖`} loading="lazy" />
+          <button className="comfy-video-thumbnail" onClick={() => setLoadPreview(true)} title={t("comfyui.playVideo")}>
+            <img src={thumbnailUrl} alt={t("comfyui.thumbnail")} loading="lazy" />
             <span>▶</span>
           </button>
         ) : !url ? (
           <div className="comfy-output-placeholder comfy-output-loading">
-            {loadPreview ? "載入作品中…" : <button className="comfy-secondary-btn" onClick={() => setLoadPreview(true)}>載入預覽</button>}
+            {loadPreview ? t("comfyui.loadingPreview") : <button className="comfy-secondary-btn" onClick={() => setLoadPreview(true)}>{t("comfyui.loadPreview")}</button>}
           </div>
         ) : output.kind === "image" ? (
           <img src={url} alt={output.filename} loading="lazy" />
@@ -169,10 +170,10 @@ function ComfyOutputCard({
       <div className="comfy-output-info">
         <span className="comfy-output-name" title={output.filename}>{output.filename}</span>
         <div className="comfy-output-actions">
-          {url && <a className="comfy-icon-btn" href={url} download={output.filename} title="下載">↓</a>}
-          {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title="開啟">↗</a>}
-          <button className="comfy-delete-btn" onClick={remove} disabled={deleting || batchDeleting} title="永久刪除作品">
-            {deleting ? "刪除中…" : "刪除"}
+          {url && <a className="comfy-icon-btn" href={url} download={output.filename} title={t("comfyui.download")}>↓</a>}
+          {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title={t("comfyui.open")}>↗</a>}
+          <button className="comfy-delete-btn" onClick={remove} disabled={deleting || batchDeleting} title={t("comfyui.deleteArtifact")}>
+            {deleting ? t("comfyui.deleting") : t("comfyui.delete")}
           </button>
         </div>
       </div>
@@ -191,6 +192,7 @@ function ParamInput({
   onChange: (value: unknown) => void
   disabled: boolean
 }) {
+  const { t } = useTranslation()
   const [preview, setPreview] = useState("")
 
   useEffect(() => () => {
@@ -242,7 +244,7 @@ function ParamInput({
         <input type="checkbox" checked={Boolean(value)} disabled={disabled}
           onChange={event => onChange(event.target.checked)} />
         <span className="comfy-switch" />
-        <span>{value ? "開啟" : "關閉"}</span>
+        <span>{value ? t("comfyui.enabled") : t("comfyui.disabled")}</span>
       </label>
     )
   } else if (def.type === "seed") {
@@ -251,20 +253,20 @@ function ParamInput({
         <input className="comfy-input comfy-number" type="number" value={value == null ? "" : String(value)}
           disabled={disabled} onChange={event => onChange(event.target.value === "" ? "" : Number(event.target.value))} />
         <button className="comfy-secondary-btn" disabled={disabled}
-          onClick={() => onChange(Math.floor(Math.random() * 2 ** 31))}>隨機</button>
+          onClick={() => onChange(Math.floor(Math.random() * 2 ** 31))}>{t("comfyui.random")}</button>
       </div>
     )
   } else if (def.type === "image") {
     control = (
       <div className="comfy-image-upload">
         <div className="comfy-image-preview-wrap">
-          {preview ? <img className="comfy-image-preview" src={preview} alt="輸入預覽" /> : (
-            <div className="comfy-image-current">{value ? `目前：${String(value)}` : "尚未選擇圖片"}</div>
+          {preview ? <img className="comfy-image-preview" src={preview} alt={t("comfyui.inputPreview")} /> : (
+            <div className="comfy-image-current">{value ? t("comfyui.currentImage") : t("comfyui.noImageSelected")}</div>
           )}
         </div>
         <div className="comfy-upload-actions">
           <label className="comfy-secondary-btn">
-            上傳圖片（自動適配）
+            {t("comfyui.uploadImage")}
             <input type="file" accept="image/*" hidden disabled={disabled} onChange={event => {
               const file = event.target.files?.[0]
               if (!file) return
@@ -277,7 +279,7 @@ function ParamInput({
             URL.revokeObjectURL(preview)
             setPreview("")
             onChange("")
-          }}>移除</button>}
+          }}>{t("comfyui.remove")}</button>}
         </div>
       </div>
     )
@@ -357,7 +359,7 @@ export function ComfyUIPage() {
       setSelectedId(previous => previous && response.templates.some(item => item.id === previous)
         ? previous
         : response.templates.find(item => item.runnable)?.id ?? response.templates[0]?.id ?? "")
-      if (showFeedback) setNotice(`已同步 ${response.templates.length} 個工作流`)
+      if (showFeedback) setNotice(t("comfyui.syncedTemplates"))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -436,7 +438,7 @@ export function ComfyUIPage() {
     for (const definition of template.params) {
       const value = finalParams[definition.key]
       if (definition.required && (value === undefined || value === null || value === "")) {
-        setError(`請填寫「${definition.label}」`)
+        setError(t("comfyui.fillRequired"))
         return
       }
     }
@@ -450,7 +452,7 @@ export function ComfyUIPage() {
         body: JSON.stringify({ workflow_id: template.id, params: finalParams }),
       })
       setActiveJobId(result.job_id)
-      setNotice("任務已加入 ComfyUI 佇列")
+      setNotice(t("comfyui.taskQueued"))
       await loadJobs()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -502,7 +504,7 @@ export function ComfyUIPage() {
                 setGenerating(false)
                 setActiveJobId(null)
                 setProgress(event.event === "done" ? { value: 100, max: 100 } : null)
-                if (event.event === "error") setError(event.message || "生成失敗")
+                if (event.event === "error") setError(event.message || t("comfyui.generateFailed"))
                 await loadJobs()
                 if (event.event === "done") await loadArtifacts(artifactPage, true)
               }
@@ -513,7 +515,7 @@ export function ComfyUIPage() {
         if (!cancelled) {
           setGenerating(false)
           setActiveJobId(null)
-          setError("進度連線中斷；任務狀態會由背景輪詢更新")
+          setError(t("comfyui.progressDisconnected"))
         }
       }
     })()
@@ -521,7 +523,7 @@ export function ComfyUIPage() {
   }, [activeJobId, loadJobs])
 
   const handleCancel = async (job: ComfyJob) => {
-    if (!window.confirm("確定取消目前的生成任務？")) return
+    if (!window.confirm(t("comfyui.confirmCancel"))) return
     setActionBusy(`cancel-${job.id}`)
     try {
       await api(`/api/v1/comfyui/jobs/${job.id}/cancel`, { method: "POST" })
@@ -529,7 +531,7 @@ export function ComfyUIPage() {
       setActiveJobId(null)
       setGenerating(false)
       setProgress(null)
-      setNotice("任務已取消")
+      setNotice(t("comfyui.taskCancelled"))
       await loadJobs()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -539,13 +541,13 @@ export function ComfyUIPage() {
   const handleDeleteJob = async (job: ComfyJob) => {
     const withFiles = job.outputs.length > 0
     const message = withFiles
-      ? `刪除「${job.workflow_name}」記錄及 ${job.outputs.length} 個作品檔案？此操作無法復原。`
-      : `刪除「${job.workflow_name}」記錄？`
+      ? t("comfyui.deleteJobWithOutputs")
+      : t("comfyui.deleteJob")
     if (!window.confirm(message)) return
     setActionBusy(`delete-${job.id}`)
     try {
       await api(`/api/v1/comfyui/jobs/${job.id}?delete_outputs=true`, { method: "DELETE" })
-      setNotice("記錄與作品已刪除")
+      setNotice(t("comfyui.jobDeleted"))
       await loadJobs()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -555,7 +557,7 @@ export function ComfyUIPage() {
   const handleDeleteOutput = async (job: ComfyJob, outputIndex: number) => {
     try {
       await api(`/api/v1/comfyui/jobs/${job.id}/outputs/${outputIndex}`, { method: "DELETE" })
-      setNotice("作品已刪除")
+      setNotice(t("comfyui.artifactDeleted"))
       await loadJobs()
       await loadArtifacts()
     } catch (reason) {
@@ -567,7 +569,7 @@ export function ComfyUIPage() {
     const query = new URLSearchParams({ filename: artifact.filename, subfolder: artifact.subfolder ?? "" })
     try {
       await api(`/api/v1/comfyui/artifacts?${query}`, { method: "DELETE" })
-      setNotice("作品已刪除")
+      setNotice(t("comfyui.artifactDeleted"))
       setSelectedArtifactKeys(current => {
         const next = new Set(current)
         next.delete(artifactKey(artifact))
@@ -607,7 +609,7 @@ export function ComfyUIPage() {
 
   const handleBatchDeleteArtifacts = async () => {
     if (!selectedArtifacts.length) return
-    if (!window.confirm(`確定永久刪除已選取的 ${selectedArtifacts.length} 個作品？此操作無法復原。`)) return
+    if (!window.confirm(t("comfyui.confirmBatchDelete"))) return
     setBatchDeleting(true)
     setError("")
     const results = await Promise.allSettled(selectedArtifacts.map(async artifact => {
@@ -627,8 +629,8 @@ export function ComfyUIPage() {
     if (nextPage !== artifactPage) setArtifactPage(nextPage)
     await loadArtifacts(nextPage)
     await loadJobs()
-    if (failed.length) setError(`${failed.length} 個作品刪除失敗，請重試。`)
-    else setNotice(`已刪除 ${selectedArtifacts.length} 個作品`)
+    if (failed.length) setError(t("comfyui.deleteFailed"))
+    else setNotice(t("comfyui.artifactsDeleted"))
     setBatchDeleting(false)
   }
 
@@ -643,18 +645,18 @@ export function ComfyUIPage() {
   const handleRerun = (job: ComfyJob) => {
     const target = templates.find(item => item.id === job.workflow_id)
     if (!target) {
-      setError("原工作流已從 ComfyUI 移除，無法重跑")
+      setError(t("comfyui.workflowRemoved"))
       return
     }
     setSelectedId(job.workflow_id)
     setParams({ ...defaultsOf(target), ...job.params })
-    setNotice("已載入上次使用的參數")
+    setNotice(t("comfyui.paramsLoaded"))
   }
 
   const handleRenameWorkflow = async () => {
     if (!template) return
     const currentName = template.filename?.split("/").pop()?.replace(/\.json$/i, "") ?? template.name
-    const name = window.prompt("輸入新的工作流檔名（可省略 .json）", currentName)
+    const name = window.prompt(t("comfyui.workflowNamePrompt"), currentName)
     if (name === null) return
     setActionBusy("rename-workflow")
     setError("")
@@ -666,7 +668,7 @@ export function ComfyUIPage() {
       })
       await loadTemplates()
       setSelectedId(result.id)
-      setNotice(`工作流已重新命名為 ${result.filename}`)
+      setNotice(t("comfyui.workflowRenamed"))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally { setActionBusy("") }
@@ -674,14 +676,14 @@ export function ComfyUIPage() {
 
   const handleDeleteWorkflow = async () => {
     if (!template) return
-    if (!window.confirm(`確定刪除工作流「${template.name}」？此操作無法復原。`)) return
+    if (!window.confirm(t("comfyui.confirmDeleteWorkflow"))) return
     setActionBusy("delete-workflow")
     setError("")
     try {
       await api(`/api/v1/comfyui/workflows/${template.id}`, { method: "DELETE" })
       setSelectedId("")
       await loadTemplates()
-      setNotice("工作流已刪除")
+      setNotice(t("comfyui.workflowDeleted"))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally { setActionBusy("") }
@@ -691,7 +693,7 @@ export function ComfyUIPage() {
     setActionBusy("free")
     try {
       await api("/api/v1/comfyui/free", { method: "POST" })
-      setNotice("已要求 ComfyUI 卸載模型並釋放顯存")
+      setNotice(t("comfyui.modelUnloaded"))
       window.setTimeout(loadStatus, 1000)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -700,7 +702,7 @@ export function ComfyUIPage() {
 
   const visibleParams = template?.params.filter(param => showAdvanced || !param.advanced) ?? []
   const groupedParams = visibleParams.reduce<Record<string, ComfyParamDef[]>>((groups, param) => {
-    const title = param.node_title || "工作流參數"
+    const title = param.node_title || t("comfyui.workflowParams")
     ;(groups[title] ||= []).push(param)
     return groups
   }, {})
@@ -710,24 +712,24 @@ export function ComfyUIPage() {
   const elapsedSeconds = activeJob?.created_at
     ? (clock - new Date(activeJob.created_at).getTime()) / 1000 : 0
   const phaseLabel = progress?.queuePosition
-    ? `排隊第 ${progress.queuePosition} 位`
-    : progress?.nodeTitle || (progress?.node ? `節點 ${progress.node}` : "等待 ComfyUI 回報階段")
-  const stepLabel = progress?.max ? `${progress.value} / ${progress.max} · ${progressPercent}%` : "執行中"
+    ? t("comfyui.queuePosition")
+    : progress?.nodeTitle || (progress?.node ? t("comfyui.node") : t("comfyui.waitingForComfyUI"))
+  const stepLabel = progress?.max ? `${progress.value} / ${progress.max} · ${progressPercent}%` : t("comfyui.running")
 
   return (
     <div className="comfy-page">
       <header className="comfy-hero">
         <div>
           <div className="comfy-eyebrow">GENERATIVE WORKSPACE</div>
-          <h1>ComfyUI 創作工作台</h1>
-          <p>自動同步 ComfyUI 工作流，集中管理參數、任務與生成作品。</p>
+          <h1>{t("comfyui.title")}</h1>
+          <p>{t("comfyui.subtitle")}</p>
         </div>
         <div className="comfy-hero-actions">
           <button className="comfy-secondary-btn" onClick={handleFreeMemory} disabled={actionBusy === "free" || Boolean(activeJobId)}>
-            {actionBusy === "free" ? "釋放中…" : "釋放顯存"}
+            {actionBusy === "free" ? t("comfyui.freeing") : t("comfyui.freeVram")}
           </button>
           <button className="comfy-primary-btn" onClick={() => loadTemplates(true)} disabled={syncing}>
-            {syncing ? "同步中…" : "同步工作流"}
+            {syncing ? t("comfyui.syncing") : t("comfyui.syncWorkflows")}
           </button>
         </div>
       </header>
@@ -735,16 +737,16 @@ export function ComfyUIPage() {
       <div className="comfy-statusbar">
         <div className="comfy-status-main">
           <span className={`comfy-status-dot ${status?.online ? "comfy-online" : "comfy-offline"}`} />
-          <strong>{status?.online ? "ComfyUI 已連線" : "ComfyUI 離線"}</strong>
+          <strong>{status?.online ? t("comfyui.connected") : t("comfyui.disconnected")}</strong>
           {status?.comfyui_version && <span>v{status.comfyui_version}</span>}
         </div>
         {status?.devices?.map(device => (
           <div className="comfy-status-stat" key={device.name}>
-            <span>GPU 顯存</span><strong>{fmtVram(device.vram_free)} / {fmtVram(device.vram_total)}</strong>
+            <span>{t("comfyui.gpuVram")}</span><strong>{fmtVram(device.vram_free)} / {fmtVram(device.vram_total)}</strong>
           </div>
         ))}
-        <div className="comfy-status-stat"><span>執行中</span><strong>{status?.queue_running ?? 0}</strong></div>
-        <div className="comfy-status-stat"><span>排隊</span><strong>{status?.queue_pending ?? 0}</strong></div>
+        <div className="comfy-status-stat"><span>{t("comfyui.running")}</span><strong>{status?.queue_running ?? 0}</strong></div>
+        <div className="comfy-status-stat"><span>{t("comfyui.queued")}</span><strong>{status?.queue_pending ?? 0}</strong></div>
       </div>
 
       {(error || notice) && (
@@ -757,12 +759,12 @@ export function ComfyUIPage() {
       <div className="comfy-workspace">
         <aside className="comfy-workflows-panel">
           <div className="comfy-panel-heading">
-            <div><span className="comfy-section-kicker">LIBRARY</span><h2>工作流</h2></div>
+            <div><span className="comfy-section-kicker">LIBRARY</span><h2>{t("comfyui.workflows")}</h2></div>
             <span className="comfy-count">{templates.length}</span>
           </div>
           <div className="comfy-search-wrap">
             <span>⌕</span>
-            <input value={workflowQuery} onChange={event => setWorkflowQuery(event.target.value)} placeholder="搜尋工作流或模型" />
+            <input value={workflowQuery} onChange={event => setWorkflowQuery(event.target.value)} placeholder={t("comfyui.searchWorkflows")} />
           </div>
           <div className="comfy-workflow-list">
             {filteredTemplates.map(item => (
@@ -775,13 +777,13 @@ export function ComfyUIPage() {
                 </div>
                 <div className="comfy-workflow-file" title={item.filename}>{item.filename}</div>
                 <div className="comfy-workflow-meta">
-                  <span>{item.node_count} 節點</span>
-                  <span>{item.params.length} 參數</span>
-                  <span>{item.runnable ? "可執行" : "需處理"}</span>
+                  <span>{t("comfyui.nodeCount")}</span>
+                  <span>{t("comfyui.paramCount")}</span>
+                  <span>{item.runnable ? t("comfyui.runnable") : t("comfyui.needsWork")}</span>
                 </div>
               </button>
             ))}
-            {!filteredTemplates.length && <div className="comfy-empty-state">找不到符合條件的工作流</div>}
+            {!filteredTemplates.length && <div className="comfy-empty-state">t("comfyui.noWorkflowFound")</div>}
           </div>
         </aside>
 
@@ -791,11 +793,11 @@ export function ComfyUIPage() {
               <div className="comfy-editor-header">
                 <div>
                   <div className="comfy-editor-title-row"><span>{template.icon}</span><h2>{template.name}</h2></div>
-                  <p>{template.filename} · 更新於 {fmtDate(template.updated_at)}</p>
+                  <p>{template.filename} · {t("comfyui.updatedAt")} {fmtDate(template.updated_at)}</p>
                 </div>
                 <div className="comfy-editor-actions">
-                  <button className="comfy-icon-btn" onClick={handleRenameWorkflow} disabled={Boolean(actionBusy)} title="重新命名工作流">✎</button>
-                  <button className="comfy-icon-btn comfy-icon-danger" onClick={handleDeleteWorkflow} disabled={Boolean(actionBusy)} title="刪除工作流">⌫</button>
+                  <button className="comfy-icon-btn" onClick={handleRenameWorkflow} disabled={Boolean(actionBusy)} title={t("comfyui.renameWorkflow")}>✎</button>
+                  <button className="comfy-icon-btn comfy-icon-danger" onClick={handleDeleteWorkflow} disabled={Boolean(actionBusy)} title={t("comfyui.deleteWorkflow")}>⌫</button>
                   <span className={`comfy-ready-badge ${template.runnable ? "ready" : "blocked"}`}>
                     {template.runnable ? "READY" : "BLOCKED"}
                   </span>
@@ -804,20 +806,20 @@ export function ComfyUIPage() {
 
               {!template.runnable ? (
                 <div className="comfy-blocked-card">
-                  <strong>此工作流已識別，但無法直接執行</strong>
+                  <strong>{t("comfyui.workflowNotRunnable")}</strong>
                   <p>{template.disabled_reason}</p>
-                  <span>若包含子圖，請在 ComfyUI 中使用「匯出 API 格式」另存到 workflows 目錄。</span>
+                  <span>{t("comfyui.workflowNotRunnableDesc")}</span>
                 </div>
               ) : (
                 <>
                   <div className="comfy-parameter-toolbar">
                     <div>
-                      <strong>生成參數</strong>
-                      <span>{visibleParams.length} / {template.params.length} 個欄位</span>
+                      <strong>{t("comfyui.generateParams")}</strong>
+                      <span>{t("comfyui.fieldCount")}</span>
                     </div>
                     {advancedCount > 0 && (
                       <button className={`comfy-text-btn ${showAdvanced ? "active" : ""}`} onClick={() => setShowAdvanced(value => !value)}>
-                        {showAdvanced ? "隱藏進階設定" : `顯示 ${advancedCount} 個進階設定`}
+                        {showAdvanced ? t("comfyui.hideAdvanced") : t("comfyui.showAdvanced")}
                       </button>
                     )}
                   </div>
@@ -834,50 +836,50 @@ export function ComfyUIPage() {
                         </div>
                       </section>
                     ))}
-                    {!visibleParams.length && <div className="comfy-empty-state">此工作流沒有可調整參數，將使用已儲存設定執行。</div>}
+                    {!visibleParams.length && <div className="comfy-empty-state">t("comfyui.noAdjustableParams")</div>}
                   </div>
                   <div className="comfy-generate-dock">
-                    <div><strong>{template.output_kind.toUpperCase()}</strong><span>{template.model || "使用工作流內模型"}</span></div>
+                    <div><strong>{template.output_kind.toUpperCase()}</strong><span>{template.model || t("comfyui.useWorkflowModel")}</span></div>
                     <button className="comfy-generate-btn" onClick={handleGenerate}
                       disabled={generating || uploading || !status?.online}>
-                      {uploading ? "正在上傳…" : generating ? "正在生成…" : "開始生成"}
+                      {uploading ? t("comfyui.uploading") : generating ? t("comfyui.generating") : t("comfyui.startGenerate")}
                     </button>
                   </div>
                 </>
               )}
             </>
-          ) : <div className="comfy-empty-state">ComfyUI workflows 目錄目前沒有 JSON 工作流。</div>}
+          ) : <div className="comfy-empty-state">t("comfyui.noWorkflowsInDir")</div>}
         </main>
 
         <aside className="comfy-activity-panel">
           <div className="comfy-panel-heading">
-            <div><span className="comfy-section-kicker">ACTIVITY</span><h2>任務</h2></div>
-            <button className="comfy-icon-btn" onClick={loadJobs} title="重新整理">↻</button>
+            <div><span className="comfy-section-kicker">ACTIVITY</span><h2>{t("comfyui.jobs")}</h2></div>
+            <button className="comfy-icon-btn" onClick={loadJobs} title={t("comfyui.refresh")}>↻</button>
           </div>
 
           {activeJobId && (
             <div className="comfy-progress-box">
-              <div className="comfy-progress-head"><span>目前階段</span><strong>{stepLabel}</strong></div>
+              <div className="comfy-progress-head"><span>{t("comfyui.currentStage")}</span><strong>{stepLabel}</strong></div>
               <div className="comfy-progress-phase" title={phaseLabel}>{phaseLabel}</div>
               <div className="comfy-progress-track"><div className={`comfy-progress-fill ${!progress?.max ? "is-indeterminate" : ""}`}
                 style={progress?.max ? { width: `${progressPercent}%` } : undefined} /></div>
               <div className="comfy-progress-metrics">
-                <span>目前節點進度</span>
-                <span>已耗時 {fmtElapsed(elapsedSeconds)}</span>
+                <span>{t("comfyui.currentNodeProgress")}</span>
+                <span>{t("comfyui.elapsed")} {fmtElapsed(elapsedSeconds)}</span>
               </div>
-              <small>步數為 ComfyUI 目前節點的實際 N/M；切換解碼、合成等階段時會重新計算。</small>
+              <small>t("comfyui.stepNote")</small>
             </div>
           )}
 
           <div className="comfy-job-filters">
-            {[['all', '全部'], ['running', '生成中'], ['done', '完成'], ['error', '失敗']].map(([value, label]) => (
+            {[['all', t('comfyui.all')], ['running', t('comfyui.generatingStatus')], ['done', t('comfyui.done')], ['error', t('comfyui.failed')]].map(([value, label]) => (
               <button key={value} className={jobFilter === value ? "active" : ""} onClick={() => setJobFilter(value)}>{label}</button>
             ))}
           </div>
 
           <div className="comfy-jobs">
             {filteredJobs.map(job => {
-              const meta = STATUS_META[job.status] ?? { label: job.status, cls: "" }
+              const meta = STATUS_META(t)[job.status] ?? { label: job.status, cls: "" }
               const running = job.status === "queued" || job.status === "running"
               return (
                 <article key={job.id} className={`comfy-job-item ${job.id === activeJobId ? "is-active" : ""}`}>
@@ -885,34 +887,34 @@ export function ComfyUIPage() {
                     <span className="comfy-job-name" title={job.workflow_name}>{job.workflow_name}</span>
                     <span className={`comfy-status-chip ${meta.cls}`}>{meta.label}</span>
                   </div>
-                  <div className="comfy-job-date">{fmtDate(job.created_at)} · {job.outputs.length} 個作品</div>
+                  <div className="comfy-job-date">{fmtDate(job.created_at)} · {t("comfyui.outputCount")}</div>
                   {job.error && <div className="comfy-job-error" title={job.error}>{job.error}</div>}
                   {running && job.current_node_title && (
                     <div className="comfy-job-progress">{job.current_node_title}{job.step_max ? ` · ${job.step_value ?? 0}/${job.step_max}` : ""}</div>
                   )}
                   <div className="comfy-job-actions">
-                    {!running && <button onClick={() => handleRerun(job)}>重跑</button>}
-                    {running && <button className="danger" disabled={actionBusy === `cancel-${job.id}`} onClick={() => handleCancel(job)}>取消</button>}
-                    {!running && <button className="danger" disabled={actionBusy === `delete-${job.id}`} onClick={() => handleDeleteJob(job)}>刪除</button>}
+                    {!running && <button onClick={() => handleRerun(job)}>{t("comfyui.rerun")}</button>}
+                    {running && <button className="danger" disabled={actionBusy === `cancel-${job.id}`} onClick={() => handleCancel(job)}>{t("comfyui.cancel")}</button>}
+                    {!running && <button className="danger" disabled={actionBusy === `delete-${job.id}`} onClick={() => handleDeleteJob(job)}>{t("comfyui.delete")}</button>}
                   </div>
                 </article>
               )
             })}
-            {!filteredJobs.length && <div className="comfy-empty-state">此分類尚無任務</div>}
+            {!filteredJobs.length && <div className="comfy-empty-state">t("comfyui.noJobsInCategory")</div>}
           </div>
         </aside>
       </div>
 
       <section className="comfy-gallery-section">
         <div className="comfy-gallery-header">
-          <div><span className="comfy-section-kicker">CREATIONS</span><h2>作品庫</h2></div>
+          <div><span className="comfy-section-kicker">CREATIONS</span><h2>{t("comfyui.gallery")}</h2></div>
           <div className="comfy-gallery-heading-actions">
-            <span>{artifactTotal} 個作品</span>
+            <span>{t("comfyui.artifactTotal")}</span>
             {artifacts.length > 0 && <>
-              <button className="comfy-secondary-btn comfy-select-all-btn" onClick={toggleAllArtifacts} disabled={batchDeleting}>{allArtifactsSelected ? "取消全選" : "全選本頁"}</button>
-              {selectedArtifacts.length > 0 && <button className="comfy-delete-btn comfy-batch-delete-btn" onClick={handleBatchDeleteArtifacts} disabled={batchDeleting}>{batchDeleting ? "刪除中…" : `刪除已選 ${selectedArtifacts.length}`}</button>}
+              <button className="comfy-secondary-btn comfy-select-all-btn" onClick={toggleAllArtifacts} disabled={batchDeleting}>{allArtifactsSelected ? t("comfyui.deselectAll") : t("comfyui.selectAll")}</button>
+              {selectedArtifacts.length > 0 && <button className="comfy-delete-btn comfy-batch-delete-btn" onClick={handleBatchDeleteArtifacts} disabled={batchDeleting}>{batchDeleting ? t("comfyui.deleting") : t("comfyui.deleteSelected")}</button>}
             </>}
-            <button className="comfy-icon-btn" onClick={() => loadArtifacts(artifactPage, true)} title="重新掃描 ComfyUI 作品">↻</button>
+            <button className="comfy-icon-btn" onClick={() => loadArtifacts(artifactPage, true)} title={t("comfyui.rescanArtifacts")}>↻</button>
           </div>
         </div>
         {artifacts.length ? (
@@ -923,12 +925,12 @@ export function ComfyUIPage() {
                 onSelectedChange={selected => toggleArtifact(artifact, selected)} batchDeleting={batchDeleting} />
             ))}
           </div>
-        ) : <div className="comfy-gallery-empty"><span>✦</span><strong>還沒有作品</strong><p>ComfyUI output 目錄中的作品會自動顯示在這裡。</p></div>}
+        ) : <div className="comfy-gallery-empty"><span>✦</span><strong>{t("comfyui.noArtifactsYet")}</strong><p>{t("comfyui.artifactsWillAppear")}</p></div>}
         {artifactTotal > GALLERY_PAGE_SIZE && (
-          <nav className="comfy-gallery-pagination" aria-label="作品庫分頁">
-            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage - 1)} disabled={artifactPage === 1}>上一頁</button>
-            <span>第 {artifactPage} / {galleryPages} 頁</span>
-            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage + 1)} disabled={artifactPage === galleryPages}>下一頁</button>
+          <nav className="comfy-gallery-pagination" aria-label={t("comfyui.galleryPagination")}>
+            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage - 1)} disabled={artifactPage === 1}>{t("comfyui.prevPage")}</button>
+            <span>{t("comfyui.pageOf")}</span>
+            <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage + 1)} disabled={artifactPage === galleryPages}>{t("comfyui.nextPage")}</button>
           </nav>
         )}
       </section>

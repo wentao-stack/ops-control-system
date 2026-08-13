@@ -5,12 +5,7 @@ import { api } from "../auth"
 import { useTranslation } from "react-i18next"
 import { AgentConversation, AgentMessage, fmtRel } from "../types"
 
-const SUGGESTIONS = [
-  "各主機監控狀況如何？",
-  "有哪些服務在運行？",
-  "最近有什麼告警？",
-  "列出所有資產",
-]
+const SUGGESTIONS_KEY = ["suggestion1", "suggestion2", "suggestion3", "suggestion4"] as const
 
 type PendingConfirm = {
   confirm_id: string
@@ -61,7 +56,7 @@ type ToastState = {
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-function groupConversations(convs: AgentConversation[]): Map<string, AgentConversation[]> {
+function groupConversations(convs: AgentConversation[], t: (key: string) => string): Map<string, AgentConversation[]> {
   const groups = new Map<string, AgentConversation[]>()
   const now = Date.now()
   const todayStart = new Date()
@@ -71,15 +66,15 @@ function groupConversations(convs: AgentConversation[]): Map<string, AgentConver
   for (const c of convs) {
     const updatedAt = new Date(c.updated_at).getTime()
     let label: string
-    if (!Number.isFinite(updatedAt) || updatedAt > now) label = "今天"
-    else if (updatedAt >= todayStart.getTime()) label = "今天"
-    else if (updatedAt >= yesterdayStart) label = "昨天"
-    else label = "更早"
+    if (!Number.isFinite(updatedAt) || updatedAt > now) label = t("agent.today")
+    else if (updatedAt >= todayStart.getTime()) label = t("agent.today")
+    else if (updatedAt >= yesterdayStart) label = t("agent.yesterday")
+    else label = t("agent.earlier")
     groups.set(label, [...(groups.get(label) ?? []), c])
   }
   // ensure ordering
   const ordered = new Map<string, AgentConversation[]>()
-  for (const key of ["今天", "昨天", "更早"]) {
+  for (const key of [t("agent.today"), t("agent.yesterday"), t("agent.earlier")]) {
     if (groups.has(key)) ordered.set(key, groups.get(key)!)
   }
   return ordered
@@ -105,22 +100,25 @@ function PaginationControls({
   total,
   onPage,
   compact = false,
+  t,
 }: {
   offset: number
   limit: number
   total: number
   onPage: (offset: number) => void
   compact?: boolean
+  t?: (key: string) => string
 }) {
   if (total <= limit) return null
   const page = Math.floor(offset / limit) + 1
   const pages = Math.ceil(total / limit)
+  const tk = t ?? ((k: string, _?: Record<string, unknown>) => k)
   return (
-    <nav className={`agent-pagination${compact ? " compact" : ""}`} aria-label="分頁">
+    <nav className={`agent-pagination${compact ? " compact" : ""}`} aria-label={tk("agent.paginationLabel")}>
       <span>{offset + 1}–{Math.min(offset + limit, total)} / {total}</span>
-      <button type="button" onClick={() => onPage(Math.max(0, offset - limit))} disabled={offset === 0}>上一頁</button>
-      <span>第 {page} / {pages} 頁</span>
-      <button type="button" onClick={() => onPage(offset + limit)} disabled={offset + limit >= total}>下一頁</button>
+      <button type="button" onClick={() => onPage(Math.max(0, offset - limit))} disabled={offset === 0}>{tk("agent.prevPage")}</button>
+      <span>{tk("agent.pageOf", { page, pages })}</span>
+      <button type="button" onClick={() => onPage(offset + limit)} disabled={offset + limit >= total}>{tk("agent.nextPage")}</button>
     </nav>
   )
 }
@@ -144,6 +142,7 @@ function Sidebar({
   offset,
   limit,
   onPage,
+  t,
 }: {
   conversations: AgentConversation[]
   activeId: string | null
@@ -161,16 +160,17 @@ function Sidebar({
   offset: number
   limit: number
   onPage: (offset: number) => void
+  t: (key: string) => string
 }) {
-  const groups = groupConversations(conversations)
+  const groups = groupConversations(conversations, t)
 
   return (
-    <aside className={`agent-sidebar${mobileOpen ? " mobile-open" : ""}`} aria-label="對話歷史">
+    <aside className={`agent-sidebar${mobileOpen ? " mobile-open" : ""}`} aria-label={t("agent.closeHistory")}>
       <div className="agent-sidebar-header">
         <button className="btn btn-primary" style={{ width: "100%" }} onClick={onNew} disabled={disabled}>
-          ＋ 新建對話
+          {t("agent.newConversation")}
         </button>
-        <button className="agent-sidebar-close" onClick={onClose} aria-label="關閉對話歷史">×</button>
+        <button className="agent-sidebar-close" onClick={onClose} aria-label={t("agent.closeHistory")}>×</button>
       </div>
       <div className="agent-sidebar-list">
         {Array.from(groups.entries()).map(([label, convs]) => (
@@ -192,8 +192,8 @@ function Sidebar({
                 <button
                   type="button"
                   className="agent-chat-delete"
-                  aria-label={`刪除對話 ${c.title}`}
-                  title="刪除對話"
+                  aria-label={`${t("agent.deleteConversation")} ${c.title}`}
+                  title={t("agent.deleteConversation")}
                   onClick={() => onDelete(c.id)}
                   disabled={disabled || deletingId === c.id}
                 >
@@ -203,25 +203,25 @@ function Sidebar({
             ))}
           </div>
         ))}
-        {loading && <div className="agent-sidebar-state">載入中...</div>}
+        {loading && <div className="agent-sidebar-state">{t("agent.loadingHistory")}</div>}
         {!loading && error && (
           <div className="agent-sidebar-state agent-sidebar-error">
             <span>{error}</span>
-            <button type="button" onClick={onRetry}>重試</button>
+            <button type="button" onClick={onRetry}>{t("agent.retry")}</button>
           </div>
         )}
         {!loading && !error && conversations.length === 0 && (
           <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: "var(--text-secondary)" }}>
-            尚無歷史
+            {t("agent.noHistory")}
           </div>
         )}
       </div>
-      {!loading && !error && <PaginationControls compact total={total} offset={offset} limit={limit} onPage={onPage} />}
+      {!loading && !error && <PaginationControls compact total={total} offset={offset} limit={limit} onPage={onPage} t={t} />}
     </aside>
   )
 }
 
-function MessageBubble({ msg }: { msg: AgentMessage }) {
+function MessageBubble({ msg, t }: { msg: AgentMessage; t: (key: string) => string }) {
   const isUser = msg.role === "user"
   const isTool = msg.role === "tool"
 
@@ -237,7 +237,7 @@ function MessageBubble({ msg }: { msg: AgentMessage }) {
         </div>
         {msg.tool_result && (
           <details className="agent-tool-details" open>
-            <summary>完整工具回傳</summary>
+            <summary>{t("agent.fullToolResult")}</summary>
             <pre className="agent-tool-body">{msg.tool_result}</pre>
           </details>
         )}
@@ -313,7 +313,7 @@ export function AgentChatPage() {
       setConversationsTotal(response.total)
       setConversationOffset(offset)
     } catch (error) {
-      setConversationsError(errorMessage(error, "載入失敗對話歷史"))
+      setConversationsError(errorMessage(error, t("agent.loadConversationsFailed")))
     } finally {
       setConversationsLoading(false)
     }
@@ -334,7 +334,7 @@ export function AgentChatPage() {
       }
     } catch (error) {
       if (messageRequestRef.current === requestId) {
-        setMessagesError(errorMessage(error, "載入失敗對話內容"))
+        setMessagesError(errorMessage(error, t("agent.loadMessagesFailed")))
       }
     } finally {
       if (messageRequestRef.current === requestId) {
@@ -350,7 +350,7 @@ export function AgentChatPage() {
     try {
       setHealth(await api<AgentHealth>("/api/v1/agent/health"))
     } catch (error) {
-      setHealth({ status: "error", model: "", message: errorMessage(error, "無法檢查模型服務") })
+      setHealth({ status: "error", model: "", message: errorMessage(error, t("agent.checkModelFailed")) })
     } finally {
       setHealthLoading(false)
     }
@@ -404,14 +404,14 @@ export function AgentChatPage() {
   const handleDelete = async (id: string) => {
     if (streaming || deletingId) return
     const conversation = conversations.find(item => item.id === id)
-    if (!window.confirm(`刪除對話「${conversation?.title ?? "未命名對話"}」？此操作無法復原。`)) return
+    if (!window.confirm(t("agent.deleteConversationConfirm", { title: conversation?.title ?? t("agent.unnamedConversation") }))) return
     setDeletingId(id)
     try {
       await api(`/api/v1/agent/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
       setConversations(prev => prev.filter(c => c.id !== id))
       if (activeId === id) handleNew()
     } catch (error) {
-      pushToast("error", errorMessage(error, "刪除對話失敗"))
+      pushToast("error", errorMessage(error, t("agent.deleteConversationFailed")))
     } finally {
       setDeletingId(null)
     }
@@ -639,7 +639,7 @@ export function AgentChatPage() {
       }
 
       const reader = response.body?.getReader()
-      if (!reader) throw new Error("伺服器未返回可讀取的串流")
+      if (!reader) throw new Error(t("agent.streamNotReadable"))
       const decoder = new TextDecoder()
       let buffer = ""
 
@@ -656,13 +656,13 @@ export function AgentChatPage() {
       finalizeTools()
       if (error instanceof DOMException && error.name === "AbortError") {
         setMessages(prev => prev.map(item =>
-          item.id === assistantId && !item.content ? { ...item, content: "已停止生成。" } : item
+          item.id === assistantId && !item.content ? { ...item, content: t("agent.stoppedGenerating") } : item
         ))
       } else {
-        const messageText = errorMessage(error, "未知錯誤")
-        pushToast("error", `請求失敗：${messageText}`)
+        const messageText = errorMessage(error, t("agent.unknownError"))
+        pushToast("error", t("agent.requestFailed", { detail: messageText }))
         setMessages(prev => prev.map(item =>
-          item.id === assistantId ? { ...item, content: item.content || `⚠ 請求失敗：${messageText}` } : item
+          item.id === assistantId ? { ...item, content: item.content || `⚠ ${t("agent.requestFailed", { detail: messageText })}` } : item
         ))
       }
     } finally {
@@ -703,7 +703,7 @@ export function AgentChatPage() {
       })
       setPendingConfirm(null)
     } catch (error) {
-      pushToast("error", errorMessage(error, "確認操作失敗"))
+      pushToast("error", errorMessage(error, t("agent.confirmFailed")))
     } finally {
       setConfirming(false)
     }
@@ -723,17 +723,17 @@ export function AgentChatPage() {
     <div className="agent-chat">
       {/* Tab switcher */}
       <div className="agent-tabs">
-        <button className={`agent-tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>💬 聊天</button>
-        <button className={`agent-tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")}>⚙ 管理中心</button>
+        <button className={`agent-tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>{t("agent.chatTab")}</button>
+        <button className={`agent-tab ${tab === "usage" ? "active" : ""}`} onClick={() => setTab("usage")}>{t("agent.adminTab")}</button>
         <span className={`agent-health-pill ${healthLoading ? "loading" : health?.status ?? "error"}`}>
           <span aria-hidden="true" />
-          {healthLoading ? "檢查模型" : health?.status === "ok" ? health.model : "模型離線"}
+          {healthLoading ? t("agent.checkingModel") : health?.status === "ok" ? health.model : t("agent.modelOffline")}
         </span>
       </div>
 
       {tab === "chat" ? (
       <div className="agent-chat-body">
-      {mobileSidebarOpen && <button className="agent-sidebar-backdrop" aria-label="關閉對話歷史" onClick={() => setMobileSidebarOpen(false)} />}
+      {mobileSidebarOpen && <button className="agent-sidebar-backdrop" aria-label={t("agent.closeHistory")} onClick={() => setMobileSidebarOpen(false)} />}
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -752,48 +752,49 @@ export function AgentChatPage() {
         offset={conversationOffset}
         limit={50}
         onPage={loadConversations}
+        t={t}
       />
 
       {/* Main chat area */}
       <div className="agent-main">
         <div className="agent-mobile-toolbar">
-          <button type="button" onClick={() => setMobileSidebarOpen(true)}>☰ 對話歷史</button>
-          <button type="button" onClick={handleNew} disabled={streaming}>＋ 新建對話</button>
+          <button type="button" onClick={() => setMobileSidebarOpen(true)}>{t("agent.mobileHistory")}</button>
+          <button type="button" onClick={handleNew} disabled={streaming}>{t("agent.newConversation")}</button>
         </div>
 
         {!healthLoading && health?.status === "error" && (
           <div className="agent-health-banner" role="alert">
             <div>
-              <strong>模型服務目前不可用</strong>
+              <strong>{t("agent.modelUnavailable")}</strong>
               <span>{health.message}</span>
             </div>
-            <button type="button" onClick={checkHealth} disabled={healthLoading}>重新檢查</button>
+            <button type="button" onClick={checkHealth} disabled={healthLoading}>{t("agent.recheck")}</button>
           </div>
         )}
 
         {/* Messages */}
         <div className="agent-messages">
-          {messagesLoading && <div className="agent-page-state">載入對話中...</div>}
+          {messagesLoading && <div className="agent-page-state">{t("agent.loadingConversation")}</div>}
           {!messagesLoading && messagesError && (
             <div className="agent-page-state agent-page-error">
               <span>{messagesError}</span>
-              {activeId && <button type="button" onClick={() => loadMessages(activeId)}>重試</button>}
+              {activeId && <button type="button" onClick={() => loadMessages(activeId)}>{t("agent.retry")}</button>}
             </div>
           )}
           {!messagesLoading && !messagesError && !activeId && messages.length === 0 && (
             <div className="agent-empty">
               <div className="agent-empty-icon">🤖</div>
-              <h3>AI 助手</h3>
-              <p>我可以幫您查看主機、服務、告警等 OPS 資源</p>
+              <h3>{t("agent.aiAssistant")}</h3>
+              <p>{t("agent.aiAssistantDesc")}</p>
               <div className="agent-suggestions">
-                {SUGGESTIONS.map(s => (
+                {SUGGESTIONS_KEY.map(k => (
                   <button
-                    key={s}
+                    key={k}
                     className="agent-suggestion"
                     disabled={streaming || health?.status !== "ok"}
-                    onClick={() => handleSend(s)}
+                    onClick={() => handleSend(t(`agent.${k}`))}
                   >
-                    {s}
+                    {t(`agent.${k}`)}
                   </button>
                 ))}
               </div>
@@ -807,14 +808,14 @@ export function AgentChatPage() {
               disabled={loadingOlderMessages || messages.length === 0}
               onClick={() => loadMessages(activeId, messages[0]?.id)}
             >
-              {loadingOlderMessages ? "載入較早訊息中…" : "載入較早訊息"}
+              {loadingOlderMessages ? t("agent.loadingOlderMessages") : t("agent.loadOlderMessages")}
             </button>
           )}
 
           {!messagesLoading && messages.map(msg =>
             msg.role === "assistant" && !msg.content && streaming
               ? null
-              : <MessageBubble key={msg.id} msg={msg} />
+              : <MessageBubble key={msg.id} msg={msg} t={t} />
           )}
 
           {/* Tool execution cards (SSE event bus) */}
@@ -843,7 +844,7 @@ export function AgentChatPage() {
               )}
               {card.status === "done" && card.result && (
                 <details className="agent-tool-details" open>
-                  <summary>完整工具回傳</summary>
+                  <summary>{t("agent.fullToolResult")}</summary>
                   <pre className="agent-tool-exec-result">{card.result}</pre>
                 </details>
               )}
@@ -856,7 +857,7 @@ export function AgentChatPage() {
               <div className="agent-thinking-dots">
                 <span>.</span><span>.</span><span>.</span>
               </div>
-              <span className="agent-thinking-text">正在思考</span>
+              <span className="agent-thinking-text">{t("agent.thinking")}</span>
             </div>
           )}
 
@@ -869,23 +870,23 @@ export function AgentChatPage() {
             <div className="agent-confirm-card">
               <div className="agent-confirm-header">
                 <span className="agent-confirm-icon">⚠️</span>
-                <span className="agent-confirm-title">需要確認操作</span>
+                <span className="agent-confirm-title">{t("agent.confirmAction")}</span>
               </div>
               <div className="agent-confirm-body">
                 <div className="agent-confirm-tool">
-                  <strong>工具:</strong> {pendingConfirm.name}
+                  <strong>{t("agent.tool")}:</strong> {pendingConfirm.name}
                 </div>
                 <div className="agent-confirm-params">
-                  <strong>參數:</strong>
+                  <strong>{t("agent.params")}:</strong>
                   <pre>{JSON.stringify(pendingConfirm.parameters, null, 2)}</pre>
                 </div>
                 <div className={`agent-confirm-risk agent-confirm-risk-${pendingConfirm.level ?? "exec"}`}>
-                  {pendingConfirm.level === "exec" && "🔴 高風險 — 執行類操作"}
-                  {pendingConfirm.level === "write" && "🟡 中風險 — 寫入類操作"}
-                  {pendingConfirm.level === "read" && "🟢 低風險 — 讀取類操作"}
+                  {pendingConfirm.level === "exec" && t("agent.riskHigh")}
+                  {pendingConfirm.level === "write" && t("agent.riskMedium")}
+                  {pendingConfirm.level === "read" && t("agent.riskLow")}
                 </div>
                 <div className="agent-confirm-warning">
-                  ⚡ 此操作可能影響系統運行，請確認後繼續
+                  {t("agent.confirmWarning")}
                 </div>
               </div>
               <div className="agent-confirm-actions">
@@ -894,14 +895,14 @@ export function AgentChatPage() {
                   onClick={() => handleConfirmTool(false)}
                   disabled={confirming}
                 >
-                  ✕ 取消
+                  {t("agent.cancel")}
                 </button>
                 <button
                   className="btn btn-danger"
                   onClick={() => handleConfirmTool(true)}
                   disabled={confirming}
                 >
-                  ✓ {confirming ? "執行中..." : "確認執行"}
+                  ✓ {confirming ? t("agent.executing") : t("agent.confirmExecute")}
                 </button>
               </div>
             </div>
@@ -918,7 +919,7 @@ export function AgentChatPage() {
                 {toast.type === "info" && "ℹ️"}
               </span>
               <span className="agent-toast-message">{toast.message}</span>
-              <button type="button" aria-label="關閉通知" onClick={() => setToasts(prev => prev.filter(item => item.id !== toast.id))}>×</button>
+              <button type="button" aria-label={t("agent.closeToast")} onClick={() => setToasts(prev => prev.filter(item => item.id !== toast.id))}>×</button>
             </div>
           ))}
         </div>
@@ -929,7 +930,7 @@ export function AgentChatPage() {
             <textarea
               ref={textareaRef}
               className="agent-input-textarea"
-              placeholder="輸入訊息... (Enter 發送, Shift+Enter 換行)"
+              placeholder={t("agent.inputPlaceholder")}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -938,7 +939,7 @@ export function AgentChatPage() {
               rows={1}
             />
             {streaming ? (
-              <button className="agent-stop-btn" onClick={handleStop} title="停止">
+              <button className="agent-stop-btn" onClick={handleStop} title={t("agent.stop")}>
                 ■
               </button>
             ) : (
@@ -946,7 +947,7 @@ export function AgentChatPage() {
                 className="agent-send-btn"
                 onClick={() => handleSend()}
                 disabled={!input.trim() || healthLoading || health?.status !== "ok"}
-                title="發送"
+                title={t("agent.send")}
               >
                 ▶
               </button>
@@ -996,6 +997,7 @@ function fmtTokens(n: number): string {
 }
 
 function AgentUsagePanel() {
+  const { t } = useTranslation()
   const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
@@ -1008,7 +1010,7 @@ function AgentUsagePanel() {
     setError("")
     api<UsageData>(`/api/v1/agent/usage?period=${p}&limit=25&offset=${offset}`)
       .then(r => setData(r))
-      .catch(error => setError(errorMessage(error, "載入用量統計失敗")))
+      .catch(error => setError(errorMessage(error, t("agent.loadUsageFailed"))))
       .finally(() => setLoading(false))
   }, [])
 
@@ -1020,22 +1022,22 @@ function AgentUsagePanel() {
     <div className="usage-panel">
       {/* Sub-tab switcher */}
       <div className="usage-sub-tabs">
-        <button className={`usage-sub-tab ${subTab === "usage" ? "active" : ""}`} onClick={() => setSubTab("usage")}>📊 用量統計</button>
-        <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>🧠 記憶管理</button>
-        <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>🔍 系統檢查</button>
+        <button className={`usage-sub-tab ${subTab === "usage" ? "active" : ""}`} onClick={() => setSubTab("usage")}>{t("agent.usageStats")}</button>
+        <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>{t("agent.memoryManagement")}</button>
+        <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>{t("agent.systemInspect")}</button>
       </div>
 
       {subTab === "usage" ? loading ? (
-        <div className="usage-empty">載入中...</div>
+        <div className="usage-empty">{t("agent.loading")}</div>
       ) : error ? (
         <div className="usage-empty usage-error-state">
           <span>{error}</span>
-          <button type="button" className="btn btn-secondary" onClick={() => load(period, recordsOffset)}>重試</button>
+          <button type="button" className="btn btn-secondary" onClick={() => load(period, recordsOffset)}>{t("agent.retry")}</button>
         </div>
       ) : data ? (
       <div className="usage-content">
       <div className="usage-header">
-        <h3>📊 Token 用量統計</h3>
+        <h3>{t("agent.tokenUsageStats")}</h3>
         <div className="usage-period">
           {(["today", "week", "month", "all"] as const).map(p => (
             <button
@@ -1043,7 +1045,7 @@ function AgentUsagePanel() {
               className={`usage-period-btn ${period === p ? "active" : ""}`}
               onClick={() => setPeriod(p)}
             >
-              {p === "today" ? "今天" : p === "week" ? "近7天" : p === "month" ? "本月" : "全部"}
+              {p === "today" ? t("agent.periodToday") : p === "week" ? t("agent.periodWeek") : p === "month" ? t("agent.periodMonth") : t("agent.periodAll")}
             </button>
           ))}
         </div>
@@ -1053,7 +1055,7 @@ function AgentUsagePanel() {
       <div className="usage-cards">
         <div className="usage-card">
           <div className="usage-card-value">{fmtTokens(data.total_tokens)}</div>
-          <div className="usage-card-label">總 Token 數</div>
+          <div className="usage-card-label">{t("agent.totalTokens")}</div>
         </div>
         <div className="usage-card">
           <div className="usage-card-value">{fmtTokens(data.total_prompt_tokens)}</div>
@@ -1065,18 +1067,18 @@ function AgentUsagePanel() {
         </div>
         <div className="usage-card">
           <div className="usage-card-value">{data.total_requests}</div>
-          <div className="usage-card-label">請求次數</div>
+          <div className="usage-card-label">{t("agent.requestCount")}</div>
         </div>
         <div className="usage-card">
           <div className="usage-card-value">{data.total_tool_calls}</div>
-          <div className="usage-card-label">工具調用次數</div>
+          <div className="usage-card-label">{t("agent.toolCallCount")}</div>
         </div>
       </div>
 
       {/* Daily chart */}
       {data.daily.length > 0 && (
         <div className="usage-chart">
-          <h4>每日用量</h4>
+          <h4>{t("agent.dailyUsage")}</h4>
           <div className="usage-bars">
             {[...data.daily].reverse().map(d => (
               <div key={d.date} className="usage-bar-group" title={`${d.date}: ${d.total_tokens} tokens, ${d.requests} requests`}>
@@ -1094,14 +1096,14 @@ function AgentUsagePanel() {
       {/* User breakdown (admin only) */}
       {Object.keys(data.user_breakdown).length > 0 && (
         <div className="usage-user-breakdown">
-          <h4>用戶明細</h4>
+          <h4>{t("agent.userBreakdown")}</h4>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>用戶</th>
-                <th>Token 數</th>
-                <th>請求次數</th>
-                <th>工具調用</th>
+                <th>{t("agent.user")}</th>
+                <th>{t("agent.tokenCount")}</th>
+                <th>{t("agent.requestCountTable")}</th>
+                <th>{t("agent.toolCalls")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1121,15 +1123,15 @@ function AgentUsagePanel() {
       {/* Recent records */}
       {data.records.length > 0 && (
         <div className="usage-records">
-          <h4>最近記錄</h4>
+          <h4>{t("agent.recentRecords")}</h4>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>時間</th>
-                <th>用戶</th>
-                <th>模型</th>
-                <th>Token</th>
-                <th>工具調用</th>
+                <th>{t("agent.time")}</th>
+                <th>{t("agent.user")}</th>
+                <th>{t("agent.model")}</th>
+                <th>{t("agent.token")}</th>
+                <th>{t("agent.toolCalls")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1153,7 +1155,7 @@ function AgentUsagePanel() {
         </div>
       )}
       </div>) : (
-        <div className="usage-empty">暫無用量數據</div>
+        <div className="usage-empty">{t("agent.noUsageData")}</div>
       ) : (subTab === "memories" ? <AgentMemoryPanel /> : <AgentInspectPanel />)}
     </div>
   )
@@ -1171,6 +1173,7 @@ type MemoryItem = {
 }
 
 function AgentMemoryPanel() {
+  const { t } = useTranslation()
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -1195,7 +1198,7 @@ function AgentMemoryPanel() {
     const qs = params.toString()
     api<{ memories: MemoryItem[]; total: number }>(`/api/v1/agent/memories${qs ? "?" + qs : ""}`)
       .then(r => { setMemories(r.memories); setTotal(r.total); setOffset(pageOffset) })
-      .catch(error => setError(errorMessage(error, "載入記憶失敗")))
+      .catch(error => setError(errorMessage(error, t("agent.loadMemoryFailed"))))
       .finally(() => setLoading(false))
   }, [])
 
@@ -1219,7 +1222,7 @@ function AgentMemoryPanel() {
       setNewValue("")
       load(searchQuery || undefined, filterCategory || undefined, 0)
     } catch (error) {
-      setError(errorMessage(error, "儲存記憶失敗"))
+      setError(errorMessage(error, t("agent.saveMemoryFailed")))
     } finally {
       setSaving(false)
     }
@@ -1227,17 +1230,17 @@ function AgentMemoryPanel() {
 
   const handleDelete = async (id: number) => {
     const memory = memories.find(item => item.id === id)
-    if (!window.confirm(`刪除記憶「${memory?.key ?? id}」？`)) return
+    if (!window.confirm(t("agent.deleteConversationConfirm", { title: memory?.key ?? String(id) }))) return
     setError("")
     try {
       await api(`/api/v1/agent/memories/${id}`, { method: "DELETE" })
       setMemories(prev => prev.filter(item => item.id !== id))
     } catch (error) {
-      setError(errorMessage(error, "刪除記憶失敗"))
+      setError(errorMessage(error, t("agent.deleteMemoryFailed")))
     }
   }
 
-  if (loading) return <div className="usage-empty">載入中...</div>
+  if (loading) return <div className="usage-empty">{t("agent.loading")}</div>
 
   // Group by category
   const groups: Record<string, MemoryItem[]> = {}
@@ -1249,8 +1252,8 @@ function AgentMemoryPanel() {
   return (
     <div className="memory-panel">
       <div className="memory-header">
-        <h3>🧠 記憶管理</h3>
-        <p className="memory-desc">Agent 的跨對話記憶 — 重要事實會自動保留到下次對話</p>
+        <h3>{t("agent.memoryTitle")}</h3>
+        <p className="memory-desc">{t("agent.memoryDesc")}</p>
       </div>
 
       {error && <div className="memory-error" role="alert">⚠ {error}</div>}
@@ -1259,50 +1262,50 @@ function AgentMemoryPanel() {
       <div className="memory-add" style={{ marginBottom: 8 }}>
         <input
           className="memory-input"
-          placeholder="搜索記憶..."
+          placeholder={t("agent.searchMemory")}
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSearch()}
         />
         <select className="memory-select" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); load(searchQuery || undefined, e.target.value || undefined, 0); }}>
-          <option value="">全部分類</option>
-          <option value="user">用戶</option>
-          <option value="environment">環境</option>
-          <option value="procedure">流程</option>
-          <option value="preference">偏好</option>
+          <option value="">{t("agent.allCategories")}</option>
+          <option value="user">{t("agent.catUser")}</option>
+          <option value="environment">{t("agent.catEnvironment")}</option>
+          <option value="procedure">{t("agent.catProcedure")}</option>
+          <option value="preference">{t("agent.catPreference")}</option>
         </select>
-        <button className="memory-add-btn" onClick={handleSearch}>🔍 搜索</button>
-        <button className="memory-add-btn" onClick={() => { setSearchQuery(""); setFilterCategory(""); load(undefined, undefined, 0); }} style={{ opacity: 0.7 }}>重置</button>
+        <button className="memory-add-btn" onClick={handleSearch}>{t("agent.search")}</button>
+        <button className="memory-add-btn" onClick={() => { setSearchQuery(""); setFilterCategory(""); load(undefined, undefined, 0); }} style={{ opacity: 0.7 }}>{t("agent.reset")}</button>
       </div>
 
       {/* Add new memory */}
       <div className="memory-add">
         <input
           className="memory-input"
-          placeholder="鍵（如：preferred_language）"
+          placeholder={t("agent.addMemoryKeyPlaceholder")}
           value={newKey}
           onChange={e => setNewKey(e.target.value)}
         />
         <select className="memory-select" value={newCategory} onChange={e => setNewCategory(e.target.value)}>
-          <option value="user">用戶</option>
-          <option value="environment">環境</option>
-          <option value="procedure">流程</option>
-          <option value="preference">偏好</option>
+          <option value="user">{t("agent.catUser")}</option>
+          <option value="environment">{t("agent.catEnvironment")}</option>
+          <option value="procedure">{t("agent.catProcedure")}</option>
+          <option value="preference">{t("agent.catPreference")}</option>
         </select>
         <input
           className="memory-input"
-          placeholder="值（如：繁體中文）"
+          placeholder={t("agent.addMemoryValuePlaceholder")}
           value={newValue}
           onChange={e => setNewValue(e.target.value)}
         />
         <button className="memory-add-btn" onClick={handleSave} disabled={saving || !newKey.trim() || !newValue.trim()}>
-          {saving ? "儲存中..." : "＋ 新增"}
+          {saving ? t("agent.saving") : t("agent.addMemory")}
         </button>
       </div>
 
       {/* Memory list */}
       {Object.keys(groups).length === 0 ? (
-        <div className="memory-empty">暫無記憶 — Agent 會在對話中自動學習並記憶重要資訊</div>
+        <div className="memory-empty">{t("agent.noMemory")}</div>
       ) : (
         Object.entries(groups).map(([cat, items]) => (
           <div key={cat} className="memory-group">
@@ -1314,7 +1317,7 @@ function AgentMemoryPanel() {
                     <span className="memory-key">{m.key}</span>
                     <span className="memory-value">{m.value}</span>
                   </div>
-                  <button className="memory-delete-btn" title={`刪除 ${m.key}`} aria-label={`刪除記憶 ${m.key}`} onClick={() => handleDelete(m.id)}>×</button>
+                  <button className="memory-delete-btn" title={t("agent.deleteMemoryItem", { key: m.key })} aria-label={t("agent.deleteMemoryItem", { key: m.key })} onClick={() => handleDelete(m.id)}>×</button>
                 </div>
               ))}
             </div>
@@ -1347,6 +1350,7 @@ type InspectReport = {
 }
 
 function AgentInspectPanel() {
+  const { t } = useTranslation()
   const [report, setReport] = useState<InspectReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -1361,7 +1365,7 @@ function AgentInspectPanel() {
       body: JSON.stringify({ create_notes: createNotes }),
     })
       .then(r => { setReport(r); setError("") })
-      .catch(error => { setError(errorMessage(error, "檢查失敗")) })
+      .catch(error => { setError(errorMessage(error, t("agent.inspectFailed"))) })
       .finally(() => setLoading(false))
   }, [createNotes])
 
@@ -1382,28 +1386,28 @@ function AgentInspectPanel() {
   return (
     <div className="usage-content">
       <div className="usage-header">
-        <h3>🔍 系統健康檢查</h3>
+        <h3>{t("agent.inspectTitle")}</h3>
         <div className="inspect-actions">
           <label>
             <input type="checkbox" checked={createNotes} onChange={event => setCreateNotes(event.target.checked)} disabled={loading} />
-            為高風險問題建立筆記
+            {t("agent.createNotesForIssues")}
           </label>
           <button className="btn btn-secondary" onClick={runInspect} disabled={loading}>
-            {loading ? "檢查中..." : report ? "🔄 重新檢查" : "開始檢查"}
+            {loading ? t("agent.inspecting") : report ? t("agent.reinspect") : t("agent.startInspect")}
           </button>
         </div>
       </div>
 
       {error && <div style={{ padding: "12px", background: "#fef2f2", color: "#dc2626", borderRadius: "6px", marginBottom: "12px" }}>⚠ {error}</div>}
 
-      {loading && !report && <div className="usage-empty">系統檢查中...</div>}
+      {loading && !report && <div className="usage-empty">{t("agent.inspectingSystem")}</div>}
 
       {!loading && !report && !error && (
         <div className="inspect-empty">
           <span>🔍</span>
-          <strong>尚未執行系統檢查</strong>
-          <p>將收集主機、服務與告警狀態，並交由 Agent 分析；預設不會修改任何資料。</p>
-          <button className="btn btn-primary" onClick={runInspect}>開始檢查</button>
+          <strong>{t("agent.noInspectYet")}</strong>
+          <p>{t("agent.noInspectDesc")}</p>
+          <button className="btn btn-primary" onClick={runInspect}>{t("agent.startInspect")}</button>
         </div>
       )}
 
@@ -1411,24 +1415,24 @@ function AgentInspectPanel() {
         <>
           {/* Summary */}
           <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "6px", marginBottom: "12px" }}>
-            <strong>📋 總結</strong>
-            <p style={{ margin: "8px 0 0" }}>{report.summary || "檢查完成"}</p>
+            <strong>{t("agent.summary")}</strong>
+            <p style={{ margin: "8px 0 0" }}>{report.summary || t("agent.inspectComplete")}</p>
             {report.notes_created.length > 0 && (
-              <p style={{ margin: "4px 0 0", color: "#dc2626" }}>📝 自動創建了 {report.notes_created.length} 筆筆記</p>
+              <p style={{ margin: "4px 0 0", color: "#dc2626" }}>📝 {t("agent.notesCreated", { count: report.notes_created.length })}</p>
             )}
-            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#888" }}>檢查時間: {new Date(report.timestamp).toLocaleString('zh-TW')}</p>
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#888" }}>{t("agent.inspectTime")}: {new Date(report.timestamp).toLocaleString('zh-TW')}</p>
           </div>
 
           {/* Hosts */}
           <div style={{ marginBottom: "12px" }}>
-            <h4 style={{ margin: "0 0 8px" }}>🖥️ 主機監控 ({report.hosts.length})</h4>
+            <h4 style={{ margin: "0 0 8px" }}>{t("agent.hostMonitoring", { count: report.hosts.length })}</h4>
             {report.hosts.map(h => (
               <div key={h.asset_id} style={{ padding: "8px", background: "#f9fafb", borderRadius: "6px", marginBottom: "4px" }}>
                 <strong>{h.name}</strong>
                 <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
                   <span style={{ color: pctColor(h.cpu_percent) }}>CPU {h.cpu_percent ?? '?'}%</span>
-                  <span style={{ color: pctColor(h.mem_percent) }}>記憶體 {h.mem_percent ?? '?'}%</span>
-                  <span style={{ color: pctColor(h.disk_percent) }}>磁碟 {h.disk_percent ?? '?'}%</span>
+                  <span style={{ color: pctColor(h.mem_percent) }}>{t("agent.memory")}: {h.mem_percent ?? '?'}%</span>
+                  <span style={{ color: pctColor(h.disk_percent) }}>{t("agent.disk")}: {h.disk_percent ?? '?'}%</span>
                 </div>
               </div>
             ))}
@@ -1436,7 +1440,7 @@ function AgentInspectPanel() {
 
           {/* Services */}
           <div style={{ marginBottom: "12px" }}>
-            <h4 style={{ margin: "0 0 8px" }}>⚙️ 服務 ({report.services.length} 台主機)</h4>
+            <h4 style={{ margin: "0 0 8px" }}>{t("agent.services", { count: report.services.length })}</h4>
             {report.services.map(s => (
               <div key={s.asset_id} style={{ padding: "8px", background: "#f9fafb", borderRadius: "6px", marginBottom: "4px" }}>
                 <strong>{s.name}</strong>
@@ -1456,7 +1460,7 @@ function AgentInspectPanel() {
           {/* Alerts */}
           {report.alerts.length > 0 && (
             <div style={{ marginBottom: "12px" }}>
-              <h4 style={{ margin: "0 0 8px" }}>🚨 未確認告警 ({report.alerts.length})</h4>
+              <h4 style={{ margin: "0 0 8px" }}>{t("agent.unacknowledgedAlerts", { count: report.alerts.length })}</h4>
               {report.alerts.map(a => (
                 <div key={a.id} style={{ padding: "8px", background: "#fef2f2", borderRadius: "6px", marginBottom: "4px", borderLeft: `3px solid ${severityColor(a.severity)}` }}>
                   <span style={{ fontWeight: "bold", color: severityColor(a.severity) }}>[{a.severity}]</span> {a.message}
@@ -1469,7 +1473,7 @@ function AgentInspectPanel() {
           {/* Issues */}
           {report.issues.length > 0 && (
             <div>
-              <h4 style={{ margin: "0 0 8px" }}>⚠️ LLM 發現問題 ({report.issues.length})</h4>
+              <h4 style={{ margin: "0 0 8px" }}>{t("agent.llmDetectedIssues", { count: report.issues.length })}</h4>
               {report.issues.map((issue, i) => (
                 <div key={i} style={{ padding: "8px", background: "#fef3c7", borderRadius: "6px", marginBottom: "4px" }}>
                   ⚠️ {issue}
@@ -1478,7 +1482,7 @@ function AgentInspectPanel() {
             </div>
           )}
           <details className="agent-raw-response">
-            <summary>完整系統與模型回傳資料（JSON）</summary>
+            <summary>{t("agent.fullSystemData")}</summary>
             <pre>{JSON.stringify(report, null, 2)}</pre>
           </details>
         </>

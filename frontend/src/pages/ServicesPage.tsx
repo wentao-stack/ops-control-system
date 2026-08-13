@@ -121,11 +121,13 @@ function SupervisorProcessRow({
   assetId,
   onAction,
   actionLoading,
+  t,
 }: {
   proc: SupervisorProcess
   assetId: string
   onAction: (assetId: string, action: string, process: string) => Promise<void>
   actionLoading: string | null
+  t: (key: string) => string
 }) {
   const [showLogs, setShowLogs] = useState(false)
   const [logSources, setLogSources] = useState<SupervisorLogSource[]>([])
@@ -133,7 +135,7 @@ function SupervisorProcessRow({
   const [loadingLogs, setLoadingLogs] = useState(false)
 
   const statusColor = STATUS_COLORS[proc.status] ?? "#6b7280"
-  const statusLabel = STATUS_LABELS[proc.status] ?? proc.status
+  const statusLabel = t(`services.status.${proc.status.toLowerCase()}`) ?? proc.status
 
   const isLoading = actionLoading === proc.display_name
 
@@ -202,7 +204,7 @@ function SupervisorProcessRow({
                 style={{ fontSize: 11, padding: "2px 8px", background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
                 onClick={() => void onAction(assetId, "restart", proc.display_name)}
                 disabled={isLoading}
-                title="重啟"
+                title={t("services.restart")}
               >
                 ↻
               </button>
@@ -211,7 +213,7 @@ function SupervisorProcessRow({
                 style={{ fontSize: 11, padding: "2px 8px", background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" }}
                 onClick={() => void onAction(assetId, "stop", proc.display_name)}
                 disabled={isLoading}
-                title="停止"
+                title={t("services.stop")}
               >
                 ■
               </button>
@@ -223,7 +225,7 @@ function SupervisorProcessRow({
               style={{ fontSize: 11, padding: "2px 8px", background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }}
               onClick={() => void onAction(assetId, "start", proc.display_name)}
               disabled={isLoading}
-              title="啟動"
+              title={t("services.start")}
             >
               ▶
             </button>
@@ -233,7 +235,7 @@ function SupervisorProcessRow({
             style={{ fontSize: 11, padding: "2px 8px", background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}
             onClick={() => void loadLogs()}
             disabled={loadingLogs}
-            title="查看日誌"
+            title={t("services.viewLogs")}
           >
             {loadingLogs ? "⠋" : "📋"}
           </button>
@@ -296,7 +298,7 @@ function SupervisorProcessRow({
               style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 10 }}
               onClick={() => { setShowLogs(false); setLogSources([]) }}
             >
-              ✕ 關閉
+              ✕ {t("services.close")}
             </button>
           </div>
         </div>
@@ -402,7 +404,7 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
       // Reload after action
       setTimeout(() => { void loadSupervisor(false) }, 1500)
     } catch (e: any) {
-      setActionFeedback({ msg: `${process} → ${action} 失敗: ${e.message}`, ok: false })
+      setActionFeedback({ msg: `${process} → ${action} ${t("services.failed")}: ${e.message}`, ok: false })
     } finally {
       setActionLoading(null)
     }
@@ -420,8 +422,8 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
     <>
       <div className="page-header">
         <div>
-          <h1>服務總覽</h1>
-          <p>遠程主機{t("services.detect")}與 Supervisor {t("services.supervisor")}</p>
+          <h1>{t("services.title")}</h1>
+          <p>{t("services.subtitle")}</p>
         </div>
       </div>
 
@@ -482,7 +484,7 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { void loadSupervisor(false) }} disabled={supCollecting}>
-              {supCollecting ? "⠋ 載入中..." : "重新載入"}
+              {supCollecting ? `⠋ ${t("common.loading")}` : t("services.reload")}
             </button>
           </div>
 
@@ -493,27 +495,27 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
             }}>
               <div className="stat-card" style={{ flex: 1, minWidth: 0 }}>
                 <div className="stat-value">{supData.length}</div>
-                <div className="stat-label">受管主機</div>
+                <div className="stat-label">{t("services.managedHosts")}</div>
               </div>
               <div className="stat-card" style={{ flex: 1, minWidth: 0 }}>
                 <div className="stat-value" style={{ color: "#16a34a" }}>{supRunning}</div>
-                <div className="stat-label">運行中</div>
+                <div className="stat-label">{t("services.status.running")}</div>
               </div>
               <div className="stat-card" style={{ flex: 1, minWidth: 0 }}>
                 <div className="stat-value" style={{ color: "#dc2626" }}>{supStopped}</div>
-                <div className="stat-label">已停止</div>
+                <div className="stat-label">{t("services.status.stopped")}</div>
               </div>
               <div className="stat-card" style={{ flex: 1, minWidth: 0 }}>
                 <div className="stat-value" style={{ fontSize: 16 }}>{supCollectedAt}</div>
-                <div className="stat-label">最後更新</div>
+                <div className="stat-label">{t("services.lastUpdate")}</div>
               </div>
             </div>
           )}
 
-          {supLoading && <div className="empty">載入中…</div>}
+          {supLoading && <div className="empty">{t("common.loading")}</div>}
 
           {supData.length === 0 && !supLoading && (
-            <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>沒有可管理的遠程主機</p></div></div>
+            <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{t("services.noManagedHosts")}</p></div></div>
           )}
 
           <div style={{ display: "grid", gap: 16 }}>
@@ -530,8 +532,8 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
                     <div>
                       <h2 style={{ margin: 0 }}>{host.name}</h2>
                       <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                        {host.hostname} · {host.processes.length} 個進程
-                        {host.error && ` · 錯誤: ${host.error}`}
+                        {host.hostname} · {host.processes.length} {t("services.processUnit")}
+                        {host.error && ` · ${t("services.error")}: ${host.error}`}
                       </span>
                     </div>
                   </div>
@@ -550,6 +552,7 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
                         assetId={host.asset_id}
                         onAction={handleSupervisorAction}
                         actionLoading={actionLoading}
+                        t={t}
                       />
                     ))
                   )}

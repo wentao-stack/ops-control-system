@@ -1,29 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { api, getToken } from "../auth"
 import { useTranslation } from "react-i18next"
+import i18n from "../i18n"
 import type { ComfyOutputItem, ComfySequence } from "../types"
 
 type ReferenceKey = "first_frame" | "character_ref" | "background_ref"
 
-const REFERENCE_META: Record<ReferenceKey, { icon: string; title: string; hint: string }> = {
-  first_frame: { icon: "▶", title: "首幀圖片", hint: "動畫開始的精確畫面" },
-  character_ref: { icon: "◉", title: "人物參考", hint: "固定臉部、服裝與體型" },
-  background_ref: { icon: "▧", title: "背景參考", hint: "固定場景、構圖與光線" },
+const REFERENCE_META: Record<ReferenceKey, { icon: string; titleKey: string; hintKey: string }> = {
+  first_frame: { icon: "▶", titleKey: "sequence.firstFrameTitle", hintKey: "sequence.firstFrameHint" },
+  character_ref: { icon: "◉", titleKey: "sequence.characterRefTitle", hintKey: "sequence.characterRefHint" },
+  background_ref: { icon: "▧", titleKey: "sequence.backgroundRefTitle", hintKey: "sequence.backgroundRefHint" },
 }
 
-const STATUS: Record<string, string> = {
-  queued: "等待生成",
-  running: "分段生成中",
-  stitching: "正在合併影片",
-  done: "生成完成",
-  error: "生成失敗",
-  cancelled: "已取消",
+const STATUS_KEYS: Record<string, string> = {
+  queued: "sequence.statusQueued",
+  running: "sequence.statusRunning",
+  stitching: "sequence.statusStitching",
+  done: "sequence.statusDone",
+  error: "sequence.statusError",
+  cancelled: "sequence.statusCancelled",
 }
 
-const SCRIPT_EXAMPLE = `全程保持人物、服裝、背景和鏡頭方向一致
-0-5秒：人物從椅子上緩慢起身
-5-10秒：人物走向窗邊，鏡頭平穩跟隨
-10-15秒：人物停下並轉身微笑`
+const SCRIPT_EXAMPLE_KEY = "sequence.scriptExample"
 
 const UPLOAD_TARGET_BYTES = 900 * 1024
 const MAX_REFERENCE_EDGE = 1920
@@ -124,6 +122,7 @@ function ReferenceCard({
   disabled: boolean
   onChange: (file: File | null) => void
 }) {
+  const { t } = useTranslation()
   const meta = REFERENCE_META[kind]
   const [preview, setPreview] = useState<string | null>(null)
 
@@ -145,12 +144,12 @@ function ReferenceCard({
         disabled={disabled}
         onChange={event => onChange(event.target.files?.[0] ?? null)}
       />
-      {preview ? <img src={preview} alt={meta.title} /> : <span className="sequence-ref-icon">{meta.icon}</span>}
+      {preview ? <img src={preview} alt={t(meta.titleKey)} /> : <span className="sequence-ref-icon">{meta.icon}</span>}
       <span className="sequence-ref-overlay">
-        <strong>{meta.title}</strong>
-        <small>{file?.name ?? meta.hint}</small>
+        <strong>{t(meta.titleKey)}</strong>
+        <small>{file?.name ?? t(meta.hintKey)}</small>
       </span>
-      {preview && <span className="sequence-ref-change">更換</span>}
+      {preview && <span className="sequence-ref-change">t("sequence.changeImage")</span>}
     </label>
   )
 }
@@ -169,11 +168,11 @@ function ResultPlayer({ output }: { output: ComfyOutputItem }) {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [output])
-  if (!url) return <div className="sequence-player-loading">正在載入成品…</div>
+  if (!url) return <div className="sequence-player-loading">t("sequence.loadingResult")</div>
   return (
     <div className="sequence-player">
       <video src={url} controls preload="metadata" />
-      <a className="btn btn-primary btn-sm" href={url} download={output.filename}>下載成品</a>
+      <a className="btn btn-primary btn-sm" href={url} download={output.filename}>t("sequence.downloadResult")</a>
     </div>
   )
 }
@@ -186,7 +185,7 @@ export function SequenceStudioPage() {
     character_ref: null,
     background_ref: null,
   })
-  const [title, setTitle] = useState("連續動畫")
+  const [title, setTitle] = useState(t("sequence.defaultTitle"))
   const [prompt, setPrompt] = useState("")
   const [totalSeconds, setTotalSeconds] = useState(30)
   const [segmentSeconds, setSegmentSeconds] = useState(10)
@@ -207,7 +206,7 @@ export function SequenceStudioPage() {
       setSequences(result.sequences)
       setSelectedId(current => current ?? result.sequences[0]?.id ?? null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "讀取任務失敗")
+      setError(err instanceof Error ? err.message : t("sequence.fetchTaskFailed"))
     }
   }, [])
 
@@ -252,30 +251,30 @@ export function SequenceStudioPage() {
       setSequences(current => [sequence, ...current])
       setSelectedId(sequence.id)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "建立任務失敗")
+      setError(err instanceof Error ? err.message : t("sequence.createTaskFailed"))
     } finally {
       setSubmitting(false)
     }
   }
 
   const cancel = async (id: string) => {
-    if (!window.confirm("確定取消這個長動畫任務？目前分段會停止。")) return
+    if (!window.confirm(t("sequence.confirmCancel"))) return
     try {
       await api(`/api/v1/comfyui/sequences/${id}/cancel`, { method: "POST" })
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "取消失敗")
+      setError(err instanceof Error ? err.message : t("sequence.cancelFailed"))
     }
   }
 
   const remove = async (id: string) => {
-    if (!window.confirm("確定永久刪除任務、所有分段與合併成品？")) return
+    if (!window.confirm(t("sequence.confirmDelete"))) return
     try {
       await api(`/api/v1/comfyui/sequences/${id}`, { method: "DELETE" })
       setSelectedId(null)
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "刪除失敗")
+      setError(err instanceof Error ? err.message : t("sequence.deleteFailed"))
     }
   }
 
@@ -284,11 +283,11 @@ export function SequenceStudioPage() {
       <section className="sequence-hero">
         <div>
           <span className="sequence-eyebrow">CONTINUITY STUDIO</span>
-          <h1>動畫連續生成</h1>
-          <p>提供三張參考圖與生成時長，人物、場景和前後畫面由系統自動保持連續。</p>
+          <h1>{t("sequence.title")}</h1>
+          <p>{t("sequence.subtitle")}</p>
         </div>
         <div className="sequence-flow-mini">
-          <span>首幀</span><b>→</b><span>生成</span><b>→</b><span>末幀接力</span><b>→</b><span>合併</span>
+          <span>{t("sequence.firstFrame")}</span><b>→</b><span>{t("sequence.generate")}</span><b>→</b><span>{t("sequence.lastFrameRelay")}</span><b>→</b><span>{t("sequence.merge")}</span>
         </div>
       </section>
 
@@ -297,8 +296,8 @@ export function SequenceStudioPage() {
       <div className="sequence-grid">
         <section className="sequence-creator">
           <div className="sequence-section-head">
-            <div><span>01</span><h2>鎖定視覺參考</h2></div>
-            <small>推薦相同寬高比 · 上傳前自動優化至 900KB 內</small>
+            <div><span>01</span><h2>{t("sequence.lockVisualRef")}</h2></div>
+            <small>t("sequence.refHint")</small>
           </div>
           <div className="sequence-reference-grid">
             {(Object.keys(REFERENCE_META) as ReferenceKey[]).map(kind => (
@@ -313,29 +312,29 @@ export function SequenceStudioPage() {
           </div>
 
           <div className="sequence-section-head sequence-step-two">
-            <div><span>02</span><h2>設定動畫腳本</h2></div>
+            <div><span>02</span><h2>{t("sequence.setAnimationScript")}</h2></div>
           </div>
           <div className="sequence-fields">
             <label className="sequence-field sequence-field-title">
-              <span>作品名稱</span>
+              <span>{t("sequence.workTitle")}</span>
               <input value={title} maxLength={200} onChange={event => setTitle(event.target.value)} />
             </label>
             <label className="sequence-field sequence-field-prompt">
-              <span>時間腳本 / 動作提示詞</span>
+              <span>{t("sequence.timelinePrompt")}</span>
               <textarea
                 value={prompt}
                 onChange={event => setPrompt(event.target.value)}
-                placeholder={SCRIPT_EXAMPLE}
+                placeholder={t(SCRIPT_EXAMPLE_KEY)}
                 rows={6}
               />
               <div className="sequence-prompt-guide">
-                <span>支援「0-5秒」「5s-10s」「00:10-00:15」；未寫時間的內容套用到整部動畫。</span>
-                <button type="button" onClick={() => setPrompt(SCRIPT_EXAMPLE)}>插入範例</button>
+                <span>t("sequence.promptGuide")</span>
+                <button type="button" onClick={() => setPrompt(t(SCRIPT_EXAMPLE_KEY))}>{t("sequence.insertExample")}</button>
               </div>
             </label>
             {parsedTimeline.length > 0 && (
               <div className="sequence-script-preview">
-                <div className="sequence-script-preview-head"><strong>已識別 {parsedTimeline.length} 個時間動作</strong><span>系統將自動分配到 {segments} 個生成片段</span></div>
+                <div className="sequence-script-preview-head"><strong>{t("sequence.parsedActions")} {parsedTimeline.length}</strong><span>{t("sequence.autoDistribute")} {segments}</span></div>
                 <div>
                   {parsedTimeline.map((cue, index) => <span key={`${cue.time}-${index}`}><b>{cue.time}</b><em>{cue.action}</em></span>)}
                 </div>
@@ -343,7 +342,7 @@ export function SequenceStudioPage() {
             )}
             <div className="sequence-settings-row">
               <label className="sequence-field">
-                <span>生成時長（整數）</span>
+                <span>{t("sequence.duration")}</span>
                 <div className="sequence-input-unit">
                   <input
                     type="number"
@@ -355,13 +354,13 @@ export function SequenceStudioPage() {
                     onKeyDown={event => [".", "e", "E", "+", "-"].includes(event.key) && event.preventDefault()}
                     onChange={event => setTotalSeconds(Math.max(5, Math.min(300, Math.trunc(Number(event.target.value) || 5))))}
                   />
-                  <b>秒</b>
+                  <b>{t("sequence.seconds")}</b>
                 </div>
-                <small>可輸入 5–300 秒，只接受整數。</small>
+                <small>t("sequence.durationHint")</small>
               </label>
               <div className="sequence-field">
-                <span>效能策略</span>
-                <div className="sequence-strategy-options" role="group" aria-label="單段生成時長">
+                <span>{t("sequence.strategy")}</span>
+                <div className="sequence-strategy-options" role="group" aria-label={t("sequence.segmentDuration")}>
                   {[5, 10, 15].map(seconds => (
                     <button
                       key={seconds}
@@ -370,43 +369,43 @@ export function SequenceStudioPage() {
                       onClick={() => setSegmentSeconds(seconds)}
                     >
                       <strong>{seconds}s</strong>
-                      <small>{seconds === 5 ? "最穩定" : seconds === 10 ? "均衡" : "少分段"}</small>
+                      <small>{seconds === 5 ? t("sequence.mostStable") : seconds === 10 ? t("sequence.balanced") : t("sequence.fewestSegments")}</small>
                     </button>
                   ))}
                 </div>
-                <small>5 秒一致性較好；10 秒速度與穩定性均衡；15 秒分段最少。</small>
+                <small>t("sequence.strategyHint")</small>
               </div>
               <label className="sequence-field">
-                <span>隨機種子</span>
+                <span>{t("sequence.seed")}</span>
                 <input type="number" value={seed} onChange={event => setSeed(Number(event.target.value))} />
-                <small>-1 會隨機一次，所有分段共用同一種子。</small>
+                <small>t("sequence.seedHint")</small>
               </label>
             </div>
             <div className="sequence-duration-presets">
-              <span>快速選擇</span>
-              {[15, 30, 60, 120].map(seconds => <button key={seconds} type="button" className={totalSeconds === seconds ? "active" : ""} onClick={() => setTotalSeconds(seconds)}>{seconds} 秒</button>)}
+              <span>{t("sequence.quickSelect")}</span>
+              {[15, 30, 60, 120].map(seconds => <button key={seconds} type="button" className={totalSeconds === seconds ? "active" : ""} onClick={() => setTotalSeconds(seconds)}>{seconds} {t("sequence.sec")}</button>)}
             </div>
           </div>
 
           <div className="sequence-submit-bar">
-            <div><strong>{segments}</strong><span>個分段 · 864×480 · 24 FPS</span></div>
+            <div><strong>{segments}</strong><span>{t("sequence.segmentInfo")}</span></div>
             <button className="btn btn-primary sequence-generate" disabled={!ready} onClick={createSequence}>
-              {submitting ? "上傳並建立中…" : "開始生成動畫"}
+              {submitting ? t("sequence.submitting") : t("sequence.startGenerate")}
             </button>
           </div>
         </section>
 
         <aside className="sequence-monitor">
           <div className="sequence-monitor-head">
-            <div><span>LIVE QUEUE</span><h2>製作進度</h2></div>
-            <button className="comfy-icon-btn" onClick={refresh} title="重新整理">↻</button>
+            <div><span>LIVE QUEUE</span><h2>{t("sequence.productionProgress")}</h2></div>
+            <button className="comfy-icon-btn" onClick={refresh} title={t("sequence.refresh")}>↻</button>
           </div>
 
           {selected ? (
             <div className="sequence-active">
               <div className="sequence-active-title">
                 <div><strong>{selected.title}</strong><small>{new Date(selected.created_at).toLocaleString("zh-TW")}</small></div>
-                <span className={`sequence-status is-${selected.status}`}>{STATUS[selected.status] ?? selected.status}</span>
+                <span className={`sequence-status is-${selected.status}`}>{t(STATUS_KEYS[selected.status] ?? selected.status)}</span>
               </div>
               {selected.final_output ? (
                 <ResultPlayer output={selected.final_output} />
@@ -416,8 +415,8 @@ export function SequenceStudioPage() {
                     <span>{selected.progress}%</span>
                   </div>
                   <div>
-                    <strong>{selected.status === "stitching" ? "合併所有影片" : `生成第 ${Math.max(1, selected.current_segment)} / ${selected.total_segments} 段`}</strong>
-                    <small>完成的分段會立即擷取末幀並傳給下一段</small>
+                    <strong>{selected.status === "stitching" ? t("sequence.mergingAll") : t("sequence.generatingSegment", { current: Math.max(1, selected.current_segment), total: selected.total_segments })}</strong>
+                    <small>t("sequence.segmentNote")</small>
                   </div>
                 </div>
               )}
@@ -427,25 +426,25 @@ export function SequenceStudioPage() {
                   const number = index + 1
                   const done = selected.segments.some(segment => segment.index === number)
                   const current = selected.current_segment === number && selected.status === "running"
-                  return <div key={number} className={`${done ? "done" : ""} ${current ? "current" : ""}`}><i>{done ? "✓" : number}</i><span>分段 {number}</span></div>
+                  return <div key={number} className={`${done ? "done" : ""} ${current ? "current" : ""}`}><i>{done ? "✓" : number}</i><span>{t("sequence.segment", { number })}</span></div>
                 })}
-                <div className={selected.status === "done" ? "done" : selected.status === "stitching" ? "current" : ""}><i>{selected.status === "done" ? "✓" : "∞"}</i><span>成片</span></div>
+                <div className={selected.status === "done" ? "done" : selected.status === "stitching" ? "current" : ""}><i>{selected.status === "done" ? "✓" : "∞"}</i><span>{t("sequence.finalVideo")}</span></div>
               </div>
               {selected.error && <div className="sequence-job-error">{selected.error}</div>}
               <div className="sequence-job-actions">
-                {["queued", "running", "stitching"].includes(selected.status) && <button className="btn btn-sm" onClick={() => cancel(selected.id)}>取消任務</button>}
-                {!(["queued", "running", "stitching"].includes(selected.status)) && <button className="btn btn-sm btn-danger" onClick={() => remove(selected.id)}>刪除任務與作品</button>}
+                {["queued", "running", "stitching"].includes(selected.status) && <button className="btn btn-sm" onClick={() => cancel(selected.id)}>t("sequence.cancelTask")</button>}
+                {!(["queued", "running", "stitching"].includes(selected.status)) && <button className="btn btn-sm btn-danger" onClick={() => remove(selected.id)}>t("sequence.deleteTaskAndOutputs")</button>}
               </div>
             </div>
-          ) : <div className="sequence-empty"><span>◇</span><strong>尚無長動畫任務</strong><small>設定左側參數後開始第一個作品</small></div>}
+          ) : <div className="sequence-empty"><span>◇</span><strong>{t("sequence.noLongAnimationTask")}</strong><small>{t("sequence.noTaskHint")}</small></div>}
 
           {sequences.length > 1 && (
             <div className="sequence-history">
-              <h3>最近任務</h3>
+              <h3>{t("sequence.recentTasks")}</h3>
               {sequences.map(item => (
                 <button key={item.id} className={item.id === selected?.id ? "active" : ""} onClick={() => setSelectedId(item.id)}>
-                  <span><strong>{item.title}</strong><small>{item.total_seconds}s · {item.total_segments} 段</small></span>
-                  <em>{STATUS[item.status] ?? item.status}</em>
+                  <span><strong>{item.title}</strong><small>{item.total_seconds}s · {t("sequence.totalSegments")} {item.total_segments}</small></span>
+                  <em>{t(STATUS_KEYS[item.status] ?? item.status)}</em>
                 </button>
               ))}
             </div>

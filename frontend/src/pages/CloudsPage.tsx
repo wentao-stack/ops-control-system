@@ -421,7 +421,7 @@ export function CloudsPage() {
                   {loading && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}> {t("common.loading")}</span>}
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                  {vultrAccount ? `${vultrAccount.name} (${vultrAccount.email}) · ${t("clouds.account.remaining")} $${vultrAccount.remaining_credit} · 更新 ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}` : t("clouds.apiKeyError")}
+                  {vultrAccount ? `${vultrAccount.name} (${vultrAccount.email}) · ${t("clouds.account.remaining")} $${vultrAccount.remaining_credit} · ${t("clouds.updated")} ${new Date(vultrAccount.fetched_at).toLocaleTimeString("zh-TW")}` : t("clouds.apiKeyError")}
                 </span>
               </div>
             </div>
@@ -525,9 +525,9 @@ export function CloudsPage() {
                 </h2>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {conohaError
-                    ? `API 連接失敗：${conohaError}`
+                    ? t("clouds.apiConnectionFailed", { error: conohaError })
                     : conohaInstances.length > 0
-                      ? `${conohaInstances.length} 個實例 · 更新 ${new Date().toLocaleTimeString("zh-TW")}`
+                      ? `${conohaInstances.length} 個實例 · ${t("clouds.updated")} ${new Date().toLocaleTimeString("zh-TW")}`
                       : "gnct58663219 (gncu58663219)"}
                 </span>
               </div>
@@ -591,7 +591,7 @@ export function CloudsPage() {
             <div>
               <h2 style={{ margin: 0 }}>Namecheap DNS</h2>
               <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                caiwentao · DNS 管理
+                t("clouds.dnsManagement")
               </span>
             </div>
           </div>
@@ -599,7 +599,7 @@ export function CloudsPage() {
         <div className="card-body">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
             <div>
-              <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>已配置域名</h3>
+              <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>t("clouds.configuredDomains")</h3>
               <div style={{ fontFamily: "monospace", fontSize: 12, background: "#f8fafc", padding: "8px 12px", borderRadius: 6, lineHeight: 2 }}>
                 <div><span style={{ color: "var(--primary)" }}>ops</span>.sanbunto.online → 163.44.124.142</div>
                 <div><span style={{ color: "var(--primary)" }}>comfy</span>.sanbunto.online → 163.44.124.142</div>
@@ -610,12 +610,12 @@ export function CloudsPage() {
               </div>
             </div>
             <div>
-              <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>API 限制</h3>
+              <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>t("clouds.apiLimits")</h3>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.8 }}>
-                <p>⚠️  個人帳號，API 功能有限</p>
-                <p>主要支援 DNS 操作（AddHosts / DeleteHosts / GetHosts）</p>
-                <p>受 Cloudflare 保護，瀏覽器自動化不穩定</p>
-                <p>驗證郵箱: caiwentao2823703@gmail.com</p>
+                <p>⚠️  t("clouds.personalAccount")</p>
+                <p>t("clouds.dnsOperations")</p>
+                <p>t("clouds.cloudflareProtected")</p>
+                <p>{t("clouds.verifyEmail")}: caiwentao2823703@gmail.com</p>
               </div>
             </div>
           </div>
