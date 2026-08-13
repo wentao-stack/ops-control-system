@@ -238,20 +238,4 @@ class MetricsHistoryGPU(Base):
     fan_speed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
-class ShowcaseItem(Base):
-    __tablename__ = "showcase_items"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    title: Mapped[str] = mapped_column(String(256), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    tags: Mapped[str | None] = mapped_column(Text, nullable=True)
-    media_url: Mapped[str] = mapped_column(String(512), nullable=False)
-    thumbnail_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending", index=True)
-    language: Mapped[str] = mapped_column(String(8), nullable=False, server_default="zh-TW")
-    author: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

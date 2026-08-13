@@ -459,27 +459,3 @@ class VultrInstancesResponse(BaseModel):
     fetched_at: str = ""
 
 
-# ── Showcase schemas ──────────────────────────────────────────────────────────
-
-class ShowcaseItemResponse(BaseModel):
-    id: str
-    title: str
-    description: str | None = None
-    content_type: str
-    category: str
-    tags: str | None = None
-    media_url: str
-    thumbnail_url: str | None = None
-    language: str
-    author: str | None = None
-    created_at: datetime
-    approved_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
-
-
-class ShowcaseListResponse(BaseModel):
-    items: list[ShowcaseItemResponse]
-    total: int
-

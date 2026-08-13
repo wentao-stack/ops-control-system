@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, is_valid_comfy_media_token, verify_password
 from .database import Base, SessionLocal, engine
-from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog, ShowcaseItem
+from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
 from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
 from .comfyui_models import ComfyArtifactRecord, ComfyJob  # noqa: F401 — ensure tables are created
 from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tables are created
@@ -43,7 +43,6 @@ from .schemas import (
     ExecLogResponse, ExecLogListResponse,
     CodeTreeItem, CodeTreeResponse, CodeFileResponse,
     VultrAccountResponse, VultrInstancesResponse,
-    ShowcaseItemResponse, ShowcaseListResponse,
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
@@ -1732,46 +1731,6 @@ async def conoha_instances():
         instances=[VultrInstanceResponse(**i) for i in instances],
         fetched_at=datetime.now().isoformat(),
     )
-
-
-# ── Showcase APIs ──────────────────────────────────────────────────────────────
-
-@app.get("/api/v1/showcase", response_model=ShowcaseListResponse)
-async def list_showcase(
-    category: str | None = None,
-    tag: str | None = None,
-    content_type: str | None = None,
-    language: str | None = None,
-    session: Session = Depends(get_session),
-):
-    """List approved showcase items. Public access, no auth required."""
-    query = select(ShowcaseItem).where(ShowcaseItem.status == "approved")
-    
-    if category:
-        query = query.where(ShowcaseItem.category == category)
-    if content_type:
-        query = query.where(ShowcaseItem.content_type == content_type)
-    if language:
-        query = query.where(ShowcaseItem.language == language)
-    
-    # Tags are stored as comma-separated string
-    if tag:
-        query = query.where(ShowcaseItem.tags.contains(tag))
-    
-    items = session.execute(query.order_by(ShowcaseItem.approved_at.desc())).scalars().all()
-    return ShowcaseListResponse(items=[ShowcaseItemResponse.model_validate(i) for i in items], total=len(items))
-
-
-@app.get("/api/v1/showcase/{item_id}", response_model=ShowcaseItemResponse)
-async def get_showcase_item(
-    item_id: str,
-    session: Session = Depends(get_session),
-):
-    """Get single showcase item by ID. Public access."""
-    item = session.get(ShowcaseItem, item_id)
-    if not item or item.status != "approved":
-        raise HTTPException(status_code=404, detail="Item not found")
-    return ShowcaseItemResponse.model_validate(item)
 
 
 # ── RAG Stats ──────────────────────────────────────────────────────────────

@@ -629,19 +629,6 @@
     "totalSegments": "{{count}} 段",
     "workTitle": "作品名稱"
   },
-  "showcase": {
-    "title": "公共展示墙",
-    "subtitle": "已审批通过的内容展示",
-    "allCategories": "全部分类",
-    "category": {
-      "animation": "动画",
-      "blog": "博客",
-      "image": "图片",
-      "document": "文档"
-    },
-    "searchPlaceholder": "搜索内容...",
-    "empty": "暂无内容"
-  },
   "workflow": {
     "title": "工作流管理",
     "templates": "模板",

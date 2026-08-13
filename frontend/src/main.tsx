@@ -17,7 +17,6 @@ import { AgentChatPage } from "./pages/AgentChatPage"
 import { CodeBrowsePage } from "./pages/CodeBrowsePage"
 import { ComfyUIPage } from "./pages/ComfyUIPage"
 import { SequenceStudioPage } from "./pages/SequenceStudioPage"
-import { ShowcasePage } from "./pages/ShowcasePage"
 import WorkflowPage from "./pages/WorkflowPage"
 import "./i18n"
 import "./styles.css"
@@ -56,7 +55,6 @@ function AppRoutes() {
         <Route path="/code" element={<CodeBrowsePage />} />
         <Route path="/comfyui" element={<ComfyUIPage />} />
         <Route path="/sequence-studio" element={<SequenceStudioPage />} />
-        <Route path="/showcase" element={<ShowcasePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

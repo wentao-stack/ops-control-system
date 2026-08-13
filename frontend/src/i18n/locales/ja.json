@@ -629,19 +629,6 @@
     "totalSegments": "{{count}} セグメント",
     "workTitle": "作品名"
   },
-  "showcase": {
-    "title": "公開展示ウォール",
-    "subtitle": "承認済みコンテンツ展示",
-    "allCategories": "全カテゴリ",
-    "category": {
-      "animation": "アニメーション",
-      "blog": "ブログ",
-      "image": "画像",
-      "document": "ドキュメント"
-    },
-    "searchPlaceholder": "コンテンツを検索...",
-    "empty": "コンテンツなし"
-  },
   "workflow": {
     "title": "ワークフロー管理",
     "templates": "テンプレート",

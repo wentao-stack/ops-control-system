@@ -629,19 +629,6 @@
     "totalSegments": "{{count}} segments",
     "workTitle": "Title"
   },
-  "showcase": {
-    "title": "Public Showcase",
-    "subtitle": "Approved Content Showcase",
-    "allCategories": "All Categories",
-    "category": {
-      "animation": "Animation",
-      "blog": "Blog",
-      "image": "Image",
-      "document": "Document"
-    },
-    "searchPlaceholder": "Search content...",
-    "empty": "No content"
-  },
   "workflow": {
     "title": "Workflow Management",
     "templates": "Templates",
