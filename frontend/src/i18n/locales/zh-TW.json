@@ -233,7 +233,9 @@
     "copied": "已複製",
     "loadingFile": "載入檔案",
     "switchLight": "切換亮色主題",
-    "switchDark": "切換暗色主題"
+    "switchDark": "切換暗色主題",
+    "fileTree": "檔案樹",
+    "lines": "行"
   },
   "comfyui": {
     "title": "ComfyUI 工作流工作台",

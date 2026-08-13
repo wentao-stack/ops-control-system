@@ -233,7 +233,9 @@
     "copied": "コピー済み",
     "loadingFile": "ファイル読み込み中",
     "switchLight": "ライトテーマに切替",
-    "switchDark": "ダークテーマに切替"
+    "switchDark": "ダークテーマに切替",
+    "fileTree": "ファイルツリー",
+    "lines": "行"
   },
   "comfyui": {
     "title": "ComfyUI ワークフロースタジオ",

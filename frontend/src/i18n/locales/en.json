@@ -233,7 +233,9 @@
     "copied": "Copied",
     "loadingFile": "Loading file",
     "switchLight": "Switch to light theme",
-    "switchDark": "Switch to dark theme"
+    "switchDark": "Switch to dark theme",
+    "fileTree": "File Tree",
+    "lines": "lines"
   },
   "comfyui": {
     "title": "ComfyUI Workflow Console",

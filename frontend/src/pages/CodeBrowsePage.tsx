@@ -331,12 +331,12 @@ export function CodeBrowsePage() {
       <div className="code-browse__search">
         <input
           type="text"
-          placeholder="🔍 搜尋檔案..."
+          placeholder={`🔍 ${t("code.search")}...`}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="input"
         />
-        <button className="btn btn--sm" onClick={() => { loadTree(); }} title="重新整理">
+        <button className="btn btn--sm" onClick={() => { loadTree(); }} title={t("code.refresh")}>
           🔄
         </button>
       </div>
@@ -346,12 +346,12 @@ export function CodeBrowsePage() {
         {/* 左欄：檔案樹 */}
         <div className="code-browse__tree">
           <div className="code-browse__tree-header">
-            <span className="code-browse__tree-title">📁 檔案樹</span>
+            <span className="code-browse__tree-title">📁 {t("code.fileTree") || "檔案樹"}</span>
             <div className="code-browse__tree-actions">
-              <button className="btn btn--sm" onClick={expandAll} title="全部展開">
+              <button className="btn btn--sm" onClick={expandAll} title={t("code.expandAll")}>
                 🔽
               </button>
-              <button className="btn btn--sm" onClick={collapseAll} title="全部收縮">
+              <button className="btn btn--sm" onClick={collapseAll} title={t("code.collapseAll")}>
                 🔼
               </button>
             </div>
@@ -389,7 +389,7 @@ export function CodeBrowsePage() {
                   <div className="code-browse__file-meta">
                     <span>{selectedFile.language}</span>
                     <span>·</span>
-                    <span>{selectedFile.line_count} 行</span>
+                    <span>{selectedFile.line_count} {t("code.lines")}</span>
                   </div>
                   <button
                     className={`btn btn--sm code-browse__copy-btn ${copyFeedback ? 'code-browse__copy-btn--active' : ''}`}
