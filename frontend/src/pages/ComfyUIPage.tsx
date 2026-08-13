@@ -929,7 +929,7 @@ export function ComfyUIPage() {
         {artifactTotal > GALLERY_PAGE_SIZE && (
           <nav className="comfy-gallery-pagination" aria-label={t("comfyui.galleryPagination")}>
             <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage - 1)} disabled={artifactPage === 1}>{t("comfyui.prevPage")}</button>
-            <span>{t("comfyui.pageOf")}</span>
+            <span>{t("comfyui.pageOf", { page: artifactPage, pages: galleryPages })}</span>
             <button className="comfy-secondary-btn" onClick={() => changeGalleryPage(artifactPage + 1)} disabled={artifactPage === galleryPages}>{t("comfyui.nextPage")}</button>
           </nav>
         )}
