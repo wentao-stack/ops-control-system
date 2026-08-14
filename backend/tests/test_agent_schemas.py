@@ -36,6 +36,23 @@ def test_system_prompt_requires_the_requested_reply_language():
     assert "日本語で回答" in build_system_prompt(locale="ja")
 
 
+def test_generated_title_uses_the_requested_ui_locale(monkeypatch):
+    import asyncio
+    from app import agent
+
+    captured = {}
+
+    async def fake_complete(model, messages):
+        captured["messages"] = messages
+        return "Host metrics status"
+
+    monkeypatch.setattr(agent, "_llm_complete", fake_complete)
+
+    assert asyncio.run(agent._generate_title("Show host metrics", "test-model", "en")) == "Host metrics status"
+    assert "English" in captured["messages"][0]["content"]
+    assert "中文" not in captured["messages"][0]["content"]
+
+
 def test_host_metrics_tool_result_uses_requested_locale_and_safe_missing_values():
     from app.agent import format_host_metrics_results
 

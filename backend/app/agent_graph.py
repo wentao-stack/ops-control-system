@@ -533,7 +533,7 @@ async def run_agent_graph(
     # Generate title
     if is_new:
         try:
-            title = await _generate_title(req.message, model)
+            title = await _generate_title(req.message, model, req.locale)
             conv_obj = session.query(AgentConversation).filter(AgentConversation.id == conv_id).first()
             if conv_obj and conv_obj.title == "新對話":
                 conv_obj.title = title

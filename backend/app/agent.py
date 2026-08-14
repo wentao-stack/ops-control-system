@@ -1333,16 +1333,24 @@ async def _llm_complete(
         return data["choices"][0]["message"]["content"]
 
 
-async def _generate_title(user_message: str, model: str) -> str:
-    """Generate a short conversation title from the first user message."""
+async def _generate_title(user_message: str, model: str, locale: str = "zh-TW") -> str:
+    """Generate a short conversation title in the web UI's selected language."""
+    title_instruction = {
+        "en": (
+            "Generate a short conversation title (3-7 words) from the user's first message. "
+            "Write the title in English. Return only the title, with no quotes or extra text."
+        ),
+        "ja": (
+            "ユーザーの最初のメッセージから短い会話タイトルを生成してください。"
+            "タイトルは日本語で、タイトルだけを返してください。"
+        ),
+        "zh-TW": "根據用戶的第一句話，生成一個簡短的對話標題（5-10個字）。只返回標題，不要其他內容。",
+    }.get(locale, "根據用戶的第一句話，生成一個簡短的對話標題（5-10個字）。只返回標題，不要其他內容。")
     try:
         title = await _llm_complete(
             model,
             [
-                {
-                    "role": "system",
-                    "content": "根據用戶的第一句話，生成一個簡短的對話標題（5-10個字）。只返回標題，不要其他內容。",
-                },
+                {"role": "system", "content": title_instruction},
                 {"role": "user", "content": user_message},
             ],
         )
