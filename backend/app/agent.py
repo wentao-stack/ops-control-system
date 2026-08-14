@@ -1136,14 +1136,24 @@ async def tool_rag_search(params: dict, session: Session) -> str:
     if not hits:
         return f"🔍 在知識庫中未找到與「{query}」相關的內容"
 
-    lines = [f"🔍 找到 {len(hits)} 筆相關結果（查詢: {query}）"]
+    lines = [
+        f"🔍 找到 {len(hits)} 筆相關結果（查詢: {query}）",
+        "",
+        "📚 可引用來源（最終回答涉及這些資料時，請以 [R1]、[R2] 標示依據）：",
+    ]
     for i, h in enumerate(hits, 1):
         src_icon = {"runbook": "📕", "note": "📝", "change": "🔄", "memory": "🧠"}.get(h["source"], "📄")
-        lines.append(f"\n  {i}. {src_icon} [{h['source']}] {h['title']} (相似度: {h['score']:.2f})")
+        lines.append(
+            f"[R{i}] {src_icon} [{h['source']}] {h['title']} "
+            f"(相似度: {h['score']:.2f}；ID: {h.get('source_id', '')})"
+        )
+
+    lines.append("\n📖 檢索內容：")
+    for i, h in enumerate(hits, 1):
         content_preview = h["content"][:300]
         if len(h["content"]) > 300:
             content_preview += "..."
-        lines.append(f"     {content_preview.replace(chr(10), ' ')}")
+        lines.append(f"[R{i}] {content_preview.replace(chr(10), ' ')}")
 
     return "\n".join(lines)
 
@@ -1313,6 +1323,11 @@ def build_system_prompt(memories_text: str = "", locale: str = "zh-TW") -> str:
 - 記憶 key 應簡短有意義（如：preferred_language, deploy_command, server_os）。
 - 記憶 value 應為聲明式事實，不要寫指令或待辦事項。
 - 如果系統 prompt 中已注入記憶，優先使用注入的記憶，不需要額外調用 get_memories。
+
+**RAG 引用規則：**
+- rag_search 回傳的「可引用來源」會使用 [R1]、[R2] 等編號。最終回答若採用了其中的事實、診斷或步驟，必須在對應敘述末尾保留該編號（例如：`Nginx upstream 無回應。[R1]`）。
+- 只引用實際由本回合 rag_search 回傳且能支持該敘述的來源；不得捏造編號、來源或相似度。
+- 若 RAG 未找到可用來源，清楚說明「知識庫沒有可驗證的來源」，並將建議標示為一般建議，不可宣稱它來自系統 Runbook 或歷史記錄。
 """
     if memories_text:
         base += f"\n**用戶記憶（跨對話上下文）：**\n{memories_text}\n"

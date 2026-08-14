@@ -434,6 +434,9 @@
     "ragActual": "実際の Top-1",
     "ragScore": "類似度",
     "ragLatency": "所要時間",
+    "ragCitations": "引用元",
+    "ragCitationSource": "ソース",
+    "ragCitationEvidence": "検索根拠",
     "closeToast": "通知を閉じる"
   },
   "code": {

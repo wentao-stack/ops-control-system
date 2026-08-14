@@ -94,6 +94,42 @@ function formatToolInput(value: string | null): string {
   }
 }
 
+type RagCitation = {
+  id: string
+  icon: string
+  source: string
+  title: string
+  score: string
+  sourceId: string
+  evidence: string
+}
+
+function parseRagCitations(result: string): RagCitation[] {
+  const [header = "", evidenceSection = ""] = result.split("📖 檢索內容：", 2)
+  if (!header.includes("📚 可引用來源")) return []
+  const evidenceById = new Map<string, string>()
+  for (const match of evidenceSection.matchAll(/^\[(R\d+)\]\s+(.+)$/gm)) evidenceById.set(match[1], match[2].trim())
+
+  const citations: RagCitation[] = []
+  const citationPattern = /^\[(R\d+)\]\s+(\S+)\s+\[([^\]]+)\]\s+(.+?)\s+\(相似度:\s+([\d.]+)；ID:\s*(.*?)\)$/gm
+  for (const match of header.matchAll(citationPattern)) {
+    citations.push({ id: match[1], icon: match[2], source: match[3], title: match[4], score: match[5], sourceId: match[6], evidence: evidenceById.get(match[1]) ?? "" })
+  }
+  return citations
+}
+
+function RagCitationCards({ result, t }: { result: string; t: (key: string) => string }) {
+  const citations = parseRagCitations(result)
+  if (!citations.length) return null
+  return <section className="agent-rag-citations" aria-label={t("agent.ragCitations")}>
+    <h4>{t("agent.ragCitations")}</h4>
+    {citations.map(citation => <details key={citation.id} className="agent-rag-citation">
+      <summary><span className="agent-rag-citation-id">{citation.id}</span><span>{citation.icon} {citation.title}</span><span className="agent-rag-citation-score">{citation.score}</span></summary>
+      <dl><div><dt>{t("agent.ragCitationSource")}</dt><dd>{citation.source} · {citation.sourceId}</dd></div><div><dt>{t("agent.ragCitationEvidence")}</dt><dd>{citation.evidence || "—"}</dd></div></dl>
+    </details>)}
+  </section>
+}
+
 function PaginationControls({
   offset,
   limit,
@@ -235,12 +271,13 @@ function MessageBubble({ msg, t }: { msg: AgentMessage; t: (key: string) => stri
             <span className="agent-tool-params">{formatToolInput(msg.tool_input)}</span>
           )}
         </div>
-        {msg.tool_result && (
+        {msg.tool_result && <>
+          {msg.tool_name === "rag_search" && <RagCitationCards result={msg.tool_result} t={t} />}
           <details className="agent-tool-details" open>
             <summary>{t("agent.fullToolResult")}</summary>
             <pre className="agent-tool-body">{msg.tool_result}</pre>
           </details>
-        )}
+        </>}
       </div>
     )
   }
@@ -843,12 +880,13 @@ export function AgentChatPage() {
                   <span className="agent-tool-exec-progress-text">{card.progress_msg}</span>
                 </div>
               )}
-              {card.status === "done" && card.result && (
+              {card.status === "done" && card.result && <>
+                {card.name === "rag_search" && <RagCitationCards result={card.result} t={t} />}
                 <details className="agent-tool-details" open>
                   <summary>{t("agent.fullToolResult")}</summary>
                   <pre className="agent-tool-exec-result">{card.result}</pre>
                 </details>
-              )}
+              </>}
             </div>
           ))}
 

@@ -434,6 +434,9 @@
     "ragActual": "實際 Top-1",
     "ragScore": "相似度",
     "ragLatency": "耗時",
+    "ragCitations": "引用來源",
+    "ragCitationSource": "來源",
+    "ragCitationEvidence": "檢索依據",
     "closeToast": "關閉通知"
   },
   "code": {

@@ -7653,6 +7653,16 @@ tbody tr:last-child td { border-bottom: none; }
 .agent-load-older { display: block; width: 100%; margin: 0 0 14px; color: var(--primary); background: var(--bg-secondary); }
 
 .agent-tool-details { border-top: 1px solid var(--border); }
+.agent-rag-citations { padding: 10px 12px; background: rgba(59, 130, 246, .04); border-top: 1px solid var(--border); }
+.agent-rag-citations h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-secondary); }
+.agent-rag-citation { border: 1px solid var(--border); border-radius: 6px; margin-top: 6px; background: var(--bg-primary); }
+.agent-rag-citation summary { display: flex; gap: 8px; align-items: center; padding: 7px 9px; cursor: pointer; font-size: 12px; }
+.agent-rag-citation-id { color: var(--primary); font-weight: 700; }
+.agent-rag-citation-score { margin-left: auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.agent-rag-citation dl { margin: 0; padding: 0 9px 9px; font-size: 12px; }
+.agent-rag-citation dl div + div { margin-top: 7px; }
+.agent-rag-citation dt { color: var(--text-secondary); font-weight: 600; }
+.agent-rag-citation dd { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-tool-details summary,
 .agent-raw-response summary { padding: 8px 12px; color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 600; }
 .agent-tool-details summary:hover,

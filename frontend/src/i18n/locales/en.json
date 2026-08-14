@@ -434,6 +434,9 @@
     "ragActual": "Actual Top-1",
     "ragScore": "Similarity",
     "ragLatency": "Latency",
+    "ragCitations": "Cited sources",
+    "ragCitationSource": "Source",
+    "ragCitationEvidence": "Retrieved evidence",
     "closeToast": "Close notification"
   },
   "code": {
