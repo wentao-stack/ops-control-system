@@ -59,6 +59,7 @@ class AgentChatRequest(BaseModel):
     conversation_id: str | None = Field(default=None, max_length=64)
     message: str = Field(min_length=1, max_length=10_000)
     model: str | None = Field(default=None, max_length=128)
+    locale: Literal["zh-TW", "en", "ja"] = "zh-TW"
 
     @field_validator("message")
     @classmethod

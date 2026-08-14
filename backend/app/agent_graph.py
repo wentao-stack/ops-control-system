@@ -178,7 +178,7 @@ def detect_intent(user_message: str) -> dict | None:
 
 # ── Build LLM Messages from History ────────────────────────────────────────
 
-def build_llm_messages(session, conv_id, memories_text):
+def build_llm_messages(session, conv_id, memories_text, locale: str = "zh-TW"):
     """Build LLM message list from conversation history."""
     from datetime import UTC, datetime
 
@@ -190,7 +190,7 @@ def build_llm_messages(session, conv_id, memories_text):
         .all()
     )
 
-    llm_messages: list[dict] = [{"role": "system", "content": _build_system_prompt(memories_text)}]
+    llm_messages: list[dict] = [{"role": "system", "content": _build_system_prompt(memories_text, locale)}]
     for m in history:
         if m.role == "tool" and m.tool_name:
             params = {}
@@ -343,7 +343,7 @@ async def run_agent_graph(
 
     # ── Phase 2: Build context ───────────────────────────────────────────
     memories_text = load_memories(session, user, req.message)
-    llm_messages = build_llm_messages(session, conv_id, memories_text)
+    llm_messages = build_llm_messages(session, conv_id, memories_text, req.locale)
     tools_openai = _get_tools_openai()
 
     # ── Phase 3: Agent loop ──────────────────────────────────────────────

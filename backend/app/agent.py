@@ -1165,7 +1165,7 @@ async def _auto_extract_memories(user_message: str, username: str, session: Sess
 # ── System prompt (generated dynamically with tool descriptions) ─────────────
 
 
-def build_system_prompt(memories_text: str = "") -> str:
+def build_system_prompt(memories_text: str = "", locale: str = "zh-TW") -> str:
     """Build system prompt that includes tool descriptions for the LLM."""
     base = """你是「笺注」，一個 OPS 運維系統的 AI 助手。
 
@@ -1174,8 +1174,13 @@ def build_system_prompt(memories_text: str = "") -> str:
     for t in _tools:
         base += f"- {t.name}: {t.description}\n"
 
-    base += """
-回答時使用繁體中文，保持簡潔專業。使用 Markdown 格式化輸出，適時使用表格展示數據。
+    reply_language = {
+        "zh-TW": "回答時使用繁體中文",
+        "en": "Respond in English",
+        "ja": "日本語で回答してください",
+    }.get(locale, "回答時使用繁體中文")
+    base += f"""
+{reply_language}，保持簡潔專業。使用 Markdown 格式化輸出，適時使用表格展示數據。
 當用戶的問題需要實際數據時，請使用工具獲取，不要憑空編造數據。
 
 **安全規則：**

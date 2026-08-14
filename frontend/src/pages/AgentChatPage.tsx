@@ -266,7 +266,7 @@ function MessageBubble({ msg, t }: { msg: AgentMessage; t: (key: string) => stri
 /* ── main page ───────────────────────────────────────────────────────────── */
 
 export function AgentChatPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const [tab, setTab] = useState<"chat" | "usage">("chat")
   const [conversations, setConversations] = useState<AgentConversation[]>([])
@@ -625,6 +625,7 @@ export function AgentChatPage() {
       const body = JSON.stringify({
         conversation_id: convId,
         message,
+        locale: i18n.resolvedLanguage || i18n.language,
       })
 
       const response = await api<Response>(`/api/v1/agent/chat`, {

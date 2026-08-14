@@ -21,6 +21,21 @@ def test_agent_requests_keep_explicit_model():
     assert AgentConversationCreate(model=model).model == model
 
 
+def test_agent_chat_request_accepts_supported_ui_locale():
+    assert AgentChatRequest(message="hello", locale="en").locale == "en"
+    assert AgentChatRequest(message="こんにちは", locale="ja").locale == "ja"
+
+    with pytest.raises(ValidationError):
+        AgentChatRequest(message="hello", locale="fr")
+
+
+def test_system_prompt_requires_the_requested_reply_language():
+    from app.agent import build_system_prompt
+
+    assert "Respond in English" in build_system_prompt(locale="en")
+    assert "日本語で回答" in build_system_prompt(locale="ja")
+
+
 def test_agent_chat_message_is_trimmed_and_blank_is_rejected():
     assert AgentChatRequest(message="  hello  ").message == "hello"
 
