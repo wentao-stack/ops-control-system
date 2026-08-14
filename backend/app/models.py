@@ -96,6 +96,13 @@ class Runbook(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     steps: Mapped[str] = mapped_column(Text, nullable=False)
     author: Mapped[str] = mapped_column(String(64), nullable=False)
+    tags: Mapped[str] = mapped_column(String(500), nullable=False, server_default="[]")
+    affected_assets: Mapped[str] = mapped_column(String(500), nullable=False, server_default="[]")
+    symptoms: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    verification_steps: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    rollback_steps: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="active", index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

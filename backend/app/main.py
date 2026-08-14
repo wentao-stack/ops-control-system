@@ -134,6 +134,8 @@ async def lifespan(_: FastAPI):
         webssh_logger.addHandler(handler)
 
     Base.metadata.create_all(bind=engine)
+    from .database import ensure_runbook_rag_columns
+    ensure_runbook_rag_columns()
     with SessionLocal() as session:
         seed_development_data(session)
 

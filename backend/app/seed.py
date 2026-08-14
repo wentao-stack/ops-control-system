@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from .auth import hash_password
-from .models import Asset, User
+from .models import Asset, Runbook, User
+from .runbook_catalog import RUNBOOKS
 from .workflow_models import WorkflowTemplate
 from .workflow_templates import TEMPLATES as BUILTIN_TEMPLATES
 
@@ -86,3 +87,22 @@ def seed_development_data(session: Session) -> None:
             existing.is_active = tpl.get("is_active", True)
             existing.updated_at = now
         session.commit()
+
+    # ── Curated Runbooks (idempotent and updated on deploy) ──────────────────
+    for item in RUNBOOKS:
+        runbook = session.query(Runbook).filter(Runbook.title == item["title"]).first()
+        values = {
+            **item,
+            "tags": _json.dumps(item["tags"], ensure_ascii=False),
+            "affected_assets": _json.dumps(item["affected_assets"], ensure_ascii=False),
+            "author": "ops-team",
+            "status": "active",
+            "version": 1,
+            "updated_at": now,
+        }
+        if runbook is None:
+            session.add(Runbook(**values, created_at=now))
+        else:
+            for field, value in values.items():
+                setattr(runbook, field, value)
+    session.commit()

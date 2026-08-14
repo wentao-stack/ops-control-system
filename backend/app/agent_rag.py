@@ -70,38 +70,34 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 # ── Chunking 策略 ────────────────────────────────────────────────────
 
+def _parse_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return value
+    try:
+        return json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+
 def chunk_runbook(rb: dict) -> list[dict]:
-    """Runbook 按步驟分割。"""
+    """Create discovery and operational chunks for a versioned Runbook."""
     chunks = []
-    # 標題 + 描述作為第一個 chunk
-    header = f"# {rb['title']}\n\n{rb['description']}"
-    chunks.append({
-        "text": header,
-        "metadata": {
-            "source": "runbook",
-            "source_id": str(rb["id"]),
-            "title": rb["title"],
-            "category": rb.get("category", ""),
-            "created_at": rb.get("created_at", "").isoformat() if isinstance(rb.get("created_at"), datetime) else str(rb.get("created_at", "")),
-        },
-    })
-    # 每個 step 作為獨立 chunk
+    tags = _parse_list(rb.get("tags"))
+    assets = _parse_list(rb.get("affected_assets"))
+    common_meta = {
+        "source": "runbook", "source_id": str(rb["id"]), "title": rb["title"],
+        "category": rb.get("category", ""), "tags": ",".join(tags),
+        "affected_assets": ",".join(assets), "status": rb.get("status", "active"),
+        "version": str(rb.get("version", 1)),
+        "created_at": rb.get("created_at", "").isoformat() if isinstance(rb.get("created_at"), datetime) else str(rb.get("created_at", "")),
+    }
+    discovery = f"# {rb['title']}\n\n症狀: {rb.get('symptoms', '')}\n適用資產: {', '.join(assets)}\n標籤: {', '.join(tags)}\n\n{rb['description']}"
+    chunks.append({"text": discovery, "metadata": {**common_meta, "chunk_type": "discovery"}})
     steps = rb.get("steps", "")
     if steps:
-        for i, step in enumerate(steps.strip().split("\n"), 1):
-            step = step.strip()
-            if step:
-                chunks.append({
-                    "text": f"步驟 {i}: {step}",
-                    "metadata": {
-                        "source": "runbook",
-                        "source_id": str(rb["id"]),
-                        "title": rb["title"],
-                        "category": rb.get("category", ""),
-                        "step": str(i),
-                        "created_at": rb.get("created_at", "").isoformat() if isinstance(rb.get("created_at"), datetime) else str(rb.get("created_at", "")),
-                    },
-                })
+        chunks.append({"text": f"# {rb['title']}\n\n執行步驟:\n{steps}\n\n驗證:\n{rb.get('verification_steps', '')}", "metadata": {**common_meta, "chunk_type": "procedure"}})
+    if rb.get("rollback_steps"):
+        chunks.append({"text": f"# {rb['title']}\n\n回滾 / 升級處理:\n{rb['rollback_steps']}", "metadata": {**common_meta, "chunk_type": "rollback"}})
     return chunks
 
 
@@ -192,8 +188,10 @@ def build_full_index(db_session) -> dict:
     for rb in runbooks:
         rb_dict = {
             "id": rb.id, "title": rb.title, "category": rb.category,
-            "description": rb.description, "steps": rb.steps,
-            "created_at": rb.created_at,
+            "description": rb.description, "steps": rb.steps, "tags": rb.tags,
+            "affected_assets": rb.affected_assets, "symptoms": rb.symptoms,
+            "verification_steps": rb.verification_steps, "rollback_steps": rb.rollback_steps,
+            "status": rb.status, "version": rb.version, "created_at": rb.created_at,
         }
         chunks = chunk_runbook(rb_dict)
         stats["runbooks"] += 1

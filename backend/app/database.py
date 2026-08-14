@@ -38,3 +38,18 @@ def create_session_factory(database_url: str = DATABASE_URL):
 
 
 engine, SessionLocal = create_session_factory()
+
+
+def ensure_runbook_rag_columns() -> None:
+    """Add RAG metadata columns for existing SQLite installations (idempotent)."""
+    columns = {
+        "tags": "TEXT NOT NULL DEFAULT '[]'", "affected_assets": "TEXT NOT NULL DEFAULT '[]'",
+        "symptoms": "TEXT NOT NULL DEFAULT ''", "verification_steps": "TEXT NOT NULL DEFAULT ''",
+        "rollback_steps": "TEXT NOT NULL DEFAULT ''", "status": "TEXT NOT NULL DEFAULT 'active'",
+        "version": "INTEGER NOT NULL DEFAULT 1",
+    }
+    with engine.begin() as conn:
+        names = {row[1] for row in conn.execute(text("PRAGMA table_info(runbooks)"))}
+        for name, definition in columns.items():
+            if name not in names:
+                conn.execute(text(f"ALTER TABLE runbooks ADD COLUMN {name} {definition}"))
