@@ -143,6 +143,12 @@ def sse(event: str, **kwargs) -> str:
     return f'data: {json.dumps(payload, ensure_ascii=False)}\n\n'
 
 
+def _read_tool_signature(tool_name: str, params: dict) -> str:
+    """Return a stable key for deduplicating read-only calls in one turn."""
+    public_params = {key: value for key, value in params.items() if not key.startswith("_")}
+    return f"{tool_name}:{json.dumps(public_params, sort_keys=True, ensure_ascii=False, default=str)}"
+
+
 def localized_event_text(locale: str, key: str, tool_name: str = "") -> str:
     """Translate Agent runtime event text rendered directly by the UI."""
     messages = {
@@ -357,7 +363,12 @@ async def run_agent_graph(
     tools_openai = _get_tools_openai()
 
     # ── Phase 3: Agent loop ──────────────────────────────────────────────
-    max_iterations = 5
+    # A normal investigation can need diagnostics, knowledge lookup, a plan,
+    # confirmation, execution, and verification.  The guard below prevents a
+    # repetitive model from spending this budget on the same read operation.
+    max_iterations = 8
+    read_tool_results: dict[str, str] = {}
+    force_text_response = False
     total_prompt_tokens = 0
     total_completion_tokens = 0
     total_tokens = 0
@@ -369,8 +380,13 @@ async def run_agent_graph(
         yield sse("thinking", text=localized_event_text(req.locale, "thinking"))
 
         # Call LLM (need full response to check tool_calls)
+        # A duplicate read call means the model already has all data for that
+        # operation.  Remove tools for exactly one turn so it must synthesize a
+        # user-facing answer instead of repeatedly asking for the same data.
+        tools_for_turn = [] if force_text_response else tools_openai
+        force_text_response = False
         try:
-            assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_openai)
+            assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_for_turn)
         except httpx.TimeoutException as e:
             yield sse("error", message=f"LLM 回應超時（模型可能正在載入，請稍後重試）: {type(e).__name__}")
             yield sse("done")
@@ -445,6 +461,23 @@ async def run_agent_graph(
                 llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
                 continue
 
+            read_signature = _read_tool_signature(tool_name, tool_args)
+            if tool_level == "read" and read_signature in read_tool_results:
+                guidance = {
+                    "en": "This identical read operation already ran. Use its result and answer the user now; do not call more tools.",
+                    "ja": "この同一の読み取り操作はすでに実行済みです。結果を使って回答し、追加のツールは呼び出さないでください。",
+                    "zh-TW": "相同的讀取操作已經執行過。請使用現有結果直接回答用戶，不要再呼叫工具。",
+                }.get(req.locale, "相同的讀取操作已經執行過。請使用現有結果直接回答用戶，不要再呼叫工具。")
+                result = f"{read_tool_results[read_signature]}\n\nℹ️ {guidance}"
+                yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
+                tool_input_json = json.dumps(tool_args, ensure_ascii=False)
+                _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
+                _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result)
+                llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
+                llm_messages.append({"role": "system", "content": guidance})
+                force_text_response = True
+                continue
+
             # Confirmation (exec-level tools)
             if requires_confirm:
                 confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
@@ -511,6 +544,9 @@ async def run_agent_graph(
                 result = f"未知工具: {tool_name}"
 
             duration_ms = int((_time.monotonic() - start) * 1000)
+
+            if tool_level == "read":
+                read_tool_results[read_signature] = result
 
             yield sse("tool_progress", id=tool_call_id, message=localized_event_text(req.locale, "completed", tool_name), percent=100)
             yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=duration_ms)
