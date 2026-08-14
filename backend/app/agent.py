@@ -519,6 +519,8 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
         return f"❌ 資產 {asset.name} 沒有配置 SSH"
     if not asset.local_machine and not asset.ssh_user:
         return f"❌ 資產 {asset.name} 沒有配置 SSH 用戶"
+    if asset.environment == "prod" and not params.get("_runbook_id"):
+        return "❌ 生產環境僅允許已審閱的 Runbook 步驟或專用 Supervisor 操作"
 
     import asyncio
     import time as _time
