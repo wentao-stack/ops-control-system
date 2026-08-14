@@ -11,12 +11,24 @@ def test_curated_runbooks_are_seeded_with_retrieval_metadata(session):
     seed_development_data(session)
     runbooks = session.query(Runbook).filter(Runbook.status == "active").all()
 
-    assert len(runbooks) == 6
+    assert len(runbooks) == 12
     nginx = next(item for item in runbooks if "Nginx 502" in item.title)
     assert "nginx" in json.loads(nginx.tags)
     assert nginx.symptoms
     assert nginx.verification_steps
     assert nginx.rollback_steps
+
+    backup = next(item for item in runbooks if "SQLite 資料庫備份" in item.title)
+    assert {"sqlite", "backup", "restore"}.issubset(json.loads(backup.tags))
+    assert "禁止直接覆蓋目前資料庫" in backup.steps
+
+    certificate = next(item for item in runbooks if "TLS 握手異常" in item.title)
+    assert {"tls", "ssl", "certificate"}.issubset(json.loads(certificate.tags))
+    assert "不得在聊天中展示私鑰" in certificate.steps
+
+    ssh = next(item for item in runbooks if "SSH 連線失敗" in item.title)
+    assert "最小權限" in ssh.description
+    assert "最後一條管理存取路徑" in ssh.rollback_steps
 
 
 def test_runbook_chunks_keep_discovery_procedure_and_safety_context():
