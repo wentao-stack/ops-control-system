@@ -152,6 +152,9 @@ def format_host_metrics_results(results: list[dict | BaseException], locale: str
         if isinstance(result, BaseException):
             lines.append(f"{labels['error']}: {result}")
             continue
+        if result.get("error"):
+            lines.append(f"{labels['error']}: {result['name']} — {result['error']}")
+            continue
         lines.append(f"📊 {result['name']} ({result['asset_id']})")
         if result.get("cpu_percent") is not None:
             lines.append(f"  {labels['cpu']}: {result['cpu_percent']}% ({value(result.get('cpu_count'))} {labels['cores']})")
@@ -197,6 +200,12 @@ async def tool_get_host_metrics(params: dict, session: Session) -> str:
         )
         # Save to history
         await asyncio.to_thread(save_metrics_to_history, raw)
+        if not raw.reachable:
+            return {
+                "asset_id": raw.asset_id,
+                "name": raw.name,
+                "error": raw.error or "SSH connection failed",
+            }
         return {
             "asset_id": raw.asset_id,
             "name": raw.name,
@@ -205,8 +214,8 @@ async def tool_get_host_metrics(params: dict, session: Session) -> str:
             "mem_total_mb": getattr(raw, "mem_total_mb", None),
             "mem_used_mb": getattr(raw, "mem_used_mb", None),
             "mem_percent": getattr(raw, "mem_percent", None),
-            "disk_total_gb": getattr(raw, "disk_total_gb", None),
-            "disk_used_gb": getattr(raw, "disk_used_gb", None),
+            "disk_total_gb": round(raw.disk_total_mb / 1024, 1),
+            "disk_used_gb": round(raw.disk_used_mb / 1024, 1),
             "disk_percent": getattr(raw, "disk_percent", None),
             "gpu": getattr(raw, "gpu", []),
         }

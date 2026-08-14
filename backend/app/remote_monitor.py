@@ -75,11 +75,11 @@ METRICS_SCRIPT = r"""
     read -r cpu_line2 < /proc/stat
     echo "$cpu_line1" "$cpu_line2" | awk '{
       user1=$2; nice1=$3; system1=$4; idle1=$5; iowait1=$6; irq1=$7; softirq1=$8;
-      user2=$10; nice2=$11; system2=$12; idle2=$13; iowait2=$14; irq2=$15; softirq2=$16;
+      user2=$13; nice2=$14; system2=$15; idle2=$16; iowait2=$17; irq2=$18; softirq2=$19;
       total1=user1+nice1+system1+idle1+iowait1+irq1+softirq1;
       total2=user2+nice2+system2+idle2+iowait2+irq2+softirq2;
       diff_idle=idle2-idle1; diff_total=total2-total1;
-      if (diff_total > 0) printf "%d\n", (diff_total-diff_idle)*100/diff_total
+      if (diff_total > 0) printf "%.1f\n", (diff_total-diff_idle)*100/diff_total
       else print 0
     }'
   )
