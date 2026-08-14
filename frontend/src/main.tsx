@@ -44,10 +44,10 @@ function AppRoutes() {
       {/* Public routes — no login required */}
       <Route path="/" element={<ShareHomePage />} />
       <Route path="/:slug" element={<SharePostPage />} />
+      <Route path="/login" element={user ? <Navigate to="/admin/overview" replace /> : <LoginPage />} />
 
       {/* Admin routes — require login */}
       <Route element={<RequireAuthOutlet />}>
-        <Route path="/login" element={user ? <Navigate to="/admin/overview" replace /> : <LoginPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin/overview" element={<OverviewPage />} />
           <Route path="/admin/assets" element={<AssetsPage />} />
