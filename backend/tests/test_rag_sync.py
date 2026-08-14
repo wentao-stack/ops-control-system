@@ -31,7 +31,7 @@ def test_note_sync_replaces_existing_vectors_and_preserves_chunk_metadata(monkey
     )
 
     assert rag_sync.sync_note(note) is True
-    assert coll.deleted == [{"where": {"source": "note", "source_id": "note-1"}}]
+    assert coll.deleted == [{"where": {"$and": [{"source": "note"}, {"source_id": "note-1"}]}}]
     assert coll.upserts[0]["ids"] == ["note:note-1:0"]
     assert coll.upserts[0]["metadatas"][0]["title"] == "部署筆記"
 
@@ -44,8 +44,8 @@ def test_unpublished_note_and_deleted_source_remove_vectors(monkeypatch):
     assert rag_sync.sync_note(note) is True
     assert rag_sync.delete_source("memory", "7") is True
     assert coll.deleted == [
-        {"where": {"source": "note", "source_id": "note-2"}},
-        {"where": {"source": "memory", "source_id": "7"}},
+        {"where": {"$and": [{"source": "note"}, {"source_id": "note-2"}]}},
+        {"where": {"$and": [{"source": "memory"}, {"source_id": "7"}]}},
     ]
 
 

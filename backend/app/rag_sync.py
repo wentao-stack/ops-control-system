@@ -16,6 +16,11 @@ from .agent_rag import (
 logger = logging.getLogger(__name__)
 
 
+def _source_where(source: str, source_id: str) -> dict[str, list[dict[str, str]]]:
+    """Build Chroma's single-operator metadata filter for one source record."""
+    return {"$and": [{"source": source}, {"source_id": str(source_id)}]}
+
+
 def _replace_source(source: str, source_id: str, chunks: list[dict[str, Any]]) -> bool:
     """Replace every vector belonging to one mutable source record.
 
@@ -25,7 +30,7 @@ def _replace_source(source: str, source_id: str, chunks: list[dict[str, Any]]) -
     try:
         coll = get_collection()
         if not chunks:
-            coll.delete(where={"source": source, "source_id": str(source_id)})
+            coll.delete(where=_source_where(source, source_id))
             return True
 
         # _upsert_chunks owns embedding generation and catches errors, so build
@@ -36,7 +41,7 @@ def _replace_source(source: str, source_id: str, chunks: list[dict[str, Any]]) -
         vectors = embed_texts(texts)
         ids = [f"{source}:{source_id}:{index}" for index, _ in enumerate(chunks)]
         metadata = [chunk["metadata"] for chunk in chunks]
-        coll.delete(where={"source": source, "source_id": str(source_id)})
+        coll.delete(where=_source_where(source, source_id))
         coll.upsert(ids=ids, documents=texts, metadatas=metadata, embeddings=vectors)
         return True
     except Exception as exc:
