@@ -1741,7 +1741,7 @@ async def conoha_instances():
 
 @app.get("/api/v1/agent/rag/stats")
 def get_rag_stats(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get RAG index statistics."""
     from .agent_rag import get_index_stats
@@ -1751,10 +1751,10 @@ def get_rag_stats(
 @app.post("/api/v1/agent/rag/reindex")
 def reindex_rag(
     session: Session = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Rebuild RAG index (admin only)."""
-    if current_user.get("role") != "admin":
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="需要 admin 權限")
     from .agent_rag import build_full_index, get_index_stats
     stats = build_full_index(session)
@@ -1763,7 +1763,7 @@ def reindex_rag(
 
 @app.get("/api/v1/agent/rag/evaluation")
 def evaluate_rag(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Evaluate multilingual Runbook retrieval without rebuilding the index."""
     from .rag_evaluation import evaluate_runbook_retrieval
