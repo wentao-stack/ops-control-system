@@ -570,6 +570,94 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
     return "\n".join(lines)
 
 
+# ── Controlled diagnostic tools ────────────────────────────────────────────
+
+_SAFE_SERVICE_NAME = re.compile(r"^[A-Za-z0-9_.@:-]{1,128}$")
+_SAFE_DISK_PATH = re.compile(r"^/[A-Za-z0-9._/:-]{0,240}$")
+
+
+def _controlled_diagnostic_params(params: dict, command: str) -> dict:
+    """Build trusted parameters for a read-only remote diagnostic command."""
+    return {
+        "asset_id": params.get("asset_id", ""),
+        "command": command,
+        "timeout": min(max(int(params.get("timeout", 30)), 5), 60),
+        "_locale": params.get("_locale", "zh-TW"),
+        "_actor": params.get("_actor", ""),
+        # Access control is the tool's read level. Do not apply the generic
+        # arbitrary-shell admin gate to a server-constructed diagnostic.
+        "_actor_role": "",
+        # These commands are constructed server-side and read-only. The flag
+        # permits production diagnostics while generic shell remains blocked.
+        "_runbook_id": "controlled-diagnostic",
+    }
+
+
+@register_tool(
+    name="get_service_logs",
+    description="讀取指定 systemd 服務的最近日誌。服務名稱和行數都會由伺服器驗證；純讀取，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {"type": "string", "description": "資產 ID 或名稱"},
+            "service": {"type": "string", "description": "systemd 服務名稱，例如 nginx 或 ocs-backend"},
+            "lines": {"type": "integer", "description": "最近日誌行數（1-500，預設 100）", "default": 100},
+        },
+        "required": ["asset_id", "service"],
+    },
+)
+async def tool_get_service_logs(params: dict, session: Session) -> str:
+    service = str(params.get("service", "")).strip()
+    lines = params.get("lines", 100)
+    if not _SAFE_SERVICE_NAME.fullmatch(service):
+        return "❌ 無效的服務名稱"
+    if not isinstance(lines, int) or not 1 <= lines <= 500:
+        return "❌ 日誌行數必須介於 1 到 500"
+    return await tool_exec_ssh_command(
+        _controlled_diagnostic_params(params, f"journalctl -u {service} --no-pager -n {lines}"), session
+    )
+
+
+@register_tool(
+    name="check_disk_usage",
+    description="檢查目標資產指定絕對路徑的磁碟使用量。路徑由伺服器驗證；純讀取，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {"type": "string", "description": "資產 ID 或名稱"},
+            "path": {"type": "string", "description": "絕對路徑，預設 /", "default": "/"},
+        },
+        "required": ["asset_id"],
+    },
+)
+async def tool_check_disk_usage(params: dict, session: Session) -> str:
+    path = str(params.get("path", "/")).strip()
+    if not _SAFE_DISK_PATH.fullmatch(path):
+        return "❌ 路徑必須是安全的絕對路徑"
+    return await tool_exec_ssh_command(_controlled_diagnostic_params(params, f"df -h {path}"), session)
+
+
+@register_tool(
+    name="check_deployment_status",
+    description="檢查指定 systemd 部署服務是否啟用。服務名稱由伺服器驗證；純讀取，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {"type": "string", "description": "資產 ID 或名稱"},
+            "service": {"type": "string", "description": "systemd 服務名稱"},
+        },
+        "required": ["asset_id", "service"],
+    },
+)
+async def tool_check_deployment_status(params: dict, session: Session) -> str:
+    service = str(params.get("service", "")).strip()
+    if not _SAFE_SERVICE_NAME.fullmatch(service):
+        return "❌ 無效的服務名稱"
+    return await tool_exec_ssh_command(
+        _controlled_diagnostic_params(params, f"systemctl is-active {service}"), session
+    )
+
+
 @register_tool(
     name="supervisor_action",
     description="管理遠端主機的 Supervisor 程序（start/stop/restart）。需要用戶確認。當用戶要求重啟程序、停止服務等 Supervisor 操作時使用。",
@@ -736,7 +824,7 @@ async def tool_create_note(params: dict, session: Session) -> str:
         content=content,
         category=category,
         tags=json.dumps(tags, ensure_ascii=False) if tags else "[]",
-        author="agent",
+        author=params.get("_actor", "agent"),
         pinned=False,
         published=True,
         version=1,
@@ -783,7 +871,7 @@ async def tool_acknowledge_alert(params: dict, session: Session) -> str:
 
     now = datetime.now(UTC).replace(microsecond=0)
     alert.acknowledged = True
-    alert.acknowledged_by = "agent"
+    alert.acknowledged_by = params.get("_actor", "agent")
     alert.acknowledged_at = now
     session.commit()
 
@@ -1509,7 +1597,7 @@ async def check_llm_health() -> AgentHealthResponse:
 # ── Proactive system inspection ─────────────────────────────────────────────
 
 
-async def inspect_system(model: str | None = None, create_notes: bool = False) -> dict:
+async def inspect_system(model: str | None = None, create_notes: bool = False, actor: str = "agent") -> dict:
     """
     Proactive system health inspection.
     Collects metrics, services, alerts → LLM analyzes → returns report.
@@ -1636,7 +1724,7 @@ async def inspect_system(model: str | None = None, create_notes: bool = False) -
                             content=issue.get("detail", issue.get("title", "")),
                             category="知識",
                             tags=json.dumps(["自動檢查", "告警"], ensure_ascii=False),
-                            author="agent",
+                            author=actor,
                             pinned=True,
                             published=True,
                             version=1,

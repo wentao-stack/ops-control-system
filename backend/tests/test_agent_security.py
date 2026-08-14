@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, _apply_sqlite_pragmas
-from app.models import Asset, AgentToolCall
+from app.models import Asset, AgentMemory, AgentToolCall
 from app.agent import (
     register_tool,
     get_tool_handler,
@@ -244,3 +244,16 @@ class TestAuditLog:
         assert call.confirmed is True
         assert call.confirmed_by == "wentao"
         assert call.confirmed_at is not None
+
+
+class TestMemoryIdentityIsolation:
+    @pytest.mark.asyncio
+    async def test_tool_uses_authenticated_actor_not_model_user(self, session):
+        from app.agent import tool_get_memories, tool_save_memory
+
+        await tool_save_memory({"_actor": "alice", "user": "bob", "key": "region", "value": "tokyo"}, session)
+        assert session.query(AgentMemory).filter_by(user="alice", key="region").one_or_none() is not None
+        assert session.query(AgentMemory).filter_by(user="bob", key="region").one_or_none() is None
+
+        result = await tool_get_memories({"_actor": "bob", "user": "alice"}, session)
+        assert "暫無記憶" in result

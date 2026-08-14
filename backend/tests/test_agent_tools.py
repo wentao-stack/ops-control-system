@@ -158,6 +158,13 @@ class TestToolRegistry:
             assert "parameters" in t["function"]
             assert "description" in t["function"]
 
+    def test_controlled_diagnostic_tools_are_read_only(self):
+        for name in ["get_service_logs", "check_disk_usage", "check_deployment_status"]:
+            tool = get_tool_handler(name)
+            assert tool is not None
+            assert tool.level == "read"
+            assert tool.requires_confirm is False
+
 
 # ── exec_ssh_command ────────────────────────────────────────────────────────
 
@@ -203,6 +210,20 @@ class TestExecSSHCommand:
         res = await invoke_tool("exec_ssh_command", {"asset_id": prod_asset.name, "command": "echo hi"}, session)
         # Should not be "找不到資產"
         assert "找不到資產" not in res
+
+    async def test_generic_shell_is_blocked_in_production(self, session, prod_asset):
+        res = await invoke_tool("exec_ssh_command", {"asset_id": prod_asset.id, "command": "echo hi"}, session)
+        assert "生產環境" in res
+
+
+class TestControlledDiagnostics:
+    async def test_rejects_unsafe_service_name(self, session):
+        res = await invoke_tool("get_service_logs", {"asset_id": "x", "service": "nginx; rm -rf /"}, session)
+        assert "無效" in res
+
+    async def test_rejects_relative_disk_path(self, session):
+        res = await invoke_tool("check_disk_usage", {"asset_id": "x", "path": "../tmp"}, session)
+        assert "絕對路徑" in res
 
 
 # ── supervisor_action ───────────────────────────────────────────────────────

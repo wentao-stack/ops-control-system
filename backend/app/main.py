@@ -1369,13 +1369,15 @@ def agent_cancel_run(run_id: str, session: Session = Depends(get_session), user:
 @app.post("/api/v1/agent/inspect", response_model=AgentInspectReport)
 async def agent_inspect(
     req: AgentInspectRequest,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> AgentInspectReport:
     """Proactive system health inspection. Collects data, analyzes with LLM, returns report."""
     from .agent_schemas import AgentInspectRequest
     from .agent import inspect_system
 
-    report = await inspect_system(req.model, create_notes=req.create_notes)
+    if req.create_notes and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Creating inspection notes requires admin role")
+    report = await inspect_system(req.model, create_notes=req.create_notes, actor=user.username)
     return report
 
 
