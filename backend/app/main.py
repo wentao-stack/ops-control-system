@@ -2641,9 +2641,10 @@ def admin_update_post_status(
     if body.status not in ("draft", "published", "archived"):
         raise HTTPException(status_code=400, detail="Invalid status")
 
+    old_status = post.status
     post.status = body.status
     post.updated_at = datetime.now(UTC)
-    if body.status == "published" and post.status != "published":
+    if body.status == "published" and old_status != "published":
         post.published_at = datetime.now(UTC)
     elif body.status != "published":
         post.published_at = None
