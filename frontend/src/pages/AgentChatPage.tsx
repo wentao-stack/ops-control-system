@@ -1012,7 +1012,7 @@ function fmtTokens(n: number): string {
 
 function AgentUsagePanel() {
   const { t } = useTranslation()
-  const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect">("usage")
+  const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect" | "rag">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
   const [recordsOffset, setRecordsOffset] = useState(0)
@@ -1039,6 +1039,7 @@ function AgentUsagePanel() {
         <button className={`usage-sub-tab ${subTab === "usage" ? "active" : ""}`} onClick={() => setSubTab("usage")}>{t("agent.usageStats")}</button>
         <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>{t("agent.memoryManagement")}</button>
         <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>{t("agent.systemInspect")}</button>
+        <button className={`usage-sub-tab ${subTab === "rag" ? "active" : ""}`} onClick={() => setSubTab("rag")}>{t("agent.ragQuality")}</button>
       </div>
 
       {subTab === "usage" ? loading ? (
@@ -1170,9 +1171,90 @@ function AgentUsagePanel() {
       )}
       </div>) : (
         <div className="usage-empty">{t("agent.noUsageData")}</div>
-      ) : (subTab === "memories" ? <AgentMemoryPanel /> : <AgentInspectPanel />)}
+      ) : (subTab === "memories" ? <AgentMemoryPanel /> : subTab === "rag" ? <AgentRagPanel /> : <AgentInspectPanel />)}
     </div>
   )
+}
+
+type RagEvaluation = {
+  index_stats: { total_vectors: number; embed_model: string; embed_dim: number }
+  total: number
+  passed: number
+  pass_rate: number
+  cases: {
+    id: string
+    query: string
+    expected_title: string
+    actual_title: string
+    source: string
+    score: number | null
+    elapsed_ms: number
+    passed: boolean
+    error: string | null
+  }[]
+}
+
+function AgentRagPanel() {
+  const { t } = useTranslation()
+  const [report, setReport] = useState<RagEvaluation | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [error, setError] = useState("")
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError("")
+    api<RagEvaluation>("/api/v1/agent/rag/evaluation")
+      .then(setReport)
+      .catch(error => setError(errorMessage(error, t("agent.loadRagFailed"))))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const rebuild = async () => {
+    if (!window.confirm(t("agent.ragRebuildConfirm"))) return
+    setRebuilding(true)
+    setError("")
+    try {
+      await api("/api/v1/agent/rag/reindex", { method: "POST" })
+      load()
+    } catch (error) {
+      setError(errorMessage(error, t("agent.ragRebuildFailed")))
+    } finally {
+      setRebuilding(false)
+    }
+  }
+
+  if (loading && !report) return <div className="usage-empty">{t("agent.loading")}</div>
+  if (error && !report) return <div className="usage-empty usage-error-state"><span>{error}</span><button type="button" className="btn btn-secondary" onClick={load}>{t("agent.retry")}</button></div>
+  if (!report) return null
+
+  return <div className="usage-content">
+    <div className="usage-header">
+      <div><h3>{t("agent.ragQualityTitle")}</h3><p>{t("agent.ragQualityDesc")}</p></div>
+      <div className="inspect-actions">
+        <button type="button" className="btn btn-secondary" disabled={loading} onClick={load}>{t("agent.ragRunEvaluation")}</button>
+        <button type="button" className="btn btn-primary" disabled={rebuilding} onClick={rebuild}>{rebuilding ? t("agent.ragRebuilding") : t("agent.ragRebuild")}</button>
+      </div>
+    </div>
+    {error && <div className="memory-error">{error}</div>}
+    <div className="usage-cards">
+      <div className="usage-card"><div className="usage-card-value">{report.index_stats.total_vectors}</div><div className="usage-card-label">{t("agent.ragVectors")}</div></div>
+      <div className="usage-card"><div className="usage-card-value">{report.pass_rate}%</div><div className="usage-card-label">{t("agent.ragPassRate")}</div></div>
+      <div className="usage-card"><div className="usage-card-value">{report.passed}/{report.total}</div><div className="usage-card-label">{t("agent.ragPassedCases")}</div></div>
+      <div className="usage-card"><div className="usage-card-value">{report.index_stats.embed_dim}</div><div className="usage-card-label">{t("agent.ragEmbeddingDimension")}</div></div>
+    </div>
+    <div className="usage-records">
+      <h4>{t("agent.ragEvaluationCases")}</h4>
+      <table className="usage-table">
+        <thead><tr><th>{t("agent.ragResult")}</th><th>{t("agent.ragQuery")}</th><th>{t("agent.ragExpected")}</th><th>{t("agent.ragActual")}</th><th>{t("agent.ragScore")}</th><th>{t("agent.ragLatency")}</th></tr></thead>
+        <tbody>{report.cases.map(item => <tr key={item.id}>
+          <td>{item.passed ? "✓" : "✗"}</td><td>{item.query}</td><td>{item.expected_title}</td><td>{item.error || item.actual_title || "—"}</td><td>{item.score == null ? "—" : item.score.toFixed(3)}</td><td>{item.elapsed_ms} ms</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </div>
 }
 
 /* ── Memory Panel ──────────────────────────────────────────────────────────── */

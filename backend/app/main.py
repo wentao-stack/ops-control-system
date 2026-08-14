@@ -1761,6 +1761,15 @@ def reindex_rag(
     return {"status": "ok", "index_stats": get_index_stats(), "build_stats": stats}
 
 
+@app.get("/api/v1/agent/rag/evaluation")
+def evaluate_rag(
+    current_user: dict = Depends(get_current_user),
+):
+    """Evaluate multilingual Runbook retrieval without rebuilding the index."""
+    from .rag_evaluation import evaluate_runbook_retrieval
+    return evaluate_runbook_retrieval()
+
+
 # ── ComfyUI 生成 ──────────────────────────────────────────────────────────
 
 
