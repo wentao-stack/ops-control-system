@@ -659,6 +659,27 @@ async def tool_check_deployment_status(params: dict, session: Session) -> str:
 
 
 @register_tool(
+    name="list_processes",
+    description="列出目標主機的主要程序，並依 CPU 或記憶體使用量排序。這是查看程序時的首選工具；純讀取，無需確認。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "asset_id": {"type": "string", "description": "資產 ID 或名稱"},
+            "sort_by": {"type": "string", "enum": ["memory", "cpu"], "description": "排序依據，預設 memory", "default": "memory"},
+        },
+        "required": ["asset_id"],
+    },
+)
+async def tool_list_processes(params: dict, session: Session) -> str:
+    sort_by = params.get("sort_by", "memory")
+    if sort_by not in {"memory", "cpu"}:
+        return "❌ sort_by 必須是 memory 或 cpu"
+    sort_column = "%mem" if sort_by == "memory" else "%cpu"
+    command = f"ps -eo pid,user,comm,%cpu,%mem --sort=-{sort_column}"
+    return await tool_exec_ssh_command(_controlled_diagnostic_params(params, command), session)
+
+
+@register_tool(
     name="supervisor_action",
     description="管理遠端主機的 Supervisor 程序（start/stop/restart）。需要用戶確認。當用戶要求重啟程序、停止服務等 Supervisor 操作時使用。",
     params_schema={
@@ -1400,6 +1421,10 @@ def build_system_prompt(memories_text: str = "", locale: str = "zh-TW") -> str:
 - 先向用戶說明計畫與影響。要執行某一個具體步驟時，使用 execute_runbook_step（不要改用 exec_ssh_command），它會逐步要求確認並寫入稽核。
 - 每一步執行結果出來後，先判斷是否成功；需要繼續才處理下一個步驟。絕不在一次回合中跳過確認或批次執行多個 Runbook 步驟。
 - 修復完成後，使用適合的 read 工具（如 get_host_metrics、get_services 或 supervisor_status）驗證健康狀態，並在最終回覆中摘要執行結果與驗證結果。
+
+**診斷工具規則：**
+- 用戶要求查看主機程序時，使用 `list_processes`，取得結果後直接摘要，不要改用多個 `ps`、`top`、`grep` 或管道命令重複查詢。
+- 用戶要求日誌、磁碟或部署狀態時，優先使用 `get_service_logs`、`check_disk_usage`、`check_deployment_status`。
 
 **記憶使用規則：**
 - 當用戶提供個人偏好、環境配置、操作經驗等事實時，使用 save_memory 保存。

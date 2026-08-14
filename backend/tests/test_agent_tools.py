@@ -159,7 +159,7 @@ class TestToolRegistry:
             assert "description" in t["function"]
 
     def test_controlled_diagnostic_tools_are_read_only(self):
-        for name in ["get_service_logs", "check_disk_usage", "check_deployment_status"]:
+        for name in ["get_service_logs", "check_disk_usage", "check_deployment_status", "list_processes"]:
             tool = get_tool_handler(name)
             assert tool is not None
             assert tool.level == "read"
@@ -224,6 +224,10 @@ class TestControlledDiagnostics:
     async def test_rejects_relative_disk_path(self, session):
         res = await invoke_tool("check_disk_usage", {"asset_id": "x", "path": "../tmp"}, session)
         assert "絕對路徑" in res
+
+    async def test_process_tool_rejects_unknown_sort(self, session):
+        res = await invoke_tool("list_processes", {"asset_id": "x", "sort_by": "pid"}, session)
+        assert "sort_by" in res
 
 
 # ── supervisor_action ───────────────────────────────────────────────────────

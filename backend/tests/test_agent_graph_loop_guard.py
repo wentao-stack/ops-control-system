@@ -14,6 +14,13 @@ def _event(raw: str) -> dict:
     return json.loads(raw.removeprefix("data: ").strip())
 
 
+def test_process_request_uses_controlled_process_tool():
+    intent = agent_graph.detect_intent("在 wentao-MS-7C91 上看一下进程")
+    assert intent is not None
+    assert intent["function"]["name"] == "list_processes"
+    assert json.loads(intent["function"]["arguments"])["asset_id"] == "wentao-MS-7C91"
+
+
 def test_repeated_read_tool_forces_a_text_answer_instead_of_exhausting_iterations(session, monkeypatch):
     conversation = AgentConversation(
         id="conv-loop-guard",

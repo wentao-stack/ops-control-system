@@ -164,8 +164,15 @@ def localized_event_text(locale: str, key: str, tool_name: str = "") -> str:
 
 def detect_intent(user_message: str) -> dict | None:
     """Auto-detect tool call intent when LLM refuses to call tools."""
-    m_cmd = re.search(r"執行\s+(.+)$", user_message)
     m_asset = re.search(r"在\s+(.+?)\s+上", user_message)
+    if m_asset and any(keyword in user_message.lower() for keyword in ["進程", "进程", "程序", "process"]):
+        return {
+            "function": {
+                "name": "list_processes",
+                "arguments": json.dumps({"asset_id": m_asset.group(1).strip()}, ensure_ascii=False),
+            }
+        }
+    m_cmd = re.search(r"執行\s+(.+)$", user_message)
     if m_cmd and m_asset:
         return {
             "function": {
@@ -385,6 +392,7 @@ async def run_agent_graph(
     total_completion_tokens = 0
     total_tokens = 0
     tool_calls_count = 0
+    generic_ssh_calls = 0
     final_content = ""
 
     for iteration in range(max_iterations):
@@ -486,6 +494,25 @@ async def run_agent_graph(
             # Signal: tool_call event
             yield sse("tool_call", id=tool_call_id, name=tool_name, params=tool_args, level=tool_level)
 
+            # Different shell spellings (ps | head, ps -ef, top, grep, …)
+            # were causing the model to burn the whole loop after it already
+            # had a valid result. One generic SSH command is enough for a
+            # turn; specialised read tools remain available for follow-ups.
+            if tool_name == "exec_ssh_command" and generic_ssh_calls >= 1:
+                result = "ℹ️ 本回合已執行過 SSH 命令。請使用已有輸出直接回答用戶，不要再嘗試其他命令變體。"
+                step.status = "succeeded"
+                step.output = result
+                step.updated_at = datetime.now(UTC)
+                session.commit()
+                yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=0)
+                tool_input_json = json.dumps(tool_args, ensure_ascii=False)
+                _save_message(session, conv_id, "tool", "", tool_name=tool_name, tool_input=tool_input_json, tool_result=result)
+                _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result)
+                llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
+                llm_messages.append({"role": "system", "content": result})
+                force_text_response = True
+                continue
+
             # Tool cards display their raw result; pass the UI locale to the handler.
             tool_args["_locale"] = req.locale
 
@@ -579,6 +606,8 @@ async def run_agent_graph(
 
             if handler:
                 try:
+                    if tool_name == "exec_ssh_command":
+                        generic_ssh_calls += 1
                     result = await handler.handler(tool_args, session)
                 except Exception as e:
                     result = f"工具執行錯誤: {str(e)[:200]}"
