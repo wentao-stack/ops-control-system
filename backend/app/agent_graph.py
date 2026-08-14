@@ -143,6 +143,16 @@ def sse(event: str, **kwargs) -> str:
     return f'data: {json.dumps(payload, ensure_ascii=False)}\n\n'
 
 
+def localized_event_text(locale: str, key: str, tool_name: str = "") -> str:
+    """Translate Agent runtime event text rendered directly by the UI."""
+    messages = {
+        "zh-TW": {"thinking": "正在分析...", "running": f"正在執行 {tool_name}...", "completed": f"{tool_name} 完成"},
+        "en": {"thinking": "Analyzing...", "running": f"Running {tool_name}...", "completed": f"{tool_name} completed"},
+        "ja": {"thinking": "分析中...", "running": f"{tool_name} を実行中...", "completed": f"{tool_name} が完了しました"},
+    }
+    return messages.get(locale, messages["zh-TW"])[key]
+
+
 # ── Intent Detection ──────────────────────────────────────────────────────
 
 def detect_intent(user_message: str) -> dict | None:
@@ -356,7 +366,7 @@ async def run_agent_graph(
 
     for iteration in range(max_iterations):
         # Signal: LLM is thinking
-        yield sse("thinking", text="正在分析...")
+        yield sse("thinking", text=localized_event_text(req.locale, "thinking"))
 
         # Call LLM (need full response to check tool_calls)
         try:
@@ -423,6 +433,9 @@ async def run_agent_graph(
             # Signal: tool_call event
             yield sse("tool_call", id=tool_call_id, name=tool_name, params=tool_args, level=tool_level)
 
+            # Tool cards display their raw result; pass the UI locale to the handler.
+            tool_args["_locale"] = req.locale
+
             # Permission check
             if not _check_tool_permission(user_role, tool_level):
                 result = f"❌ 權限不足：無法使用 {tool_name}（需要 {tool_level} 權限）"
@@ -486,7 +499,7 @@ async def run_agent_graph(
             import time as _time
             start = _time.monotonic()
 
-            yield sse("tool_progress", id=tool_call_id, message=f"正在執行 {tool_name}...", percent=50)
+            yield sse("tool_progress", id=tool_call_id, message=localized_event_text(req.locale, "running", tool_name), percent=50)
 
             if handler:
                 try:
@@ -499,7 +512,7 @@ async def run_agent_graph(
 
             duration_ms = int((_time.monotonic() - start) * 1000)
 
-            yield sse("tool_progress", id=tool_call_id, message=f"{tool_name} 完成", percent=100)
+            yield sse("tool_progress", id=tool_call_id, message=localized_event_text(req.locale, "completed", tool_name), percent=100)
             yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=duration_ms)
 
             tool_input_json = json.dumps(tool_args, ensure_ascii=False)

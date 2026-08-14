@@ -135,6 +135,36 @@ def record_tool_call(
 # ── Tool Definitions ────────────────────────────────────────────────────────
 
 
+def format_host_metrics_results(results: list[dict | BaseException], locale: str = "zh-TW") -> str:
+    """Format host metrics in the language selected by the web UI."""
+    labels = {
+        "zh-TW": {"error": "錯誤", "cpu": "CPU", "memory": "記憶體", "disk": "磁碟", "cores": "核心", "empty": "無法收集監控數據"},
+        "en": {"error": "Error", "cpu": "CPU", "memory": "Memory", "disk": "Disk", "cores": "cores", "empty": "Unable to collect monitoring data"},
+        "ja": {"error": "エラー", "cpu": "CPU", "memory": "メモリ", "disk": "ディスク", "cores": "コア", "empty": "監視データを収集できません"},
+    }.get(locale, {})
+    labels = labels or {"error": "錯誤", "cpu": "CPU", "memory": "記憶體", "disk": "磁碟", "cores": "核心", "empty": "無法收集監控數據"}
+
+    def value(item: object) -> object:
+        return "-" if item is None else item
+
+    lines: list[str] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            lines.append(f"{labels['error']}: {result}")
+            continue
+        lines.append(f"📊 {result['name']} ({result['asset_id']})")
+        if result.get("cpu_percent") is not None:
+            lines.append(f"  {labels['cpu']}: {result['cpu_percent']}% ({value(result.get('cpu_count'))} {labels['cores']})")
+        if result.get("mem_percent") is not None:
+            lines.append(f"  {labels['memory']}: {value(result.get('mem_used_mb'))}MB / {value(result.get('mem_total_mb'))}MB ({result['mem_percent']}%)")
+        if result.get("disk_percent") is not None:
+            lines.append(f"  {labels['disk']}: {value(result.get('disk_used_gb'))}GB / {value(result.get('disk_total_gb'))}GB ({result['disk_percent']}%)")
+        for gpu in result.get("gpu") or []:
+            lines.append(f"  GPU: {gpu}")
+        lines.append("")
+    return "\n".join(lines) if lines else labels["empty"]
+
+
 @register_tool(
     name="get_host_metrics",
     description="獲取所有遠程主機的監控數據（CPU、記憶體、磁碟、GPU）。當用戶詢問主機狀態、監控、資源使用時使用。",
@@ -150,9 +180,10 @@ async def tool_get_host_metrics(params: dict, session: Session) -> str:
     from .models import Asset
     import asyncio
 
+    locale = params.get("_locale", "zh-TW")
     assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
     if not assets:
-        return "沒有配置 SSH 連線的主機"
+        return {"en": "No hosts with SSH connections are configured", "ja": "SSH 接続が設定されたホストはありません"}.get(locale, "沒有配置 SSH 連線的主機")
 
     async def _collect(asset: Asset) -> dict:
         raw = await asyncio.to_thread(
@@ -181,24 +212,7 @@ async def tool_get_host_metrics(params: dict, session: Session) -> str:
         }
 
     results = await asyncio.gather(*[_collect(a) for a in assets], return_exceptions=True)
-    lines = []
-    for r in results:
-        if isinstance(r, Exception):
-            lines.append(f"錯誤: {r}")
-        else:
-            d = r
-            lines.append(f"📊 {d['name']} ({d['asset_id']})")
-            if d.get("cpu_percent") is not None:
-                lines.append(f"  CPU: {d['cpu_percent']}% ({d.get('cpu_count', '?')} cores)")
-            if d.get("mem_percent") is not None:
-                lines.append(f"  記憶體: {d['mem_used_mb']}MB / {d['mem_total_mb']}MB ({d['mem_percent']}%)")
-            if d.get("disk_percent") is not None:
-                lines.append(f"  磁碟: {d['disk_used_gb']}GB / {d['disk_total_gb']}GB ({d['disk_percent']}%)")
-            if d.get("gpu"):
-                for g in d["gpu"]:
-                    lines.append(f"  GPU: {g}")
-            lines.append("")
-    return "\n".join(lines) if lines else "無法收集監控數據"
+    return format_host_metrics_results(results, locale)
 
 
 @register_tool(

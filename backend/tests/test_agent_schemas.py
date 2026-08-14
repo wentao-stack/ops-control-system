@@ -36,6 +36,33 @@ def test_system_prompt_requires_the_requested_reply_language():
     assert "日本語で回答" in build_system_prompt(locale="ja")
 
 
+def test_host_metrics_tool_result_uses_requested_locale_and_safe_missing_values():
+    from app.agent import format_host_metrics_results
+
+    results = [{
+        "name": "archlinux",
+        "asset_id": "asset-1",
+        "cpu_percent": 12.5,
+        "cpu_count": 4,
+        "mem_used_mb": 512,
+        "mem_total_mb": 1024,
+        "mem_percent": 50.0,
+        "disk_used_gb": None,
+        "disk_total_gb": None,
+        "disk_percent": 25.0,
+        "gpu": [],
+    }]
+
+    english = format_host_metrics_results(results, "en")
+    japanese = format_host_metrics_results(results, "ja")
+
+    assert "Memory: 512MB / 1024MB" in english
+    assert "Disk: -GB / -GB" in english
+    assert "記憶體" not in english and "磁碟" not in english
+    assert "メモリ: 512MB / 1024MB" in japanese
+    assert "ディスク: -GB / -GB" in japanese
+
+
 def test_agent_chat_message_is_trimmed_and_blank_is_rejected():
     assert AgentChatRequest(message="  hello  ").message == "hello"
 
