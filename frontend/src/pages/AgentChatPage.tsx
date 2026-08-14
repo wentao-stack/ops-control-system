@@ -24,6 +24,7 @@ type AgentHealth = {
 
 type SSEEvent =
   | { event: "conv_id"; conv_id: string }
+  | { event: "run_id"; run_id: string; status: string }
   | { event: "thinking"; text: string }
   | { event: "token"; token: string }
   | { event: "tool_call"; id: string; name: string; params: Record<string, any>; level: string }
@@ -329,6 +330,7 @@ export function AgentChatPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const activeRunRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messageRequestRef = useRef(0)
@@ -433,6 +435,7 @@ export function AgentChatPage() {
     setHasMoreMessages(false)
     setToolCards([])
     setPendingConfirm(null)
+    activeRunRef.current = null
     setMobileSidebarOpen(false)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
@@ -561,6 +564,9 @@ export function AgentChatPage() {
       }
 
       switch (parsed.event) {
+        case "run_id":
+          activeRunRef.current = parsed.run_id
+          break
         case "conv_id":
           convId = parsed.conv_id
           setActiveId(parsed.conv_id)
@@ -709,6 +715,7 @@ export function AgentChatPage() {
       setToolCards([])
       setPendingConfirm(null)
       abortRef.current = null
+      activeRunRef.current = null
       loadConversations(0)
       if (receivedError) checkHealth()
     }
@@ -716,6 +723,8 @@ export function AgentChatPage() {
 
   /* stop streaming */
   const handleStop = () => {
+    const runId = activeRunRef.current
+    if (runId) api("/api/v1/agent/runs/" + encodeURIComponent(runId) + "/cancel", { method: "POST" }).catch(() => undefined)
     if (pendingConfirm) {
       api("/api/v1/agent/confirm", {
         method: "POST",
