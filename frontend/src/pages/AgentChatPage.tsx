@@ -1059,7 +1059,7 @@ function fmtTokens(n: number): string {
 
 function AgentUsagePanel() {
   const { t } = useTranslation()
-  const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect" | "rag">("usage")
+  const [subTab, setSubTab] = useState<"usage" | "memories" | "inspect" | "rag" | "runs">("usage")
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState("month")
   const [recordsOffset, setRecordsOffset] = useState(0)
@@ -1087,6 +1087,7 @@ function AgentUsagePanel() {
         <button className={`usage-sub-tab ${subTab === "memories" ? "active" : ""}`} onClick={() => setSubTab("memories")}>{t("agent.memoryManagement")}</button>
         <button className={`usage-sub-tab ${subTab === "inspect" ? "active" : ""}`} onClick={() => setSubTab("inspect")}>{t("agent.systemInspect")}</button>
         <button className={`usage-sub-tab ${subTab === "rag" ? "active" : ""}`} onClick={() => setSubTab("rag")}>{t("agent.ragQuality")}</button>
+        <button className={`usage-sub-tab ${subTab === "runs" ? "active" : ""}`} onClick={() => setSubTab("runs")}>{t("agent.runCenter")}</button>
       </div>
 
       {subTab === "usage" ? loading ? (
@@ -1218,9 +1219,96 @@ function AgentUsagePanel() {
       )}
       </div>) : (
         <div className="usage-empty">{t("agent.noUsageData")}</div>
-      ) : (subTab === "memories" ? <AgentMemoryPanel /> : subTab === "rag" ? <AgentRagPanel /> : <AgentInspectPanel />)}
+      ) : (subTab === "memories" ? <AgentMemoryPanel /> : subTab === "rag" ? <AgentRagPanel /> : subTab === "runs" ? <AgentRunPanel /> : <AgentInspectPanel />)}
     </div>
   )
+}
+
+type AgentRunStep = {
+  id: number
+  sequence: number
+  status: string
+  tool_name: string | null
+  input: string
+  output: string
+  created_at: string
+  updated_at: string
+}
+
+type AgentRun = {
+  id: string
+  conversation_id: string
+  status: string
+  input: string
+  output: string
+  error: string | null
+  cancel_requested: boolean
+  created_at: string
+  updated_at: string
+  steps?: AgentRunStep[]
+}
+
+function AgentRunPanel() {
+  const { t } = useTranslation()
+  const [runs, setRuns] = useState<AgentRun[]>([])
+  const [selected, setSelected] = useState<AgentRun | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError("")
+    api<{ runs: AgentRun[] }>("/api/v1/agent/runs?limit=50")
+      .then(result => setRuns(result.runs))
+      .catch(err => setError(errorMessage(err, t("agent.loadRunsFailed"))))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const selectRun = async (id: string) => {
+    try {
+      setSelected(await api<AgentRun>(`/api/v1/agent/runs/${encodeURIComponent(id)}`))
+    } catch (err) {
+      setError(errorMessage(err, t("agent.loadRunsFailed")))
+    }
+  }
+
+  const cancelRun = async (run: AgentRun) => {
+    try {
+      await api(`/api/v1/agent/runs/${encodeURIComponent(run.id)}/cancel`, { method: "POST" })
+      await selectRun(run.id)
+      load()
+    } catch (err) {
+      setError(errorMessage(err, t("agent.cancelRunFailed")))
+    }
+  }
+
+  const isActive = (status: string) => ["queued", "running", "awaiting_approval"].includes(status)
+  if (loading && !runs.length) return <div className="usage-empty">{t("agent.loading")}</div>
+  return <div className="usage-content">
+    <div className="usage-header">
+      <div><h3>{t("agent.runCenter")}</h3><p>{t("agent.runCenterDesc")}</p></div>
+      <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}>{t("agent.refresh")}</button>
+    </div>
+    {error && <div className="memory-error">{error}</div>}
+    {!runs.length ? <div className="usage-empty">{t("agent.noRuns")}</div> : <div className="usage-records">
+      <table className="usage-table"><thead><tr><th>{t("agent.time")}</th><th>{t("agent.status")}</th><th>{t("agent.request")}</th><th>{t("agent.actions")}</th></tr></thead>
+        <tbody>{runs.map(run => <tr key={run.id}>
+          <td>{new Date(run.created_at).toLocaleString()}</td><td>{run.status}</td><td>{run.input.slice(0, 80)}</td>
+          <td><button type="button" className="btn btn-secondary" onClick={() => selectRun(run.id)}>{t("agent.details")}</button>{isActive(run.status) && <button type="button" className="btn btn-danger" onClick={() => cancelRun(run)}>{t("agent.cancel")}</button>}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
+    {selected && <div className="usage-records"><h4>{selected.id} · {selected.status}</h4>
+      {selected.error && <div className="memory-error">{selected.error}</div>}
+      <p><strong>{t("agent.request")}：</strong>{selected.input}</p>
+      {selected.output && <pre className="agent-tool-exec-result">{selected.output}</pre>}
+      <table className="usage-table"><thead><tr><th>#</th><th>{t("agent.status")}</th><th>{t("agent.toolCalls")}</th><th>{t("agent.result")}</th></tr></thead>
+        <tbody>{(selected.steps ?? []).map(step => <tr key={step.id}><td>{step.sequence}</td><td>{step.status}</td><td>{step.tool_name ?? "—"}</td><td>{step.output.slice(0, 180) || "—"}</td></tr>)}</tbody>
+      </table>
+    </div>}
+  </div>
 }
 
 type RagEvaluation = {
