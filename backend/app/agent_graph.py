@@ -53,7 +53,7 @@ from typing import Any, AsyncIterator, TypedDict
 import httpx
 import logging
 
-from .agent_models import AgentConversation, AgentMessage
+from .agent_models import AgentConversation, AgentMessage, AgentRun, AgentStep
 from .agent_schemas import AgentChatRequest
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 SSE_EVENT_TYPES = [
     "conv_id",        # {"conv_id": str}
+    "run_id",         # {"run_id": str, "status": str}
     "thinking",       # {"text": str}
     "token",          # {"token": str}
     "tool_call",      # {"id": str, "name": str, "params": dict, "level": str}
@@ -286,7 +287,7 @@ def load_memories(session, user, user_message):
     vector_ids: dict[str, float] = {}  # memory_id -> cosine_similarity
     try:
         from .agent_rag import rag_search
-        result = rag_search(query=user_message, source="memories", limit=10)
+        result = rag_search(query=user_message, source="memories", limit=10, memory_user=user)
         for hit in result.get("results", []):
             mid = hit.get("source_id", "")
             if mid:
@@ -354,6 +355,17 @@ async def run_agent_graph(
         yield sse("done")
         return
 
+    # Persist a Run before invoking the model so its progress survives a dropped SSE connection.
+    run_id = f"run-{_uuid.uuid4().hex[:16]}"
+    run = AgentRun(
+        id=run_id, conversation_id=conv_id, user=user, status="running",
+        input=req.message, output="", error=None, cancel_requested=False,
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+    )
+    session.add(run)
+    session.commit()
+    yield sse("run_id", run_id=run_id, status="running")
+
     # Save user message
     _save_message(session, conv_id, "user", req.message)
 
@@ -376,6 +388,14 @@ async def run_agent_graph(
     final_content = ""
 
     for iteration in range(max_iterations):
+        session.refresh(run)
+        if run.cancel_requested:
+            run.status = "cancelled"
+            run.updated_at = datetime.now(UTC)
+            session.commit()
+            yield sse("warning", message="執行已取消")
+            yield sse("done")
+            return
         # Signal: LLM is thinking
         yield sse("thinking", text=localized_event_text(req.locale, "thinking"))
 
@@ -388,10 +408,18 @@ async def run_agent_graph(
         try:
             assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_for_turn)
         except httpx.TimeoutException as e:
+            run.status = "timed_out"
+            run.error = str(e)[:500]
+            run.updated_at = datetime.now(UTC)
+            session.commit()
             yield sse("error", message=f"LLM 回應超時（模型可能正在載入，請稍後重試）: {type(e).__name__}")
             yield sse("done")
             return
         except Exception as e:
+            run.status = "failed"
+            run.error = str(e)[:500]
+            run.updated_at = datetime.now(UTC)
+            session.commit()
             yield sse("error", message=f"LLM 呼叫失敗: {type(e).__name__}: {e}")
             yield sse("done")
             return
@@ -440,11 +468,20 @@ async def run_agent_graph(
                 tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
             except json.JSONDecodeError:
                 tool_args = {}
+            tool_args["_actor"] = user
+            tool_args["_actor_role"] = user_role
 
             handler = _get_tool_handler(tool_name)
             requires_confirm = handler and handler.requires_confirm
             tool_level = handler.level if handler else "read"
             tool_call_id = f"tc-{_uuid.uuid4().hex[:8]}"
+            step = AgentStep(
+                run_id=run_id, sequence=tool_calls_count, status="running", tool_name=tool_name,
+                input=json.dumps(tool_args, ensure_ascii=False), output="",
+                created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+            )
+            session.add(step)
+            session.commit()
 
             # Signal: tool_call event
             yield sse("tool_call", id=tool_call_id, name=tool_name, params=tool_args, level=tool_level)
@@ -480,6 +517,9 @@ async def run_agent_graph(
 
             # Confirmation (exec-level tools)
             if requires_confirm:
+                step.status = "awaiting_approval"
+                step.updated_at = datetime.now(UTC)
+                session.commit()
                 confirm_id = f"cf-{_uuid.uuid4().hex[:8]}"
                 confirm_message = f"確認執行 {tool_name}？\n\n參數: {json.dumps(tool_args, ensure_ascii=False)}"
 
@@ -529,6 +569,9 @@ async def run_agent_graph(
                         yield sse("confirm_result", id=confirm_id, approved=True)
 
             # Execute tool with progress
+            step.status = "running"
+            step.updated_at = datetime.now(UTC)
+            session.commit()
             import time as _time
             start = _time.monotonic()
 
@@ -549,6 +592,10 @@ async def run_agent_graph(
                 read_tool_results[read_signature] = result
 
             yield sse("tool_progress", id=tool_call_id, message=localized_event_text(req.locale, "completed", tool_name), percent=100)
+            step.status = "succeeded" if not str(result).startswith("❌") else "failed"
+            step.output = str(result)
+            step.updated_at = datetime.now(UTC)
+            session.commit()
             yield sse("tool_result", id=tool_call_id, name=tool_name, result=result, duration_ms=duration_ms)
 
             tool_input_json = json.dumps(tool_args, ensure_ascii=False)
@@ -605,4 +652,8 @@ async def run_agent_graph(
         pass
 
     # Done
+    run.status = "succeeded"
+    run.output = final_content
+    run.updated_at = datetime.now(UTC)
+    session.commit()
     yield sse("done")

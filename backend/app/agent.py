@@ -134,6 +134,27 @@ def record_tool_call(
 
 # ── Tool Definitions ────────────────────────────────────────────────────────
 
+# Generic SSH is deliberately diagnostic-only. Mutating operations must go
+# through a reviewed Runbook step or the dedicated supervisor tool.
+_SAFE_SHELL_PREFIXES = ("df", "free", "uptime", "ps", "ss", "journalctl", "tail", "grep", "cat", "docker", "supervisorctl", "systemctl", "echo")
+
+def _validate_controlled_shell(command: str, timeout: object, role: str, runbook_id: object = None) -> str | None:
+    if role and role != "admin":
+        return "❌ 僅管理員可執行受控遠端操作"
+    if not isinstance(timeout, int) or timeout < 5 or timeout > 60:
+        return "❌ 逾時必須介於 5 到 60 秒"
+    normalized = command.strip()
+    if any(char in normalized for char in (";", "|", "&", "`", "$", ">", "<", "\n")):
+        return "❌ 危險命令組合不允許；請使用受控 Runbook 步驟"
+    prefix = normalized.split(maxsplit=1)[0] if normalized else ""
+    if prefix not in _SAFE_SHELL_PREFIXES:
+        return "❌ 危險或未受控的命令不在診斷白名單；請使用 Runbook 或專用操作工具"
+    is_mutating = normalized.startswith(("systemctl restart ", "systemctl start ", "systemctl stop ", "docker restart "))
+    if is_mutating and not runbook_id:
+        return "❌ 變更服務必須透過已審閱的 Runbook 步驟執行"
+    return None
+
+
 
 def format_host_metrics_results(results: list[dict | BaseException], locale: str = "zh-TW") -> str:
     """Format host metrics in the language selected by the web UI."""
@@ -471,17 +492,9 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
     if not command or len(command) > 500:
         return "❌ 命令長度必須在 1-500 字元之間"
 
-    # Command blacklist — dangerous commands that should never be executed
-    _DANGEROUS_CMDS = [
-        "rm -rf /", "rm -rf /*", "mkfs", "dd if=", "fdisk",
-        ":(){:|:};", "curl.*|.*bash", "wget.*|.*bash",
-        "chmod -R 777", "chown -R",
-    ]
-    import re as _re
-    cmd_lower = command.lower().strip()
-    for pattern in _DANGEROUS_CMDS:
-        if _re.search(pattern, cmd_lower):
-            return f"❌ 命令包含危險操作，已被黑名單阻擋: {command[:80]}"
+    validation_error = _validate_controlled_shell(command, timeout, params.get("_actor_role", ""), params.get("_runbook_id"))
+    if validation_error:
+        return validation_error
 
     asset = session.execute(
         select(Asset).where(
@@ -535,7 +548,7 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
         stderr=result.get("stderr", "")[:5000],
         exit_code=result.get("exit_code", -1),
         duration=duration,
-        user="agent",
+        user=params.get("_actor", "agent"),
         created_at=now,
     )
     session.add(log)
@@ -635,7 +648,7 @@ async def tool_supervisor_action(params: dict, session: Session) -> str:
         title=f"Agent: {action} {process_name} on {asset.name}",
         change_type="config",
         status="completed" if result.success else "rolled_back",
-        author="agent",
+        author=params.get("_actor", "agent"),
         description=f"Supervisor {action} {process_name} — {result.message or '成功'}",
         affected_assets=asset.name,
         created_at=now,
@@ -894,6 +907,9 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
         "command": params.get("command", ""),
         "timeout": params.get("timeout", 60),
         "_locale": locale,
+        "_actor": params.get("_actor", ""),
+        "_actor_role": params.get("_actor_role", ""),
+        "_runbook_id": runbook.id,
     }, session)
 
     succeeded = result.startswith("✅")
@@ -902,7 +918,7 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
         title=f"Runbook: {runbook.title} — {step_name}",
         change_type="maintenance",
         status="completed" if succeeded else "rolled_back",
-        author="agent",
+        author=params.get("_actor", "agent"),
         description=(
             f"Runbook #{runbook.id} step '{step_name}' on {params.get('asset_id', '')}. "
             f"Result: {result[:500]}"
@@ -924,10 +940,6 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
     params_schema={
         "type": "object",
         "properties": {
-            "user": {
-                "type": "string",
-                "description": "用戶名",
-            },
             "category": {
                 "type": "string",
                 "enum": ["user", "environment", "procedure", "preference"],
@@ -942,7 +954,7 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
                 "description": "記憶內容（聲明式事實）",
             },
         },
-        "required": ["user", "key", "value"],
+        "required": ["key", "value"],
     },
     level="write",
 )
@@ -958,13 +970,13 @@ async def tool_save_memory(params: dict, session: Session) -> str:
     from .models import AgentMemory
     from datetime import UTC, datetime
 
-    user = params.get("user", "")
+    user = params.get("_actor", "")
     category = params.get("category", "environment")
     key = params.get("key", "")
     value = params.get("value", "")
 
     if not all([user, key, value]):
-        return "❌ 缺少必要參數: user, key, value"
+        return "❌ 缺少受驗證的用戶身分或必要參數: key, value"
 
     # Upsert: update if key exists for this user, else insert
     existing = session.scalar(
@@ -1003,10 +1015,6 @@ async def tool_save_memory(params: dict, session: Session) -> str:
     params_schema={
         "type": "object",
         "properties": {
-            "user": {
-                "type": "string",
-                "description": "用戶名",
-            },
             "category": {
                 "type": "string",
                 "enum": ["user", "environment", "procedure", "preference"],
@@ -1017,7 +1025,7 @@ async def tool_save_memory(params: dict, session: Session) -> str:
                 "description": "關鍵字搜索",
             },
         },
-        "required": ["user"],
+        "required": [],
     },
     level="read",
 )
@@ -1031,19 +1039,19 @@ async def tool_get_memories(params: dict, session: Session) -> str:
     """
     from .models import AgentMemory
 
-    user = params.get("user", "")
+    user = params.get("_actor", "")
     category = params.get("category", "")
     query = params.get("query", "")
 
     if not user:
-        return "❌ 需要 user 參數"
+        return "❌ 缺少受驗證的用戶身分"
 
     # ── Semantic search via RAG when query provided ─────────────────────
     semantic_ids: dict[str, float] = {}
     if query:
         try:
             from .agent_rag import rag_search
-            result = rag_search(query=query, source="memories", limit=10)
+            result = rag_search(query=query, source="memories", limit=10, memory_user=user)
             for hit in result.get("results", []):
                 sid = hit.get("source_id", "")
                 if sid:
@@ -1124,7 +1132,7 @@ async def tool_rag_search(params: dict, session: Session) -> str:
     if not query:
         return "❌ 需要 query 參數"
 
-    result = _rag_search(query=query, source=source, limit=limit)
+    result = _rag_search(query=query, source=source, limit=limit, memory_user=params.get("_actor"))
 
     if result.get("error"):
         return f"❌ RAG 搜索失敗: {result['error']}"

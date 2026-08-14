@@ -165,6 +165,7 @@ def chunk_memory(mem: dict) -> list[dict]:
             "title": mem["key"],
             "category": mem.get("category", ""),
             "created_at": mem.get("created_at", "").isoformat() if isinstance(mem.get("created_at"), datetime) else str(mem.get("created_at", "")),
+            "user": mem.get("user", ""),
         },
     }]
 
@@ -228,7 +229,7 @@ def build_full_index(db_session) -> dict:
     for mem in memories:
         mem_dict = {
             "id": mem.id, "key": mem.key, "value": mem.value,
-            "category": mem.category, "created_at": mem.created_at,
+            "category": mem.category, "user": mem.user, "created_at": mem.created_at,
         }
         chunks = chunk_memory(mem_dict)
         stats["memories"] += 1
@@ -272,7 +273,7 @@ def upsert_document(source: str, source_id: str, text: str, title: str, category
 
 # ── rag_search 工具 ──────────────────────────────────────────────────
 
-def rag_search(query: str, source: str = "all", limit: int = 5) -> dict:
+def rag_search(query: str, source: str = "all", limit: int = 5, memory_user: str | None = None) -> dict:
     """
     語義搜索知識庫。當用戶詢問具體問題、故障排查、SOP 時調用。
 
@@ -303,12 +304,16 @@ def rag_search(query: str, source: str = "all", limit: int = 5) -> dict:
     }
     if source != "all" and source in source_map:
         where_filter = {"source": source_map[source]}
+        if source == "memories" and memory_user:
+            where_filter = {"$and": [{"source": "memory"}, {"user": memory_user}]}
 
     # 向量搜索
     try:
+        # A global query may include shared knowledge plus only the caller's memories.
+        query_limit = max(limit * 10, 50) if memory_user and source == "all" else limit
         results = coll.query(
             query_embeddings=vectors,  # type: ignore[arg-type]
-            n_results=limit,
+            n_results=query_limit,
             where=where_filter,  # type: ignore[arg-type]
             include=["documents", "metadatas", "distances"],
         )
@@ -325,6 +330,8 @@ def rag_search(query: str, source: str = "all", limit: int = 5) -> dict:
     for doc_id, doc, meta, dist in zip(ids, docs, metas, dists):
         # cosine distance → similarity (1 - distance)
         score = round(1 - dist, 4) if dist <= 2 else 0.0
+        if meta.get("source") == "memory" and meta.get("user") != memory_user:
+            continue
         formatted.append({
             "source": meta.get("source", "unknown"),
             "source_id": meta.get("source_id", ""),
@@ -333,6 +340,9 @@ def rag_search(query: str, source: str = "all", limit: int = 5) -> dict:
             "score": score,
             "content": doc[:2000],  # 截斷過長內容
         })
+
+        if len(formatted) >= limit:
+            break
 
     return {
         "query": query,

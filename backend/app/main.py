@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 from .auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, decode_ws_token, get_current_user, get_session, is_valid_comfy_media_token, verify_password
 from .database import Base, SessionLocal, engine
 from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, ExecLog
-from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
+from .agent_models import AgentConversation, AgentMessage, AgentRun, AgentStep  # noqa: F401 — ensure tables are created
 from .comfyui_models import ComfyArtifactRecord, ComfyJob  # noqa: F401 — ensure tables are created
 from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tables are created
 from .share_models import SharePost  # noqa: F401 — ensure tables are created
@@ -1326,6 +1326,41 @@ async def agent_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/api/v1/agent/runs")
+def agent_list_runs(limit: int = Query(default=50, ge=1, le=100), session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    """List recoverable Agent runs for the authenticated user."""
+    runs = session.scalars(select(AgentRun).where(AgentRun.user == user.username).order_by(AgentRun.created_at.desc()).limit(limit)).all()
+    return {"runs": [_agent_run_payload(run) for run in runs]}
+
+
+def _agent_run_payload(run: AgentRun) -> dict[str, Any]:
+    return {"id": run.id, "conversation_id": run.conversation_id, "status": run.status, "input": run.input, "output": run.output, "error": run.error, "cancel_requested": run.cancel_requested, "created_at": run.created_at.isoformat(), "updated_at": run.updated_at.isoformat()}
+
+
+@app.get("/api/v1/agent/runs/{run_id}")
+def agent_get_run(run_id: str, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    run = session.scalar(select(AgentRun).where(AgentRun.id == run_id, AgentRun.user == user.username))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Agent run not found")
+    payload = _agent_run_payload(run)
+    steps = session.scalars(select(AgentStep).where(AgentStep.run_id == run.id).order_by(AgentStep.sequence, AgentStep.id)).all()
+    payload["steps"] = [{"id": step.id, "sequence": step.sequence, "status": step.status, "tool_name": step.tool_name, "input": step.input, "output": step.output, "created_at": step.created_at.isoformat(), "updated_at": step.updated_at.isoformat()} for step in steps]
+    return payload
+
+
+@app.post("/api/v1/agent/runs/{run_id}/cancel")
+def agent_cancel_run(run_id: str, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    run = session.scalar(select(AgentRun).where(AgentRun.id == run_id, AgentRun.user == user.username))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Agent run not found")
+    if run.status in {"succeeded", "failed", "cancelled", "timed_out"}:
+        raise HTTPException(status_code=409, detail="Agent run is already finished")
+    run.cancel_requested = True
+    run.updated_at = datetime.now(UTC)
+    session.commit()
+    return {"ok": True, "run_id": run.id, "status": "cancelling"}
 
 
 # ── Agent proactive inspection ──────────────────────────────────────────────

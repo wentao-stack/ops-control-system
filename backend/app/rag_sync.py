@@ -79,7 +79,7 @@ def sync_memory(memory: Any) -> bool:
     """Synchronize an AgentMemory entry."""
     payload = {
         "id": memory.id, "key": memory.key, "value": memory.value,
-        "category": memory.category, "created_at": memory.created_at,
+        "category": memory.category, "user": memory.user, "created_at": memory.created_at,
     }
     return _replace_source("memory", str(memory.id), chunk_memory(payload))
 
