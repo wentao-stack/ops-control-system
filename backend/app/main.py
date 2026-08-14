@@ -22,6 +22,7 @@ from .models import Alert, Asset, AssetService, Change, Note, Runbook, User, Exe
 from .agent_models import AgentConversation, AgentMessage  # noqa: F401 — ensure tables are created
 from .comfyui_models import ComfyArtifactRecord, ComfyJob  # noqa: F401 — ensure tables are created
 from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tables are created
+from .share_models import SharePost  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
 from .remote_service import detect_remote_services
@@ -43,6 +44,7 @@ from .schemas import (
     ExecLogResponse, ExecLogListResponse,
     CodeTreeItem, CodeTreeResponse, CodeFileResponse,
     VultrAccountResponse, VultrInstancesResponse,
+    SharePostCreate, SharePostUpdate, SharePostStatusUpdate, SharePostResponse, SharePostListResponse,
 )
 from .monitor import collect_host_metrics
 from .seed import seed_development_data
@@ -2450,6 +2452,238 @@ async def comfyui_upload(
     }
 
 
+# ── Share API (public) ───────────────────────────────────────────────────────
+
+SHARE_DATA_DIR = Path(__file__).resolve().parents[2] / ".data" / "share"
+SHARE_COVERS_DIR = SHARE_DATA_DIR / "covers"
+SHARE_VIDEOS_DIR = SHARE_DATA_DIR / "videos"
+SHARE_COVERS_DIR.mkdir(parents=True, exist_ok=True)
+SHARE_VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/api/v1/share/posts", response_model=SharePostListResponse)
+def share_list_posts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=12, ge=1, le=50),
+    session: Session = Depends(get_session),
+) -> SharePostListResponse:
+    """Public: list published posts."""
+    q = select(SharePost).where(SharePost.status == "published")
+    total = session.scalar(select(func.count()).select_from(q.subquery())) or 0
+    items = session.scalars(q.order_by(SharePost.published_at.desc(), SharePost.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    return SharePostListResponse(
+        items=[SharePostResponse.model_validate(p) for p in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        generated_at=datetime.now(UTC),
+    )
+
+
+@app.get("/api/v1/share/posts/{slug}")
+def share_get_post(slug: str, session: Session = Depends(get_session)) -> SharePostResponse:
+    """Public: get a single published post by slug."""
+    post = session.scalar(select(SharePost).where(SharePost.slug == slug, SharePost.status == "published"))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return SharePostResponse.model_validate(post)
+
+
+@app.get("/api/v1/share/posts/{slug}/video")
+def share_stream_video(slug: str, range_header: str | None = None):
+    """Public: stream video file with Range support."""
+    # Find the post
+    with SessionLocal() as session:
+        post = session.scalar(select(SharePost).where(SharePost.slug == slug, SharePost.status == "published", SharePost.video_file.isnot(None)))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = SHARE_VIDEOS_DIR / post.video_file  # type: ignore[operator]
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file missing")
+
+    import re
+    start, end = 0, video_path.stat().st_size - 1
+    if range_header:
+        m = re.search(r"bytes=(\d+)-(\d*)", range_header)
+        if m:
+            start = int(m.group(1))
+            end = int(m.group(2)) if m.group(2) else video_path.stat().st_size - 1
+
+    length = end - start + 1
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{video_path.stat().st_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+        "Content-Type": "video/mp4",
+    }
+
+    return Response(
+        content=open(video_path, "rb").seek(start) and open(video_path, "rb").read()[start:end + 1],
+        status_code=206,
+        headers=headers,
+        media_type="video/mp4",
+    )
+
+
+# ── Share API (admin - JWT required) ─────────────────────────────────────────
+
+@app.get("/api/v1/posts", response_model=SharePostListResponse)
+def admin_list_posts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: str | None = None,
+    session: Session = Depends(get_session),
+    _user: User = Depends(get_current_user),
+) -> SharePostListResponse:
+    """Admin: list all posts (including drafts)."""
+    q = select(SharePost)
+    if status_filter:
+        q = q.where(SharePost.status == status_filter)
+    total = session.scalar(select(func.count()).select_from(q.subquery())) or 0
+    items = session.scalars(q.order_by(SharePost.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    return SharePostListResponse(
+        items=[SharePostResponse.model_validate(p) for p in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        generated_at=datetime.now(UTC),
+    )
+
+
+@app.post("/api/v1/posts", response_model=SharePostResponse)
+def admin_create_post(
+    body: SharePostCreate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> SharePostResponse:
+    """Admin: create a new post."""
+    existing = session.scalar(select(SharePost).where(SharePost.slug == body.slug))
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Slug '{body.slug}' already exists")
+
+    now = datetime.now(UTC)
+    post = SharePost(
+        title=body.title,
+        slug=body.slug,
+        cover_image=body.cover_image,
+        video_file=body.video_file,
+        content=body.content,
+        excerpt=body.excerpt,
+        status=body.status,
+        author=user.username,
+        created_at=now,
+        updated_at=now,
+        published_at=now if body.status == "published" else None,
+    )
+    session.add(post)
+    session.commit()
+    session.refresh(post)
+    return SharePostResponse.model_validate(post)
+
+
+@app.put("/api/v1/posts/{post_id}", response_model=SharePostResponse)
+def admin_update_post(
+    post_id: int,
+    body: SharePostUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> SharePostResponse:
+    """Admin: update a post."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    if "slug" in update_data:
+        existing = session.scalar(select(SharePost).where(SharePost.slug == body.slug, SharePost.id != post_id))
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Slug '{body.slug}' already exists")
+
+    for key, value in update_data.items():
+        setattr(post, key, value)
+    post.updated_at = datetime.now(UTC)
+
+    if "status" in update_data and update_data["status"] == "published" and post.status != "published":
+        post.published_at = datetime.now(UTC)
+
+    session.commit()
+    session.refresh(post)
+    return SharePostResponse.model_validate(post)
+
+
+@app.delete("/api/v1/posts/{post_id}")
+def admin_delete_post(
+    post_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Admin: delete a post."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    session.delete(post)
+    session.commit()
+    return {"deleted": True, "id": post_id}
+
+
+@app.patch("/api/v1/posts/{post_id}/status", response_model=SharePostResponse)
+def admin_update_post_status(
+    post_id: int,
+    body: SharePostStatusUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> SharePostResponse:
+    """Admin: change post status."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if body.status not in ("draft", "published", "archived"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    post.status = body.status
+    post.updated_at = datetime.now(UTC)
+    if body.status == "published" and post.status != "published":
+        post.published_at = datetime.now(UTC)
+    elif body.status != "published":
+        post.published_at = None
+
+    session.commit()
+    session.refresh(post)
+    return SharePostResponse.model_validate(post)
+
+
+@app.post("/api/v1/posts/{post_id}/upload-cover", response_model=dict)
+async def admin_upload_cover(
+    post_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Admin: upload cover image for a post."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Cover image too large (max 20MB)")
+
+    import uuid
+    ext = (file.filename or "image.png").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "png"
+    if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+        ext = "png"
+    filename = f"{uuid.uuid4().hex[:10]}.{ext}"
+    filepath = SHARE_COVERS_DIR / filename
+    filepath.write_bytes(data)
+
+    post.cover_image = filename
+    post.updated_at = datetime.now(UTC)
+    session.commit()
+
+    return {"filename": filename, "url": f"/share-static/covers/{filename}"}
+
+
 # ── SPA Fallback ──────────────────────────────────────────────────────────────
 
 
@@ -2457,6 +2691,12 @@ frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if frontend_dist.is_dir():
     # Serve static assets directly
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="frontend-assets")
+
+    # Serve share static files (covers, videos)
+    if SHARE_COVERS_DIR.is_dir():
+        app.mount("/share-static/covers", StaticFiles(directory=str(SHARE_COVERS_DIR)), name="share-covers")
+    if SHARE_VIDEOS_DIR.is_dir():
+        app.mount("/share-static/videos", StaticFiles(directory=str(SHARE_VIDEOS_DIR)), name="share-videos")
 
     # SPA fallback: serve index.html for any unmatched route
     from fastapi.responses import FileResponse

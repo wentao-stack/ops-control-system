@@ -2,7 +2,9 @@ import { createRoot } from "react-dom/client"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider, useAuth } from "./AuthProvider"
 import { LoginPage } from "./LoginPage"
-import { Layout } from "./Layout"
+import { AdminLayout, RequireAuthOutlet } from "./AdminLayout"
+import { ShareHomePage } from "./pages/ShareHomePage"
+import { SharePostPage } from "./pages/SharePostPage"
 import { OverviewPage } from "./pages/OverviewPage"
 import { AssetsPage } from "./pages/AssetsPage"
 import { AssetDetailPage } from "./pages/AssetDetailPage"
@@ -18,6 +20,8 @@ import { CodeBrowsePage } from "./pages/CodeBrowsePage"
 import { ComfyUIPage } from "./pages/ComfyUIPage"
 import { SequenceStudioPage } from "./pages/SequenceStudioPage"
 import WorkflowPage from "./pages/WorkflowPage"
+import { ShareManagePage } from "./pages/ShareManagePage"
+import { ShareEditorPage } from "./pages/ShareEditorPage"
 import "./i18n"
 import "./styles.css"
 
@@ -35,28 +39,40 @@ function AppRoutes() {
     )
   }
 
-  if (!user) return <LoginPage />
-
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<OverviewPage />} />
-        <Route path="/assets" element={<AssetsPage />} />
-        <Route path="/assets/:assetId" element={<AssetDetailPage />} />
-        <Route path="/monitoring" element={<MonitoringPage />} />
-        <Route path="/remote" element={<RemotePage />} />
-        <Route path="/services" element={<ServicesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/clouds" element={<CloudsPage />} />
-        <Route path="/notes" element={<NotesPage />} />
-        <Route path="/notes/:noteId" element={<NoteDetailPage />} />
-        <Route path="/agent" element={<AgentChatPage />} />
-        <Route path="/workflow" element={<WorkflowPage />} />
-        <Route path="/code" element={<CodeBrowsePage />} />
-        <Route path="/comfyui" element={<ComfyUIPage />} />
-        <Route path="/sequence-studio" element={<SequenceStudioPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Public routes — no login required */}
+      <Route path="/" element={<ShareHomePage />} />
+      <Route path="/:slug" element={<SharePostPage />} />
+
+      {/* Admin routes — require login */}
+      <Route element={<RequireAuthOutlet />}>
+        <Route path="/login" element={user ? <Navigate to="/admin/overview" replace /> : <LoginPage />} />
+        <Route element={<AdminLayout />}>
+          <Route path="/admin/overview" element={<OverviewPage />} />
+          <Route path="/admin/assets" element={<AssetsPage />} />
+          <Route path="/admin/assets/:assetId" element={<AssetDetailPage />} />
+          <Route path="/admin/monitoring" element={<MonitoringPage />} />
+          <Route path="/admin/remote" element={<RemotePage />} />
+          <Route path="/admin/services" element={<ServicesPage />} />
+          <Route path="/admin/settings" element={<SettingsPage />} />
+          <Route path="/admin/clouds" element={<CloudsPage />} />
+          <Route path="/admin/notes" element={<NotesPage />} />
+          <Route path="/admin/notes/:noteId" element={<NoteDetailPage />} />
+          <Route path="/admin/agent" element={<AgentChatPage />} />
+          <Route path="/admin/workflow" element={<WorkflowPage />} />
+          <Route path="/admin/code" element={<CodeBrowsePage />} />
+          <Route path="/admin/comfyui" element={<ComfyUIPage />} />
+          <Route path="/admin/sequence-studio" element={<SequenceStudioPage />} />
+          <Route path="/admin/share-manage" element={<ShareManagePage />} />
+          <Route path="/admin/share-manage/new" element={<ShareEditorPage />} />
+          <Route path="/admin/share-manage/:id" element={<ShareEditorPage />} />
+          <Route path="*" element={<Navigate to="/admin/overview" replace />} />
+        </Route>
       </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

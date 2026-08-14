@@ -17,7 +17,8 @@
     "comfyui": "生成",
     "sequence": "動畫",
     "code": "代碼",
-    "settings": "設定"
+    "settings": "設定",
+    "share-manage": "內容管理"
   },
   "pageTitle": {
     "/": "儀表板總覽",

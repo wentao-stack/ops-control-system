@@ -459,3 +459,55 @@ class VultrInstancesResponse(BaseModel):
     fetched_at: str = ""
 
 
+# ── Share Post schemas ───────────────────────────────────────────────────────
+
+class SharePostCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    slug: str = Field(min_length=1, max_length=300)
+    cover_image: str | None = None
+    video_file: str | None = None
+    content: str = ""
+    excerpt: str = ""
+    status: str = "draft"
+
+
+class SharePostUpdate(BaseModel):
+    title: str | None = None
+    slug: str | None = None
+    cover_image: str | None = None
+    video_file: str | None = None
+    content: str | None = None
+    excerpt: str | None = None
+    status: str | None = None
+
+
+class SharePostStatusUpdate(BaseModel):
+    status: str
+
+
+class SharePostResponse(BaseModel):
+    id: int
+    title: str
+    slug: str
+    cover_image: str | None
+    video_file: str | None
+    content: str
+    excerpt: str
+    status: str
+    author: str
+    created_at: datetime
+    updated_at: datetime
+    published_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class SharePostListResponse(BaseModel):
+    items: list[SharePostResponse]
+    total: int
+    page: int
+    page_size: int
+    generated_at: datetime
+
+
