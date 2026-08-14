@@ -877,10 +877,23 @@ export function AgentChatPage() {
                 <div className="agent-confirm-tool">
                   <strong>{t("agent.tool")}:</strong> {pendingConfirm.name}
                 </div>
-                <div className="agent-confirm-params">
-                  <strong>{t("agent.params")}:</strong>
-                  <pre>{JSON.stringify(pendingConfirm.parameters, null, 2)}</pre>
-                </div>
+                {pendingConfirm.name === "execute_runbook_step" ? (
+                  <div className="agent-confirm-params agent-runbook-execution-plan">
+                    <strong>📖 {t("agent.runbookExecution")}</strong>
+                    <dl>
+                      <div><dt>{t("agent.runbook")}</dt><dd>#{String(pendingConfirm.parameters.runbook_id ?? "—")}</dd></div>
+                      <div><dt>{t("agent.step")}</dt><dd>{String(pendingConfirm.parameters.step_name ?? "—")}</dd></div>
+                      <div><dt>{t("agent.target")}</dt><dd>{String(pendingConfirm.parameters.asset_id ?? "—")}</dd></div>
+                      <div><dt>{t("agent.command")}</dt><dd><code>{String(pendingConfirm.parameters.command ?? "—")}</code></dd></div>
+                    </dl>
+                    <p>{t("agent.auditNotice")}</p>
+                  </div>
+                ) : (
+                  <div className="agent-confirm-params">
+                    <strong>{t("agent.params")}:</strong>
+                    <pre>{JSON.stringify(pendingConfirm.parameters, null, 2)}</pre>
+                  </div>
+                )}
                 <div className={`agent-confirm-risk agent-confirm-risk-${pendingConfirm.level ?? "exec"}`}>
                   {pendingConfirm.level === "exec" && t("agent.riskHigh")}
                   {pendingConfirm.level === "write" && t("agent.riskMedium")}

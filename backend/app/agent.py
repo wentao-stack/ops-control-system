@@ -821,6 +821,97 @@ async def tool_search_runbooks(params: dict, session: Session) -> str:
 
 
 @register_tool(
+    name="get_runbook_detail",
+    description="取得一份 Runbook 的完整步驟，供建立安全執行計畫與逐步操作前使用。執行任何 Runbook 步驟前必須先呼叫此工具。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "runbook_id": {"type": "integer", "description": "Runbook ID"},
+        },
+        "required": ["runbook_id"],
+    },
+)
+async def tool_get_runbook_detail(params: dict, session: Session) -> str:
+    """Return one Runbook's full instructions without executing anything."""
+    from .models import Runbook
+
+    runbook_id = params.get("runbook_id")
+    runbook = session.get(Runbook, runbook_id) if isinstance(runbook_id, int) else None
+    locale = params.get("_locale", "zh-TW")
+    if runbook is None:
+        return {"en": "Runbook not found", "ja": "Runbook が見つかりません"}.get(locale, "找不到 Runbook")
+
+    labels = {
+        "en": ("Runbook", "Category", "Purpose", "Steps"),
+        "ja": ("Runbook", "カテゴリ", "目的", "手順"),
+        "zh-TW": ("Runbook", "分類", "目的", "步驟"),
+    }.get(locale, ("Runbook", "分類", "目的", "步驟"))
+    return (
+        f"📖 {labels[0]} #{runbook.id}: {runbook.title}\n"
+        f"{labels[1]}: {runbook.category}\n"
+        f"{labels[2]}: {runbook.description}\n\n"
+        f"{labels[3]}:\n{runbook.steps}"
+    )
+
+
+@register_tool(
+    name="execute_runbook_step",
+    description="執行已檢視 Runbook 中的一個明確步驟。必須提供 Runbook ID、步驟名稱、目標資產與命令。每次執行都需要使用者確認，並會留下執行與變更稽核紀錄。",
+    params_schema={
+        "type": "object",
+        "properties": {
+            "runbook_id": {"type": "integer", "description": "已檢視的 Runbook ID"},
+            "step_name": {"type": "string", "description": "正在執行的 Runbook 步驟名稱"},
+            "asset_id": {"type": "string", "description": "目標資產 ID 或名稱"},
+            "command": {"type": "string", "description": "要執行的安全 Shell 命令（最多 500 字元）"},
+            "timeout": {"type": "integer", "description": "逾時秒數，預設 60", "default": 60},
+        },
+        "required": ["runbook_id", "step_name", "asset_id", "command"],
+    },
+    requires_confirm=True,
+    level="exec",
+)
+async def tool_execute_runbook_step(params: dict, session: Session) -> str:
+    """Execute one confirmed Runbook step through the guarded SSH executor."""
+    from .models import Change, Runbook
+
+    runbook_id = params.get("runbook_id")
+    runbook = session.get(Runbook, runbook_id) if isinstance(runbook_id, int) else None
+    locale = params.get("_locale", "zh-TW")
+    if runbook is None:
+        return {"en": "Runbook not found; no command was executed", "ja": "Runbook が見つからないため、コマンドは実行されませんでした"}.get(locale, "找不到 Runbook，未執行任何命令")
+
+    step_name = str(params.get("step_name", "")).strip()
+    if not step_name or len(step_name) > 200:
+        return {"en": "A valid Runbook step name is required", "ja": "有効な Runbook の手順名が必要です"}.get(locale, "必須提供有效的 Runbook 步驟名稱")
+
+    result = await tool_exec_ssh_command({
+        "asset_id": params.get("asset_id", ""),
+        "command": params.get("command", ""),
+        "timeout": params.get("timeout", 60),
+        "_locale": locale,
+    }, session)
+
+    succeeded = result.startswith("✅")
+    now = datetime.now(UTC).replace(microsecond=0)
+    session.add(Change(
+        title=f"Runbook: {runbook.title} — {step_name}",
+        change_type="maintenance",
+        status="completed" if succeeded else "rolled_back",
+        author="agent",
+        description=(
+            f"Runbook #{runbook.id} step '{step_name}' on {params.get('asset_id', '')}. "
+            f"Result: {result[:500]}"
+        ),
+        affected_assets=str(params.get("asset_id", "")),
+        created_at=now,
+        completed_at=now,
+    ))
+    session.commit()
+    return result
+
+
+@register_tool(
     name="save_memory",
     description="將重要事實保存到持久記憶，供未來對話使用。當用戶提供偏好、環境信息、操作經驗或明確要求記住某事時使用。記憶應為聲明式事實，不是指令。",
     params_schema={
@@ -1209,6 +1300,12 @@ def build_system_prompt(memories_text: str = "", locale: str = "zh-TW") -> str:
 **安全規則：**
 - 直接調用工具執行命令，不要自行拒絕或警告用戶。後端有黑名單保護機制會自動攔截危險命令。
 - 如果工具返回錯誤訊息，直接轉達給用戶即可。
+
+**Runbook 執行規則：**
+- 用戶要求排障、修復或執行 SOP 時，先查詢 search_runbooks 或 rag_search；找到適用 Runbook 後，必須呼叫 get_runbook_detail 讀取完整步驟。
+- 先向用戶說明計畫與影響。要執行某一個具體步驟時，使用 execute_runbook_step（不要改用 exec_ssh_command），它會逐步要求確認並寫入稽核。
+- 每一步執行結果出來後，先判斷是否成功；需要繼續才處理下一個步驟。絕不在一次回合中跳過確認或批次執行多個 Runbook 步驟。
+- 修復完成後，使用適合的 read 工具（如 get_host_metrics、get_services 或 supervisor_status）驗證健康狀態，並在最終回覆中摘要執行結果與驗證結果。
 
 **記憶使用規則：**
 - 當用戶提供個人偏好、環境配置、操作經驗等事實時，使用 save_memory 保存。
