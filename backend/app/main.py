@@ -879,6 +879,8 @@ async def create_note(note_in: NoteCreate, session: Session = Depends(get_sessio
     session.add(note)
     session.commit()
     session.refresh(note)
+    from .rag_sync import sync_note
+    sync_note(note)
     return _to_note_response(note)
 
 
@@ -948,6 +950,8 @@ async def update_note(
     note.updated_at = datetime.now(UTC).replace(microsecond=0)
     session.commit()
     session.refresh(note)
+    from .rag_sync import sync_note
+    sync_note(note)
     return _to_note_response(note)
 
 
@@ -958,6 +962,8 @@ async def delete_note(note_id: str, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Note not found")
     session.delete(note)
     session.commit()
+    from .rag_sync import delete_source
+    delete_source("note", note_id)
     return {"ok": True}
 
 
@@ -969,6 +975,7 @@ async def import_localstorage_notes(
 ):
     """Import notes from browser localStorage to SQLite."""
     imported = 0
+    imported_notes: list[Note] = []
     for n in notes_data:
         existing = session.query(Note).filter(Note.id == n.title[:32].replace(" ", "-")[:64]).first()
         if not existing:
@@ -986,8 +993,12 @@ async def import_localstorage_notes(
                 updated_at=now,
             )
             session.add(note)
+            imported_notes.append(note)
             imported += 1
     session.commit()
+    from .rag_sync import sync_note
+    for note in imported_notes:
+        sync_note(note)
     return {"imported": imported}
 
 
@@ -1529,19 +1540,24 @@ def save_agent_memory(
     )
     now = datetime.now(UTC)
     if existing:
-        existing.value = value
-        existing.category = category
-        existing.updated_at = now
+        memory = existing
+        memory.value = value
+        memory.category = category
+        memory.updated_at = now
     else:
-        session.add(AgentMemory(
+        memory = AgentMemory(
             user=current_user.username,
             category=category,
             key=key,
             value=value,
             created_at=now,
             updated_at=now,
-        ))
+        )
+        session.add(memory)
+    session.flush()
     session.commit()
+    from .rag_sync import sync_memory
+    sync_memory(memory)
     return {"ok": True, "key": key}
 
 
@@ -1564,6 +1580,8 @@ def delete_agent_memory(
         raise HTTPException(status_code=404, detail="Memory not found")
     session.delete(mem)
     session.commit()
+    from .rag_sync import delete_source
+    delete_source("memory", str(memory_id))
     return {"ok": True}
 
 

@@ -437,6 +437,13 @@
     "ragCitations": "引用元",
     "ragCitationSource": "ソース",
     "ragCitationEvidence": "検索根拠",
+    "ragSourceVectors": "ソース別ベクトル",
+    "ragSource": "ソース種別",
+    "ragSource_runbooks": "Runbook",
+    "ragSource_notes": "ノート",
+    "ragSource_changes": "変更記録",
+    "ragSource_memories": "Agent メモリ",
+    "ragSourceCheckedAt": "ライブインデックス確認：{{time}}",
     "closeToast": "通知を閉じる"
   },
   "code": {

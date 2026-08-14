@@ -1215,7 +1215,13 @@ function AgentUsagePanel() {
 }
 
 type RagEvaluation = {
-  index_stats: { total_vectors: number; embed_model: string; embed_dim: number }
+  index_stats: {
+    total_vectors: number
+    embed_model: string
+    embed_dim: number
+    source_vector_counts: Record<"runbooks" | "notes" | "changes" | "memories", number>
+    checked_at: string
+  }
   total: number
   passed: number
   pass_rate: number
@@ -1282,6 +1288,14 @@ function AgentRagPanel() {
       <div className="usage-card"><div className="usage-card-value">{report.pass_rate}%</div><div className="usage-card-label">{t("agent.ragPassRate")}</div></div>
       <div className="usage-card"><div className="usage-card-value">{report.passed}/{report.total}</div><div className="usage-card-label">{t("agent.ragPassedCases")}</div></div>
       <div className="usage-card"><div className="usage-card-value">{report.index_stats.embed_dim}</div><div className="usage-card-label">{t("agent.ragEmbeddingDimension")}</div></div>
+    </div>
+    <div className="usage-records">
+      <h4>{t("agent.ragSourceVectors")}</h4>
+      <table className="usage-table">
+        <thead><tr><th>{t("agent.ragSource")}</th><th>{t("agent.ragVectors")}</th></tr></thead>
+        <tbody>{Object.entries(report.index_stats.source_vector_counts).map(([source, count]) => <tr key={source}><td>{t(`agent.ragSource_${source}`)}</td><td>{count}</td></tr>)}</tbody>
+      </table>
+      <p className="usage-note">{t("agent.ragSourceCheckedAt", { time: new Date(report.index_stats.checked_at).toLocaleString() })}</p>
     </div>
     <div className="usage-records">
       <h4>{t("agent.ragEvaluationCases")}</h4>

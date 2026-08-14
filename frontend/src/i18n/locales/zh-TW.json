@@ -437,6 +437,13 @@
     "ragCitations": "引用來源",
     "ragCitationSource": "來源",
     "ragCitationEvidence": "檢索依據",
+    "ragSourceVectors": "來源向量覆蓋",
+    "ragSource": "來源類型",
+    "ragSource_runbooks": "Runbook",
+    "ragSource_notes": "筆記",
+    "ragSource_changes": "變更記錄",
+    "ragSource_memories": "Agent 記憶",
+    "ragSourceCheckedAt": "即時索引檢查：{{time}}",
     "closeToast": "關閉通知"
   },
   "code": {

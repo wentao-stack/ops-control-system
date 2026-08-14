@@ -643,6 +643,8 @@ async def tool_supervisor_action(params: dict, session: Session) -> str:
     )
     session.add(change)
     session.commit()
+    from .rag_sync import sync_change
+    sync_change(change)
 
     icon = "✅" if result.success else "❌"
     lines = [f"{icon} Supervisor {action} on {asset.name}"]
@@ -728,6 +730,8 @@ async def tool_create_note(params: dict, session: Session) -> str:
     )
     session.add(note)
     session.commit()
+    from .rag_sync import sync_note
+    sync_note(note)
 
     return f"✅ 筆記已創建\n  標題: {title}\n  分類: {category}\n  ID: {note_id}\n  連結: /notes/{note_id}"
 
@@ -894,7 +898,7 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
 
     succeeded = result.startswith("✅")
     now = datetime.now(UTC).replace(microsecond=0)
-    session.add(Change(
+    change = Change(
         title=f"Runbook: {runbook.title} — {step_name}",
         change_type="maintenance",
         status="completed" if succeeded else "rolled_back",
@@ -906,8 +910,11 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
         affected_assets=str(params.get("asset_id", "")),
         created_at=now,
         completed_at=now,
-    ))
+    )
+    session.add(change)
     session.commit()
+    from .rag_sync import sync_change
+    sync_change(change)
     return result
 
 
@@ -968,34 +975,24 @@ async def tool_save_memory(params: dict, session: Session) -> str:
     )
     now = datetime.now(UTC)
     if existing:
-        existing.value = value
-        existing.category = category
-        existing.updated_at = now
+        memory = existing
+        memory.value = value
+        memory.category = category
+        memory.updated_at = now
     else:
-        session.add(AgentMemory(
+        memory = AgentMemory(
             user=user,
             category=category,
             key=key,
             value=value,
             created_at=now,
             updated_at=now,
-        ))
-    session.commit()
-
-    # Upsert to ChromaDB vector index for semantic search
-    mem_id = existing.id if existing else session.scalar(select(func.max(AgentMemory.id)))
-    try:
-        from .agent_rag import upsert_document
-        text = f"# {key}\n\n{value}"
-        upsert_document(
-            source="memory",
-            source_id=str(mem_id),
-            text=text,
-            title=key,
-            category=category,
         )
-    except Exception as e:
-        logger.warning(f"RAG upsert memory failed [{key}]: {e}")
+        session.add(memory)
+    session.flush()
+    session.commit()
+    from .rag_sync import sync_memory
+    sync_memory(memory)
 
     return f"✅ 已記憶 [{category}] {key}: {value}"
 
@@ -1263,27 +1260,16 @@ async def _auto_extract_memories(user_message: str, username: str, session: Sess
             ))
     session.commit()
 
-    # Upsert extracted memories to ChromaDB vector index
-    try:
-        from .agent_rag import upsert_document
-        for key, category, value in extractions:
-            mem_obj = session.scalar(
-                select(AgentMemory).where(
-                    AgentMemory.user == username,
-                    AgentMemory.key == key,
-                )
+    from .rag_sync import sync_memory
+    for key, _, _ in extractions:
+        mem_obj = session.scalar(
+            select(AgentMemory).where(
+                AgentMemory.user == username,
+                AgentMemory.key == key,
             )
-            if mem_obj:
-                text = f"# {key}\n\n{value}"
-                upsert_document(
-                    source="memory",
-                    source_id=str(mem_obj.id),
-                    text=text,
-                    title=key,
-                    category=category,
-                )
-    except Exception as e:
-        logger.warning(f"RAG upsert auto-extracted memory failed: {e}")
+        )
+        if mem_obj:
+            sync_memory(mem_obj)
 
 
 # ── System prompt (generated dynamically with tool descriptions) ─────────────

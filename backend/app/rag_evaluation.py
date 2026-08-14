@@ -6,6 +6,7 @@ import time
 from typing import TypedDict
 
 from .agent_rag import get_index_stats, rag_search
+from .rag_sync import get_source_vector_counts
 
 
 class EvaluationCase(TypedDict):
@@ -54,8 +55,9 @@ def evaluate_runbook_retrieval() -> dict:
 
     passed = sum(result["passed"] for result in results)
     total = len(results)
+    index_stats = {**get_index_stats(), **get_source_vector_counts()}
     return {
-        "index_stats": get_index_stats(),
+        "index_stats": index_stats,
         "total": total,
         "passed": passed,
         "pass_rate": round((passed / total) * 100, 1) if total else 0.0,

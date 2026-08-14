@@ -437,6 +437,13 @@
     "ragCitations": "Cited sources",
     "ragCitationSource": "Source",
     "ragCitationEvidence": "Retrieved evidence",
+    "ragSourceVectors": "Source vector coverage",
+    "ragSource": "Source type",
+    "ragSource_runbooks": "Runbooks",
+    "ragSource_notes": "Notes",
+    "ragSource_changes": "Change records",
+    "ragSource_memories": "Agent memories",
+    "ragSourceCheckedAt": "Live index check: {{time}}",
     "closeToast": "Close notification"
   },
   "code": {
