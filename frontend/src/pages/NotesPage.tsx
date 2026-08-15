@@ -644,7 +644,7 @@ const navigate = useNavigate()
   }
 
   const handleViewNote = (noteId: string) => {
-    navigate(`/notes/${noteId}`)
+    navigate(`/admin/notes/${noteId}`)
   }
 
   // Category counts (approximate from current page for display)

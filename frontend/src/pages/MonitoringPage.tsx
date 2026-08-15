@@ -57,6 +57,7 @@ function HostCard({ host, expanded, onToggle, t }: { host: RemoteHostMetric; exp
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("monitoring.disk")}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: barColor(host.disk_percent) }}>{host.disk_percent.toFixed(0)}%</div>
         </div>
       </div>
 
@@ -142,6 +143,7 @@ function SkeletonCard() {
 /* ── Metrics History Panel ─────────────────────────────────────────────────── */
 
 type ChartPoint = { t: string; v: number }
+type ChartMetric = "cpu" | "mem" | "disk" | "swap"
 type HistoryRecord = {
   id: number; asset_id: string; hostname: string;
   cpu_percent: number; cpu_count: number;
@@ -160,17 +162,18 @@ function MiniChart({ data, color, height = 60, t }: { data: ChartPoint[]; color:
   const area = `0,${height} ${pts} ${w},${height}`
   return (
     <svg viewBox={`0 0 ${w} ${height}`} style={{ width: "100%", height }} preserveAspectRatio="none">
+      {[0.25, 0.5, 0.75].map(y => <line key={y} x1="0" x2={w} y1={height * y} y2={height * y} stroke="currentColor" opacity={0.1} vectorEffect="non-scaling-stroke" />)}
       <polygon points={area} fill={color} opacity={0.15} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
     </svg>
   )
 }
 
 function MetricsHistoryPanel({ assets, t }: { assets: RemoteHostMetric[]; t: (key: string) => string }) {
   const [assetId, setAssetId] = useState(assets[0]?.asset_id || "")
-  const [metric, setMetric] = useState<"cpu" | "mem" | "disk" | "swap">("cpu")
+  const [metric, setMetric] = useState<ChartMetric>("cpu")
   const [hours, setHours] = useState(24)
-  const [chartData, setChartData] = useState<ChartPoint[]>([])
+  const [charts, setCharts] = useState<Record<ChartMetric, ChartPoint[]>>({ cpu: [], mem: [], disk: [], swap: [] })
   const [records, setRecords] = useState<HistoryRecord[]>([])
   const [stats, setStats] = useState({ total: 0, earliest: "", latest: "" })
   const [loading, setLoading] = useState(false)
@@ -179,12 +182,13 @@ function MetricsHistoryPanel({ assets, t }: { assets: RemoteHostMetric[]; t: (ke
     if (!assetId) return
     setLoading(true)
     try {
-      const data = await api<any>(`/api/v1/metrics/history/chart?asset_id=${assetId}&metric=${metric}&hours=${hours}`)
-      setChartData(data.data || [])
+      const metrics: ChartMetric[] = ["cpu", "mem", "disk", "swap"]
+      const results = await Promise.all(metrics.map(m => api<any>(`/api/v1/metrics/history/chart?asset_id=${assetId}&metric=${m}&hours=${hours}`)))
+      setCharts(metrics.reduce((all, m, index) => ({ ...all, [m]: results[index].data || [] }), {} as Record<ChartMetric, ChartPoint[]>))
     } catch { /* silent */ } finally {
       setLoading(false)
     }
-  }, [assetId, metric, hours])
+  }, [assetId, hours])
 
   const loadRecords = useCallback(async () => {
     if (!assetId) return
@@ -202,6 +206,7 @@ function MetricsHistoryPanel({ assets, t }: { assets: RemoteHostMetric[]; t: (ke
   const CHART_COLORS: Record<string, string> = { cpu: "#3b82f6", mem: "#f59e0b", disk: "#10b981", swap: "#8b5cf6" }
   const metricLabel = METRIC_LABELS[metric]
   const chartColor = CHART_COLORS[metric]
+  const chartData = charts[metric]
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -236,6 +241,14 @@ function MetricsHistoryPanel({ assets, t }: { assets: RemoteHostMetric[]; t: (ke
         <div style={{ marginBottom: 16, background: "var(--surface)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{metricLabel} {t("monitoring.usageRate")} — {hours}{t("monitoring.hourUnit")}</div>
           {loading ? <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>{t("common.loading")}</div> : <MiniChart data={chartData} color={chartColor} t={t} />}
+        </div>
+        <div className="monitor-history-grid">
+          {(["cpu", "mem", "disk", "swap"] as ChartMetric[]).map(m => (
+            <button key={m} className={`monitor-history-mini ${metric === m ? "is-active" : ""}`} onClick={() => setMetric(m)}>
+              <span><b>{METRIC_LABELS[m]}</b><strong style={{ color: CHART_COLORS[m] }}>{charts[m].length ? `${charts[m][charts[m].length - 1].v.toFixed(1)}%` : "—"}</strong></span>
+              <MiniChart data={charts[m]} color={CHART_COLORS[m]} height={52} t={t} />
+            </button>
+          ))}
         </div>
 
         {/* Recent records table */}
@@ -331,7 +344,7 @@ export function MonitoringPage() {
   }, [])
 
   return (
-    <>
+    <div className="monitoring-page">
       <div className="page-header">
         <div>
           <h1>{t("monitoring.title")}</h1>
@@ -356,6 +369,7 @@ export function MonitoringPage() {
         </div>
       </div>
 
+      {tab === "live" && <>
       {loading && <div className="empty">{t("common.loading")}</div>}
 
       {/* Local host metrics */}
@@ -442,7 +456,8 @@ export function MonitoringPage() {
           />
         ))}
       </div>
+      </>}
       {tab === "history" && <MetricsHistoryPanel assets={remoteData} t={t} />}
-    </>
+    </div>
   )
 }

@@ -200,6 +200,36 @@ def detect_intent(user_message: str) -> dict | None:
     return None
 
 
+def _explicit_asset_id(session: Any, user_message: str) -> str | None:
+    """Return the asset explicitly named in this message, never a chat default."""
+    from .models import Asset
+
+    message = user_message.casefold()
+    candidates: list[tuple[str, str]] = []
+    for asset in session.query(Asset).all():
+        display_name = asset.name.casefold()
+        hostname = display_name.split(" (", 1)[0].strip()
+        for alias in (asset.id.casefold(), display_name, hostname):
+            if len(alias) >= 3 and alias in message:
+                candidates.append((alias, asset.id))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: len(item[0]), reverse=True)
+    return candidates[0][1]
+
+
+def _is_host_status_request(user_message: str) -> bool:
+    message = user_message.casefold()
+    host_words = ("主機", "主机", "伺服器", "服务器", "host", "server")
+    status_words = ("狀態", "状态", "監控", "监控", "資源", "资源", "cpu", "記憶體", "内存", "记忆", "memory")
+    return any(word in message for word in host_words) and any(word in message for word in status_words)
+
+
+def _is_process_request(user_message: str) -> bool:
+    message = user_message.casefold()
+    return any(word in message for word in ("進程", "进程", "程序", "process"))
+
+
 # ── Build LLM Messages from History ────────────────────────────────────────
 
 def build_llm_messages(session, conv_id, memories_text, locale: str = "zh-TW"):
@@ -380,6 +410,26 @@ async def run_agent_graph(
     memories_text = load_memories(session, user, req.message)
     llm_messages = build_llm_messages(session, conv_id, memories_text, req.locale)
     tools_openai = _get_tools_openai()
+    explicit_asset_id = _explicit_asset_id(session, req.message)
+    forced_tool: dict | None = None
+    if explicit_asset_id and _is_host_status_request(req.message):
+        forced_tool = {
+            "id": f"call_{_uuid.uuid4().hex[:12]}",
+            "type": "function",
+            "function": {
+                "name": "get_host_metrics",
+                "arguments": json.dumps({"asset_id": explicit_asset_id}, ensure_ascii=False),
+            },
+        }
+    elif explicit_asset_id and _is_process_request(req.message):
+        forced_tool = {
+            "id": f"call_{_uuid.uuid4().hex[:12]}",
+            "type": "function",
+            "function": {
+                "name": "list_processes",
+                "arguments": json.dumps({"asset_id": explicit_asset_id}, ensure_ascii=False),
+            },
+        }
 
     # ── Phase 3: Agent loop ──────────────────────────────────────────────
     # A normal investigation can need diagnostics, knowledge lookup, a plan,
@@ -414,13 +464,28 @@ async def run_agent_graph(
         tools_for_turn = [] if force_text_response else tools_openai
         force_text_response = False
         try:
-            assistant_msg = await _llm_chat_with_tools(model, llm_messages, tools_for_turn)
+            assistant_msg = (
+                {"content": "", "tool_calls": [forced_tool]}
+                if iteration == 0 and forced_tool
+                else await _llm_chat_with_tools(model, llm_messages, tools_for_turn)
+            )
         except httpx.TimeoutException as e:
+            logger.warning("LLM request timed out: %s", e)
             run.status = "timed_out"
             run.error = str(e)[:500]
             run.updated_at = datetime.now(UTC)
             session.commit()
-            yield sse("error", message=f"LLM 回應超時（模型可能正在載入，請稍後重試）: {type(e).__name__}")
+            yield sse("error", message="模型服務回應逾時，請稍後再試", code="LLM_TIMEOUT")
+            yield sse("done")
+            return
+        except httpx.HTTPStatusError as e:
+            logger.warning("LLM returned HTTP %s: %s", e.response.status_code, e.response.text[:500])
+            run.status = "failed"
+            run.error = f"LLM HTTP {e.response.status_code}"
+            run.updated_at = datetime.now(UTC)
+            session.commit()
+            message = "模型服務暫時不可用，請稍後再試" if e.response.status_code >= 500 else "模型服務拒絕此請求，請調整後重試"
+            yield sse("error", message=message, code="LLM_UPSTREAM_ERROR")
             yield sse("done")
             return
         except Exception as e:
@@ -428,7 +493,8 @@ async def run_agent_graph(
             run.error = str(e)[:500]
             run.updated_at = datetime.now(UTC)
             session.commit()
-            yield sse("error", message=f"LLM 呼叫失敗: {type(e).__name__}: {e}")
+            logger.exception("LLM request failed")
+            yield sse("error", message="模型服務目前無法使用，請稍後再試", code="LLM_REQUEST_FAILED")
             yield sse("done")
             return
 
@@ -476,6 +542,8 @@ async def run_agent_graph(
                 tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
             except json.JSONDecodeError:
                 tool_args = {}
+            if explicit_asset_id and "asset_id" in tool_args:
+                tool_args["asset_id"] = explicit_asset_id
             tool_args["_actor"] = user
             tool_args["_actor_role"] = user_role
 
@@ -632,6 +700,12 @@ async def run_agent_graph(
             _record_tool_call(session, conv_id, user, tool_name, tool_level, tool_input_json, result, confirmed=bool(requires_confirm), confirmed_by=user if requires_confirm else None)
             llm_messages.append({"role": "tool", "tool_call_id": tc.get("id", tool_call_id), "content": result})
         else:
+            if iteration == 0 and forced_tool:
+                final_content = str(result)
+                for i in range(0, len(final_content), 2):
+                    yield sse("token", token=final_content[i:i + 2])
+                _save_message(session, conv_id, "assistant", final_content)
+                break
             continue
 
     else:
@@ -643,7 +717,7 @@ async def run_agent_graph(
     # ── Phase 4: Post-processing ─────────────────────────────────────────
 
     # Generate title
-    if is_new:
+    if is_new and not forced_tool:
         try:
             title = await _generate_title(req.message, model, req.locale)
             conv_obj = session.query(AgentConversation).filter(AgentConversation.id == conv_id).first()

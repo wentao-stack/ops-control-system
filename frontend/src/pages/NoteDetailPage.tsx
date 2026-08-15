@@ -395,7 +395,7 @@ const { noteId } = useParams<{ noteId: string }>()
     if (confirm(t("notes.confirmDelete"))) {
       try {
         await deleteNoteApi(note.id)
-        navigate("/notes")
+        navigate("/admin/notes")
       } catch (e: any) {
         alert(t("notes.deleteFailed", { message: e.message }))
       }
@@ -413,7 +413,7 @@ const { noteId } = useParams<{ noteId: string }>()
   }
 
   const handleNavigateToNote = (id: string) => {
-    navigate(`/notes/${id}`)
+    navigate(`/admin/notes/${id}`)
   }
 
   return (
@@ -421,7 +421,7 @@ const { noteId } = useParams<{ noteId: string }>()
       {/* Back button */}
       <button
         className="btn btn-sm"
-        onClick={() => navigate("/notes")}
+        onClick={() => navigate("/admin/notes")}
         style={{ marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 4 }}
       >
         {t("notes.backToList")}
@@ -442,7 +442,7 @@ const { noteId } = useParams<{ noteId: string }>()
           <div className="card-body" style={{ padding: 20, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <div style={{ color: "var(--danger)", marginBottom: 12 }}>{error}</div>
-            <button className="btn" onClick={() => navigate("/notes")}>{t("notes.returnToList")}</button>
+            <button className="btn" onClick={() => navigate("/admin/notes")}>{t("notes.returnToList")}</button>
           </div>
         </div>
       )}
@@ -521,7 +521,7 @@ const { noteId } = useParams<{ noteId: string }>()
 
             {/* Navigation between notes */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-              <button className="btn btn-sm" onClick={() => navigate("/notes")}>
+              <button className="btn btn-sm" onClick={() => navigate("/admin/notes")}>
                 {t("notes.returnToList")}
               </button>
               <button className="btn btn-sm" onClick={() => setShowEditor(true)}>

@@ -21,6 +21,23 @@ def test_process_request_uses_controlled_process_tool():
     assert json.loads(intent["function"]["arguments"])["asset_id"] == "wentao-MS-7C91"
 
 
+def test_explicit_asset_status_request_is_bound_to_that_asset(session):
+    from app.models import Asset
+
+    session.add(Asset(
+        id="asset-vultr", name="vultr (149.28.44.218)", asset_type="host",
+        environment="production", owner="ops", criticality="high",
+        health_status="healthy", ssh_host="149.28.44.218", ssh_port=22,
+        ssh_user="root", local_machine=False, created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+    ))
+    session.commit()
+
+    message = "vultr 看一下這台主機狀態"
+    assert agent_graph._explicit_asset_id(session, message) == "asset-vultr"
+    assert agent_graph._is_host_status_request(message)
+    assert agent_graph._is_process_request("看一下 vultr 這台主機的進程")
+
+
 def test_repeated_read_tool_forces_a_text_answer_instead_of_exhausting_iterations(session, monkeypatch):
     conversation = AgentConversation(
         id="conv-loop-guard",

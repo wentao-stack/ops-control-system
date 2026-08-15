@@ -31,7 +31,7 @@ def test_execute_runbook_step_requires_existing_runbook_and_records_change(sessi
         title="Restart web service",
         category="web",
         description="Recover the web process safely.",
-        steps="1. Restart process",
+        steps="1. supervisorctl restart nginx",
         author="admin",
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),

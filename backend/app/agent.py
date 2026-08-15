@@ -134,11 +134,34 @@ def record_tool_call(
 
 # ── Tool Definitions ────────────────────────────────────────────────────────
 
-# Generic SSH is deliberately diagnostic-only. Mutating operations must go
-# through a reviewed Runbook step or the dedicated supervisor tool.
-_SAFE_SHELL_PREFIXES = ("df", "free", "uptime", "ps", "ss", "journalctl", "tail", "grep", "cat", "docker", "supervisorctl", "systemctl", "echo")
+# Generic SSH is deliberately diagnostic-only. Broad command prefixes are
+# unsafe because many subcommands mutate state or expose sensitive files.
+_CONTROLLED_DIAGNOSTIC_TOKEN = object()
+_APPROVED_RUNBOOK_TOKEN = object()
+_READ_ONLY_DIAGNOSTIC_PATTERNS = (
+    re.compile(r"\A(?:uptime|hostname|who|w|free(?: -h)?|lsb_release -a)\Z"),
+    re.compile(r"\Aps(?: [A-Za-z0-9._,=%+ -]+)?\Z"),
+    re.compile(r"\Atop -b -n [1-9]\Z"),
+    re.compile(r"\Adf(?: -[A-Za-z]+)?(?: /[A-Za-z0-9._/:-]{0,240})?\Z"),
+    re.compile(r"\Ass(?: [A-Za-z0-9-]+)+\Z"),
+    re.compile(r"\Asystemctl (?:status|is-active|show|list-units|list-unit-files)(?: [A-Za-z0-9_.:-]+)*(?: --no-pager)?\Z"),
+    re.compile(r"\Asupervisorctl status(?: [A-Za-z0-9_.:-]+)?\Z"),
+    re.compile(r"\Adocker (?:ps|images|stats --no-stream|logs [A-Za-z0-9_.:-]+ --tail [0-9]{1,4})\Z"),
+    re.compile(r"\Aecho [A-Za-z0-9 .,:_/+=-]{1,200}\Z"),
+)
 
-def _validate_controlled_shell(command: str, timeout: object, role: str, runbook_id: object = None) -> str | None:
+
+def _is_safe_read_only_diagnostic(command: str) -> bool:
+    if command.startswith("journalctl "):
+        forbidden = ("--vacuum", "--rotate", "--flush", "--sync", "--setup-keys")
+        return not any(option in command for option in forbidden) and bool(
+            re.fullmatch(r"journalctl(?: -u [A-Za-z0-9_.:-]+)?(?: --no-pager)?(?: -n [0-9]{1,4})?", command)
+        )
+    return any(pattern.fullmatch(command) for pattern in _READ_ONLY_DIAGNOSTIC_PATTERNS)
+
+def _validate_controlled_shell(
+    command: str, timeout: object, role: str, runbook_id: object = None, control_token: object = None, runbook_token: object = None,
+) -> str | None:
     if role and role != "admin":
         return "❌ 僅管理員可執行受控遠端操作"
     if not isinstance(timeout, int) or timeout < 5 or timeout > 60:
@@ -146,12 +169,12 @@ def _validate_controlled_shell(command: str, timeout: object, role: str, runbook
     normalized = command.strip()
     if any(char in normalized for char in (";", "|", "&", "`", "$", ">", "<", "\n")):
         return "❌ 危險命令組合不允許；請使用受控 Runbook 步驟"
-    prefix = normalized.split(maxsplit=1)[0] if normalized else ""
-    if prefix not in _SAFE_SHELL_PREFIXES:
-        return "❌ 危險或未受控的命令不在診斷白名單；請使用 Runbook 或專用操作工具"
-    is_mutating = normalized.startswith(("systemctl restart ", "systemctl start ", "systemctl stop ", "docker restart "))
-    if is_mutating and not runbook_id:
-        return "❌ 變更服務必須透過已審閱的 Runbook 步驟執行"
+    if control_token is _CONTROLLED_DIAGNOSTIC_TOKEN:
+        return None
+    if runbook_token is _APPROVED_RUNBOOK_TOKEN:
+        return None
+    if not _is_safe_read_only_diagnostic(normalized):
+        return "❌ 僅允許固定的只讀診斷命令；其他操作必須使用已審閱的 Runbook 步驟"
     return None
 
 
@@ -191,21 +214,34 @@ def format_host_metrics_results(results: list[dict | BaseException], locale: str
 
 @register_tool(
     name="get_host_metrics",
-    description="獲取所有遠程主機的監控數據（CPU、記憶體、磁碟、GPU）。當用戶詢問主機狀態、監控、資源使用時使用。",
+    description="獲取遠程主機的監控數據（CPU、記憶體、磁碟、GPU）。指定 asset_id 時只查詢該主機；未指定時查詢全部主機。當用戶詢問主機狀態、監控、資源使用時使用。",
     params_schema={
         "type": "object",
-        "properties": {},
+        "properties": {
+            "asset_id": {"type": "string", "description": "要查詢的資產 ID 或名稱（可選）"},
+        },
         "required": [],
     },
 )
 async def tool_get_host_metrics(params: dict, session: Session) -> str:
-    """Collect metrics from all remote hosts via SSH."""
+    """Collect metrics from one requested host, or all remote hosts."""
     from .remote_monitor import collect_remote_metrics, save_metrics_to_history
     from .models import Asset
     import asyncio
 
     locale = params.get("_locale", "zh-TW")
     assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
+    requested_asset = str(params.get("asset_id", "")).strip()
+    if requested_asset:
+        exact = [asset for asset in assets if asset.id == requested_asset or asset.name == requested_asset]
+        partial = [asset for asset in assets if requested_asset.lower() in asset.name.lower()]
+        matches = exact or partial
+        if len(matches) != 1:
+            if len(matches) > 1:
+                names = ", ".join(asset.name for asset in matches)
+                return f"❌ 資產名稱 '{requested_asset}' 不明確：{names}"
+            return f"❌ 找不到具備 SSH 連線的資產 '{requested_asset}'"
+        assets = matches
     if not assets:
         return {"en": "No hosts with SSH connections are configured", "ja": "SSH 接続が設定されたホストはありません"}.get(locale, "沒有配置 SSH 連線的主機")
 
@@ -492,7 +528,11 @@ async def tool_exec_ssh_command(params: dict, session: Session) -> str:
     if not command or len(command) > 500:
         return "❌ 命令長度必須在 1-500 字元之間"
 
-    validation_error = _validate_controlled_shell(command, timeout, params.get("_actor_role", ""), params.get("_runbook_id"))
+    validation_error = _validate_controlled_shell(
+        command, timeout, params.get("_actor_role", ""), params.get("_runbook_id"),
+        params.get("_controlled_diagnostic_token"),
+        params.get("_approved_runbook_token"),
+    )
     if validation_error:
         return validation_error
 
@@ -590,6 +630,7 @@ def _controlled_diagnostic_params(params: dict, command: str) -> dict:
         # These commands are constructed server-side and read-only. The flag
         # permits production diagnostics while generic shell remains blocked.
         "_runbook_id": "controlled-diagnostic",
+        "_controlled_diagnostic_token": _CONTROLLED_DIAGNOSTIC_TOKEN,
     }
 
 
@@ -982,6 +1023,16 @@ async def tool_get_runbook_detail(params: dict, session: Session) -> str:
     )
 
 
+def _runbook_permits_command(steps: str, command: str) -> bool:
+    """Allow only a command written verbatim in the reviewed Runbook steps."""
+    normalized = command.strip()
+    for line in steps.splitlines():
+        candidate = re.sub(r"^\s*\d+[.)]\s*", "", line).strip()
+        if candidate == normalized:
+            return True
+    return False
+
+
 @register_tool(
     name="execute_runbook_step",
     description="執行已檢視 Runbook 中的一個明確步驟。必須提供 Runbook ID、步驟名稱、目標資產與命令。每次執行都需要使用者確認，並會留下執行與變更稽核紀錄。",
@@ -1013,14 +1064,19 @@ async def tool_execute_runbook_step(params: dict, session: Session) -> str:
     if not step_name or len(step_name) > 200:
         return {"en": "A valid Runbook step name is required", "ja": "有効な Runbook の手順名が必要です"}.get(locale, "必須提供有效的 Runbook 步驟名稱")
 
+    command = str(params.get("command", "")).strip()
+    if not _runbook_permits_command(runbook.steps, command):
+        return {"en": "Command is not an approved Runbook step; no command was executed", "ja": "コマンドは承認済み Runbook の手順に含まれないため実行されませんでした"}.get(locale, "命令不在已審閱 Runbook 步驟中，未執行任何命令")
+
     result = await tool_exec_ssh_command({
         "asset_id": params.get("asset_id", ""),
-        "command": params.get("command", ""),
+        "command": command,
         "timeout": params.get("timeout", 60),
         "_locale": locale,
         "_actor": params.get("_actor", ""),
         "_actor_role": params.get("_actor_role", ""),
         "_runbook_id": runbook.id,
+        "_approved_runbook_token": _APPROVED_RUNBOOK_TOKEN,
     }, session)
 
     succeeded = result.startswith("✅")
