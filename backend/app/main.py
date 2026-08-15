@@ -2601,6 +2601,8 @@ def admin_list_posts(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     status_filter: str | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
     session: Session = Depends(get_session),
     _user: User = Depends(get_current_user),
 ) -> SharePostListResponse:
@@ -2608,6 +2610,10 @@ def admin_list_posts(
     q = select(SharePost)
     if status_filter:
         q = q.where(SharePost.status == status_filter)
+    if source_type:
+        q = q.where(SharePost.source_type == source_type)
+    if source_id:
+        q = q.where(SharePost.source_id == source_id)
     total = session.scalar(select(func.count()).select_from(q.subquery())) or 0
     items = session.scalars(q.order_by(SharePost.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
     return SharePostListResponse(

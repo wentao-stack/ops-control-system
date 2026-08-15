@@ -643,7 +643,18 @@ const navigate = useNavigate()
     setShowEditor(true)
   }
 
-  const handleViewNote = (noteId: string) => {
+  const handleViewNote = async (noteId: string) => {
+    // Check if this note has been published as a share post
+    try {
+      const posts = await apiFetch("/posts?source_type=note&source_id=" + noteId)
+      if (posts && posts.items && posts.items.length > 0) {
+        // Navigate to the public post page
+        navigate(`/${posts.items[0].slug}`)
+        return
+      }
+    } catch {
+      // If API fails, fall through to admin note detail
+    }
     navigate(`/admin/notes/${noteId}`)
   }
 
