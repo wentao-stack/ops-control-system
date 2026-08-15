@@ -24,6 +24,8 @@ class SharePost(Base):
         server_default="draft",
     )
     author: Mapped[str] = mapped_column(String(64), nullable=False, server_default="admin")
+    source_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # "note" | "comfyui"
+    source_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

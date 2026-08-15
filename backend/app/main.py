@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time as _time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, st
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -2749,6 +2751,104 @@ async def admin_upload_cover(
     session.commit()
 
     return {"filename": filename, "url": f"/share-static/covers/{filename}"}
+
+
+class PublishFromSourceRequest(BaseModel):
+    source_type: str  # "note" | "comfyui"
+    source_id: str
+    title: str | None = None
+    excerpt: str | None = None
+    cover_image: str | None = None
+    status: str = "published"  # "published" | "draft"
+
+
+@app.post("/api/v1/posts/publish-from-source", response_model=SharePostResponse)
+def admin_publish_from_source(
+    body: PublishFromSourceRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> SharePostResponse:
+    """Admin: publish content from a note or ComfyUI artifact to the homepage."""
+    if body.source_type not in ("note", "comfyui"):
+        raise HTTPException(status_code=400, detail="source_type must be 'note' or 'comfyui'")
+
+    # Check if already published from this source
+    existing = session.scalar(
+        select(SharePost).where(
+            SharePost.source_type == body.source_type,
+            SharePost.source_id == body.source_id,
+        )
+    )
+    if existing:
+        # Update existing post
+        if body.title:
+            existing.title = body.title
+        if body.excerpt:
+            existing.excerpt = body.excerpt
+        if body.cover_image:
+            existing.cover_image = body.cover_image
+        old_status = existing.status
+        existing.status = body.status
+        existing.updated_at = datetime.now(UTC)
+        if body.status == "published" and old_status != "published":
+            existing.published_at = datetime.now(UTC)
+        elif body.status != "published":
+            existing.published_at = None
+        session.commit()
+        session.refresh(existing)
+        return SharePostResponse.model_validate(existing)
+
+    # Fetch source content
+    title = body.title or ""
+    content = ""
+    excerpt = body.excerpt or ""
+
+    if body.source_type == "note":
+        from .models import Note
+        note = session.scalar(select(Note).where(Note.id == body.source_id))
+        if note is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        title = body.title or note.title
+        content = note.content
+        if not excerpt:
+            # Generate excerpt from content (strip markdown, first 200 chars)
+            plain = re.sub(r"[#*`>\[\]|\-]", "", content).strip()
+            excerpt = plain[:200] + ("…" if len(plain) > 200 else "")
+    elif body.source_type == "comfyui":
+        # For ComfyUI artifacts, the content is a description/caption
+        title = body.title or "AI 生成作品"
+        content = body.excerpt or "AI 生成作品"
+        if not excerpt:
+            excerpt = content[:200]
+
+    # Generate unique slug
+    base_slug = re.sub(r"[^\w\u4e00-\u9fff-]", "-", title.lower()).strip("-")[:80] or f"post-{body.source_id}"
+    slug = base_slug
+    counter = 1
+    while session.scalar(select(SharePost).where(SharePost.slug == slug)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    now = datetime.now(UTC)
+    post = SharePost(
+        title=title,
+        slug=slug,
+        cover_image=body.cover_image,
+        video_file=None,
+        content=content,
+        excerpt=excerpt,
+        status=body.status,
+        author=user.username,
+        source_type=body.source_type,
+        source_id=body.source_id,
+        created_at=now,
+        updated_at=now,
+        published_at=now if body.status == "published" else None,
+    )
+    session.add(post)
+    session.commit()
+    session.refresh(post)
+    return SharePostResponse.model_validate(post)
 
 
 # ── SPA Fallback ──────────────────────────────────────────────────────────────

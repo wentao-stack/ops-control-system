@@ -360,6 +360,8 @@ const { noteId } = useParams<{ noteId: string }>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [published, setPublished] = useState(false)
 
   const fetchNote = useCallback(async () => {
     if (!noteId) return
@@ -414,6 +416,32 @@ const { noteId } = useParams<{ noteId: string }>()
 
   const handleNavigateToNote = (id: string) => {
     navigate(`/admin/notes/${id}`)
+  }
+
+  const handlePublish = async () => {
+    if (!note) return
+    setPublishing(true)
+    try {
+      const res = await fetch("/api/v1/posts/publish-from-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          source_type: "note",
+          source_id: note.id,
+          title: note.title,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`API ${res.status}: ${text}`)
+      }
+      setPublished(true)
+    } catch (e: any) {
+      alert(`發布失敗: ${e.message}`)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   return (
@@ -483,6 +511,9 @@ const { noteId } = useParams<{ noteId: string }>()
                       {note.pinned ? `★ ${t("notes.unpin")}` : `☆ ${t("notes.pin")}`}
                     </button>
                     <button className="btn btn-sm" onClick={() => setShowEditor(true)} title={t("notes.edit")}>✎ {t("notes.edit")}</button>
+                    <button className="btn btn-sm" onClick={handlePublish} disabled={publishing} title="發布到首頁" style={{ color: published ? "#22c55e" : "#3b82f6" }}>
+                      {publishing ? "⏳ 發布中…" : published ? "✓ 已發布" : "📤 發布到首頁"}
+                    </button>
                     <button className="btn btn-sm" onClick={handleDelete} title={t("notes.deleteNote")} style={{ color: "var(--danger)" }}>🗑 {t("notes.deleteNote")}</button>
                   </div>
                 </div>

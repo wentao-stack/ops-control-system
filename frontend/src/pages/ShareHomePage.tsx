@@ -8,6 +8,7 @@ interface SharePost {
   slug: string
   cover_image: string | null
   excerpt: string
+  source_type: string | null
   created_at: string
   published_at: string | null
 }
@@ -132,10 +133,15 @@ export function ShareHomePage() {
                   <Link key={post.id} to={`/${post.slug}`} className="sh-post-card">
                     {post.cover_image && (
                       <div className="sh-post-cover">
-                        <img src={`/share-static/covers/${post.cover_image}`} alt={post.title} />
+                        <img src={post.cover_image.startsWith("http") ? post.cover_image : `/share-static/covers/${post.cover_image}`} alt={post.title} />
                       </div>
                     )}
                     <div className="sh-post-body">
+                      {post.source_type && (
+                        <span className={`sh-source-badge sh-source-${post.source_type}`}>
+                          {post.source_type === "note" ? "📝 筆記" : "🎨 AI 創作"}
+                        </span>
+                      )}
                       <h3>{post.title}</h3>
                       <p>{post.excerpt}</p>
                       <span className="sh-post-date">
@@ -293,6 +299,12 @@ const shareHomeStyles = `
 .sh-post-cover { height: 190px; overflow: hidden; }
 .sh-post-cover img { width: 100%; height: 100%; object-fit: cover; }
 .sh-post-body { padding: 20px; }
+.sh-source-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; margin-bottom: 10px;
+}
+.sh-source-note { background: rgba(59,130,246,.12); color: #60a5fa; }
+.sh-source-comfyui { background: rgba(168,85,247,.12); color: #c084fc; }
 .sh-post-body h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: #f1f5f9; line-height: 1.4; }
 .sh-post-body p { margin: 0 0 12px; color: var(--sh-dim); font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sh-post-date { font-size: 12px; color: var(--sh-dim); }

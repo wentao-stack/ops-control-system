@@ -100,6 +100,8 @@ function ComfyOutputCard({
   const [failed, setFailed] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [loadPreview, setLoadPreview] = useState(output.kind === "image")
+  const [publishing, setPublishing] = useState(false)
+  const [published, setPublished] = useState(false)
 
   useEffect(() => {
     if (!loadPreview) return
@@ -140,6 +142,32 @@ function ComfyOutputCard({
     }
   }
 
+  const handlePublish = async () => {
+    setPublishing(true)
+    try {
+      const res = await fetch("/api/v1/posts/publish-from-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          source_type: "comfyui",
+          source_id: `${output.subfolder ?? ""}/${output.filename}`,
+          title: output.filename.replace(/\.[^.]+$/, ""),
+          cover_image: url ?? undefined,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`API ${res.status}: ${text}`)
+      }
+      setPublished(true)
+    } catch (e: any) {
+      alert(`發布失敗: ${e.message}`)
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   return (
     <article className={`comfy-output-card${selected ? " is-selected" : ""}`}>
       <div className="comfy-output-stage">
@@ -172,6 +200,9 @@ function ComfyOutputCard({
         <div className="comfy-output-actions">
           {url && <a className="comfy-icon-btn" href={url} download={output.filename} title={t("comfyui.download")}>↓</a>}
           {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title={t("comfyui.open")}>↗</a>}
+          <button className="comfy-icon-btn" onClick={handlePublish} disabled={publishing} title="發布到首頁" style={{ color: published ? "#22c55e" : "#3b82f6" }}>
+            {publishing ? "⏳" : published ? "✓" : "📤"}
+          </button>
           <button className="comfy-delete-btn" onClick={remove} disabled={deleting || batchDeleting} title={t("comfyui.deleteArtifact")}>
             {deleting ? t("comfyui.deleting") : t("comfyui.delete")}
           </button>

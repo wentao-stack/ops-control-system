@@ -469,6 +469,8 @@ class SharePostCreate(BaseModel):
     content: str = ""
     excerpt: str = ""
     status: str = "draft"
+    source_type: str | None = None
+    source_id: str | None = None
 
 
 class SharePostUpdate(BaseModel):
@@ -479,6 +481,8 @@ class SharePostUpdate(BaseModel):
     content: str | None = None
     excerpt: str | None = None
     status: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
 
 
 class SharePostStatusUpdate(BaseModel):
@@ -495,6 +499,8 @@ class SharePostResponse(BaseModel):
     excerpt: str
     status: str
     author: str
+    source_type: str | None
+    source_id: str | None
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None
