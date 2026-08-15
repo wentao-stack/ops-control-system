@@ -7,10 +7,17 @@ interface SharePost {
   title: string
   slug: string
   cover_image: string | null
+  video_file: string | null
   excerpt: string
   source_type: string | null
   created_at: string
   published_at: string | null
+}
+
+function coverUrl(cover: string | null | undefined): string | undefined {
+  if (!cover) return undefined
+  if (cover.startsWith("http")) return cover
+  return `/share-static/covers/${cover}`
 }
 
 const TOPICS = [
@@ -161,7 +168,8 @@ export function ShareHomePage() {
                   <Link key={post.id} to={`/p/${post.id}`} className="sh-post-card">
                     {post.cover_image && (
                       <div className="sh-post-cover">
-                        <img src={post.cover_image.startsWith("http") ? post.cover_image : `/share-static/covers/${post.cover_image}`} alt={post.title} />
+                        <img src={coverUrl(post.cover_image)} alt={post.title} />
+                        {post.video_file && <span className="sh-video-badge">▶ 影片</span>}
                       </div>
                     )}
                     <div className="sh-post-body">
@@ -329,8 +337,15 @@ const shareHomeStyles = `
   transition: all .2s; display: block;
 }
 .sh-post-card:hover { transform: translateY(-3px); border-color: rgba(56,189,248,.3); box-shadow: 0 10px 28px rgba(0,0,0,.3); }
-.sh-post-cover { height: 190px; overflow: hidden; }
+.sh-post-cover { height: 190px; overflow: hidden; position: relative; }
 .sh-post-cover img { width: 100%; height: 100%; object-fit: cover; }
+.sh-video-badge {
+  position: absolute; bottom: 10px; right: 10px;
+  padding: 3px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(0,0,0,.7); color: #fff;
+  backdrop-filter: blur(4px);
+}
 .sh-post-body { padding: 20px; }
 .sh-source-badge {
   display: inline-block; padding: 3px 10px; border-radius: 10px;

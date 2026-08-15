@@ -17,6 +17,18 @@ interface Post {
   published_at: string | null
 }
 
+function coverUrl(cover: string | null | undefined): string | undefined {
+  if (!cover) return undefined
+  if (cover.startsWith("http")) return cover
+  return `/share-static/covers/${cover}`
+}
+
+function videoUrl(videoFile: string | null | undefined): string | undefined {
+  if (!videoFile) return undefined
+  if (videoFile.startsWith("http")) return videoFile
+  return `/share-static/videos/${videoFile}`
+}
+
 export function ShareEditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -28,9 +40,11 @@ export function ShareEditorPage() {
   const [content, setContent] = useState("")
   const [status, setStatus] = useState("draft")
   const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [videoFile, setVideoFile] = useState<string | null>(null)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -46,6 +60,7 @@ export function ShareEditorPage() {
           setContent(post.content)
           setStatus(post.status)
           setCoverImage(post.cover_image)
+          setVideoFile(post.video_file)
         } else {
           setError("文章不存在")
         }
@@ -78,7 +93,7 @@ export function ShareEditorPage() {
     setSaving(true)
     setError("")
     try {
-      const body = { title, slug, excerpt, content, status, cover_image: coverImage }
+      const body = { title, slug, excerpt, content, status, cover_image: coverImage, video_file: videoFile }
       if (isEdit) {
         await api(`/api/v1/posts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       } else {
@@ -109,6 +124,26 @@ export function ShareEditorPage() {
       setError(e.message || "上傳失敗")
     } finally {
       setUploadingCover(false)
+    }
+  }
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !isEdit || !id) return
+    setUploadingVideo(true)
+    setError("")
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await api(`/api/v1/posts/${id}/upload-video`, {
+        method: "POST",
+        body: formData,
+      } as RequestInit)
+      setVideoFile((res as any).filename)
+    } catch (e: any) {
+      setError(e.message || "影片上傳失敗")
+    } finally {
+      setUploadingVideo(false)
     }
   }
 
@@ -145,9 +180,19 @@ export function ShareEditorPage() {
         {/* Cover Image */}
         <div>
           <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>封面圖片</label>
-          {coverImage && <img src={`/share-static/covers/${coverImage}`} alt="cover" style={{ maxWidth: 400, borderRadius: 8, marginBottom: 8 }} />}
+          {coverImage && <img src={coverUrl(coverImage)} alt="cover" style={{ maxWidth: 400, borderRadius: 8, marginBottom: 8 }} />}
           <input type="file" accept="image/*" onChange={handleCoverUpload} disabled={uploadingCover} />
           {uploadingCover && <span style={{ marginLeft: 8, color: "#888" }}>上傳中…</span>}
+        </div>
+
+        {/* Video */}
+        <div>
+          <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>影片</label>
+          {videoFile && (
+            <video src={videoUrl(videoFile)} controls style={{ maxWidth: 400, borderRadius: 8, marginBottom: 8 }} />
+          )}
+          <input type="file" accept="video/*" onChange={handleVideoUpload} disabled={uploadingVideo} />
+          {uploadingVideo && <span style={{ marginLeft: 8, color: "#888" }}>影片上傳中…</span>}
         </div>
 
         {/* Content */}

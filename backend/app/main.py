@@ -2522,7 +2522,7 @@ async def comfyui_upload(
 
 # ── Share API (public) ───────────────────────────────────────────────────────
 
-SHARE_DATA_DIR = Path(__file__).resolve().parents[2] / ".data" / "share"
+SHARE_DATA_DIR = Path(__file__).resolve().parents[1] / ".data" / "share"
 SHARE_COVERS_DIR = SHARE_DATA_DIR / "covers"
 SHARE_VIDEOS_DIR = SHARE_DATA_DIR / "videos"
 SHARE_COVERS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2766,6 +2766,37 @@ async def admin_upload_cover(
     session.commit()
 
     return {"filename": filename, "url": f"/share-static/covers/{filename}"}
+
+
+@app.post("/api/v1/posts/{post_id}/upload-video", response_model=dict)
+async def admin_upload_video(
+    post_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Admin: upload video file for a post."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    data = await file.read()
+    if len(data) > 500 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Video too large (max 500MB)")
+
+    import uuid
+    ext = (file.filename or "video.mp4").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "mp4"
+    if ext not in ("mp4", "webm", "mov", "mkv", "avi"):
+        ext = "mp4"
+    filename = f"{uuid.uuid4().hex[:10]}.{ext}"
+    filepath = SHARE_VIDEOS_DIR / filename
+    filepath.write_bytes(data)
+
+    post.video_file = filename
+    post.updated_at = datetime.now(UTC)
+    session.commit()
+
+    return {"filename": filename, "url": f"/share-static/videos/{filename}"}
 
 
 class PublishFromSourceRequest(BaseModel):

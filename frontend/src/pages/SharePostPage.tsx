@@ -19,6 +19,20 @@ interface SharePost {
   source_id: string | null
 }
 
+/* ── Media URL Helpers ─────────────────────────────────────────────────────── */
+
+function coverUrl(cover: string | null | undefined): string | undefined {
+  if (!cover) return undefined
+  if (cover.startsWith("http")) return cover
+  return `/share-static/covers/${cover}`
+}
+
+function videoUrl(videoFile: string | null | undefined): string | undefined {
+  if (!videoFile) return undefined
+  if (videoFile.startsWith("http")) return videoFile
+  return `/share-static/videos/${videoFile}`
+}
+
 /* ── Markdown Renderer ─────────────────────────────────────────────────────── */
 
 function escapeHtml(s: string): string {
@@ -409,7 +423,7 @@ export function SharePostPage() {
       {/* Cover image */}
       {post.cover_image && (
         <div className="sp-cover">
-          <img src={post.cover_image.startsWith("http") ? post.cover_image : `/share-static/covers/${post.cover_image}`} alt={post.title} />
+          <img src={coverUrl(post.cover_image)} alt={post.title} />
         </div>
       )}
 
@@ -418,8 +432,8 @@ export function SharePostPage() {
         <article className="sp-article">
           {post.video_file && (
             <div className="sp-video">
-              <video controls poster={post.cover_image ? (post.cover_image.startsWith("http") ? post.cover_image : `/share-static/covers/${post.cover_image}`) : undefined}>
-                <source src={`/share-static/videos/${post.video_file}`} type="video/mp4" />
+              <video controls poster={coverUrl(post.cover_image)} preload="metadata">
+                <source src={videoUrl(post.video_file)} type="video/mp4" />
                 您的瀏覽器不支援影片播放
               </video>
             </div>
