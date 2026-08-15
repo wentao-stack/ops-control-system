@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { api, getToken } from "../auth"
-import type { Summary, Asset } from "../types"
 
 interface SharePost {
   id: number
@@ -13,15 +12,13 @@ interface SharePost {
   published_at: string | null
 }
 
-const FEATURES = [
-  { icon: "🖥", title: "資產庫存", desc: "統一管理伺服器、容器與雲端資源，環境與健康狀態一目了然。", to: "/admin/assets" },
-  { icon: "📡", title: "主機監控", desc: "CPU、記憶體、磁碟與 GPU 即時指標，遠端主機一覽無遺。", to: "/admin/monitoring" },
-  { icon: "🔧", title: "服務偵測", desc: "systemd 與 Docker 服務狀態偵測，Supervisor 程序管理。", to: "/admin/services" },
-  { icon: "⌨", title: "SSH 終端", desc: "瀏覽器內 SSH 終端與遠端命令執行，免裝客戶端。", to: "/admin/remote" },
-  { icon: "🤖", title: "AI Agent", desc: "對話式運維助手，工具調用、Runbook 執行與 RAG 知識檢索。", to: "/admin/agent" },
-  { icon: "🔄", title: "工作流", desc: "LLM、API、Shell 步驟組合，自動化運維流程。", to: "/admin/workflow" },
-  { icon: "📝", title: "筆記知識庫", desc: "運維筆記與知識沉澱，支援搜索與分類。", to: "/admin/notes" },
-  { icon: "🎨", title: "ComfyUI", desc: "AI 圖像與影片生成工作流，本地 GPU 推理。", to: "/admin/comfyui" },
+const TOPICS = [
+  { icon: "🤖", label: "AI / LLM" },
+  { icon: "☁️", label: "雲端運算" },
+  { icon: "🐧", label: "系統管理" },
+  { icon: "🎨", label: "創作" },
+  { icon: "🔧", label: "DevOps" },
+  { icon: "📚", label: "學習筆記" },
 ]
 
 export function ShareHomePage() {
@@ -29,8 +26,6 @@ export function ShareHomePage() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [assets, setAssets] = useState<Asset[]>([])
   const [authed, setAuthed] = useState(false)
   const PAGE_SIZE = 12
 
@@ -50,13 +45,9 @@ export function ShareHomePage() {
   useEffect(() => {
     fetchPosts(page)
     setAuthed(!!getToken())
-    api<Summary>("/api/v1/inventory/summary").then(setSummary).catch(() => {})
-    api<{ items: Asset[]; total: number }>("/api/v1/assets").then(d => setAssets(d.items ?? [])).catch(() => {})
   }, [page, fetchPosts])
 
   const pages = Math.ceil(total / PAGE_SIZE)
-  const healthy = summary?.by_health.healthy ?? 0
-  const attention = (summary?.by_health.warning ?? 0) + (summary?.by_health.critical ?? 0)
 
   return (
     <div className="sh">
@@ -68,8 +59,8 @@ export function ShareHomePage() {
             <span className="sh-logo-text">OPS<span className="sh-logo-accent">CONTROL</span></span>
           </Link>
           <nav className="sh-nav">
-            <a href="#features">功能</a>
-            <a href="#system">系統</a>
+            <a href="#posts">文章</a>
+            <a href="#topics">主題</a>
             {authed ? (
               <Link to="/admin/overview" className="sh-nav-cta">控制台</Link>
             ) : (
@@ -83,139 +74,90 @@ export function ShareHomePage() {
       <section className="sh-hero">
         <div className="sh-hero-grid" />
         <div className="sh-hero-inner">
-          <span className="sh-hero-badge">◆ 遠端伺服器作業控制平台</span>
+          <span className="sh-hero-badge">◆ 技術分享與作品展示</span>
           <h1>
-            一站式 <span className="sh-hero-grad">運維控制</span> 中心
+            記錄 <span className="sh-hero-grad">技術探索</span> 與創作
           </h1>
           <p className="sh-hero-sub">
-            資產管理 · 主機監控 · 服務偵測 · SSH 終端 · AI Agent · 工作流自動化
+            AI · 雲端運算 · 系統管理 · 創作 — 分享學習過程與實作成果
           </p>
           <div className="sh-hero-actions">
+            <a href="#posts" className="sh-btn sh-btn-primary">瀏覽文章</a>
             {authed ? (
-              <Link to="/admin/overview" className="sh-btn sh-btn-primary">進入控制台 →</Link>
+              <Link to="/admin/overview" className="sh-btn sh-btn-ghost">進入控制台</Link>
             ) : (
-              <Link to="/login" className="sh-btn sh-btn-primary">登入控制台 →</Link>
+              <Link to="/login" className="sh-btn sh-btn-ghost">登入</Link>
             )}
-            <a href="#features" className="sh-btn sh-btn-ghost">探索功能</a>
           </div>
-
-          {/* Live stats */}
-          {summary && (
-            <div className="sh-stats">
-              <div className="sh-stat">
-                <span className="sh-stat-num">{summary.total}</span>
-                <span className="sh-stat-label">資產總數</span>
-              </div>
-              <div className="sh-stat">
-                <span className="sh-stat-num sh-stat-ok">{healthy}</span>
-                <span className="sh-stat-label">健康</span>
-              </div>
-              <div className="sh-stat">
-                <span className="sh-stat-num" style={{ color: attention > 0 ? "var(--sh-warn)" : "var(--sh-dim)" }}>
-                  {attention}
-                </span>
-                <span className="sh-stat-label">需關注</span>
-              </div>
-              <div className="sh-stat">
-                <span className="sh-stat-num">{assets.length}</span>
-                <span className="sh-stat-label">已連線主機</span>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
-      {/* Features */}
-      <section className="sh-section" id="features">
+      {/* Topics */}
+      <section className="sh-section" id="topics">
         <div className="sh-container">
           <div className="sh-section-head">
-            <h2>核心功能</h2>
-            <p>從資產到 AI，覆蓋運維全生命週期</p>
+            <h2>主題分類</h2>
+            <p>按領域瀏覽技術內容</p>
           </div>
-          <div className="sh-features-grid">
-            {FEATURES.map(f => (
-              <Link key={f.to} to={f.to} className="sh-feature-card">
-                <span className="sh-feature-icon">{f.icon}</span>
-                <h3>{f.title}</h3>
-                <p>{f.desc}</p>
-                <span className="sh-feature-link">進入 →</span>
-              </Link>
+          <div className="sh-topics">
+            {TOPICS.map(t => (
+              <span key={t.label} className="sh-topic-chip">
+                <span className="sh-topic-icon">{t.icon}</span>
+                {t.label}
+              </span>
             ))}
           </div>
         </div>
       </section>
 
-      {/* System status */}
-      {summary && assets.length > 0 && (
-        <section className="sh-section sh-section-alt" id="system">
-          <div className="sh-container">
-            <div className="sh-section-head">
-              <h2>系統狀態</h2>
-              <p>即時資產健康概覽</p>
-            </div>
-            <div className="sh-system-grid">
-              {assets.map(a => (
-                <Link key={a.id} to={`/admin/assets/${a.id}`} className="sh-system-card">
-                  <div className="sh-system-top">
-                    <span className={`sh-dot sh-dot-${a.health_status}`} />
-                    <strong>{a.name}</strong>
-                    <span className="sh-system-env">{a.environment}</span>
-                  </div>
-                  <div className="sh-system-bottom">
-                    <span>{a.asset_type}</span>
-                    <span className="sh-system-health">{healthLabel(a.health_status)}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Posts */}
-      {total > 0 && (
-        <section className="sh-section">
-          <div className="sh-container">
-            <div className="sh-section-head">
-              <h2>技術分享</h2>
-              <p>AI · 雲端運算 · 系統管理 · 創作</p>
+      <section className="sh-section sh-section-alt" id="posts">
+        <div className="sh-container">
+          <div className="sh-section-head">
+            <h2>技術分享</h2>
+            <p>AI · 雲端運算 · 系統管理 · 創作</p>
+          </div>
+          {loading ? (
+            <div className="sh-loading">載入中…</div>
+          ) : total === 0 ? (
+            <div className="sh-empty">
+              <span className="sh-empty-icon">📝</span>
+              <h3>還沒有已發布的文章</h3>
+              <p>內容發布後會顯示在這裡</p>
             </div>
-            {loading ? (
-              <div className="sh-loading">載入中…</div>
-            ) : (
-              <>
-                <div className="sh-posts-grid">
-                  {posts.map(post => (
-                    <Link key={post.id} to={`/${post.slug}`} className="sh-post-card">
-                      {post.cover_image && (
-                        <div className="sh-post-cover">
-                          <img src={`/share-static/covers/${post.cover_image}`} alt={post.title} />
-                        </div>
-                      )}
-                      <div className="sh-post-body">
-                        <h3>{post.title}</h3>
-                        <p>{post.excerpt}</p>
-                        <span className="sh-post-date">
-                          {post.published_at ? new Date(post.published_at).toLocaleDateString("zh-TW") : ""}
-                        </span>
+          ) : (
+            <>
+              <div className="sh-posts-grid">
+                {posts.map(post => (
+                  <Link key={post.id} to={`/${post.slug}`} className="sh-post-card">
+                    {post.cover_image && (
+                      <div className="sh-post-cover">
+                        <img src={`/share-static/covers/${post.cover_image}`} alt={post.title} />
                       </div>
-                    </Link>
+                    )}
+                    <div className="sh-post-body">
+                      <h3>{post.title}</h3>
+                      <p>{post.excerpt}</p>
+                      <span className="sh-post-date">
+                        {post.published_at ? new Date(post.published_at).toLocaleDateString("zh-TW") : ""}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {pages > 1 && (
+                <div className="sh-pagination">
+                  {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
+                    <button key={p} className={p === page ? "active" : ""} onClick={() => setPage(p)}>
+                      {p}
+                    </button>
                   ))}
                 </div>
-                {pages > 1 && (
-                  <div className="sh-pagination">
-                    {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
-                      <button key={p} className={p === page ? "active" : ""} onClick={() => setPage(p)}>
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </section>
-      )}
+              )}
+            </>
+          )}
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="sh-footer">
@@ -223,18 +165,13 @@ export function ShareHomePage() {
           <div className="sh-footer-brand">
             <span className="sh-logo-mark">◈</span> OPS Control System
           </div>
-          <p>© {new Date().getFullYear()} OPS Control System · 遠端伺服器作業控制平台</p>
+          <p>© {new Date().getFullYear()} OPS Control System · 技術分享與作品展示</p>
         </div>
       </footer>
 
       <style>{shareHomeStyles}</style>
     </div>
   )
-}
-
-function healthLabel(h: string): string {
-  const map: Record<string, string> = { healthy: "正常", warning: "警告", critical: "嚴重", unknown: "未知" }
-  return map[h] ?? h
 }
 
 const shareHomeStyles = `
@@ -251,9 +188,6 @@ const shareHomeStyles = `
   --sh-dim: #64748b;
   --sh-accent: #38bdf8;
   --sh-accent2: #818cf8;
-  --sh-ok: #34d399;
-  --sh-warn: #fbbf24;
-  --sh-danger: #f87171;
 }
 
 /* ── Header ── */
@@ -286,7 +220,7 @@ const shareHomeStyles = `
 /* ── Hero ── */
 .sh-hero {
   position: relative; overflow: hidden;
-  padding: 96px 24px 72px;
+  padding: 100px 24px 80px;
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, rgba(56,189,248,.14), transparent 60%),
     radial-gradient(ellipse 60% 50% at 80% 20%, rgba(129,140,248,.10), transparent 50%),
@@ -300,7 +234,7 @@ const shareHomeStyles = `
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000, transparent 80%);
 }
-.sh-hero-inner { position: relative; z-index: 1; max-width: 820px; margin: 0 auto; text-align: center; }
+.sh-hero-inner { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; text-align: center; }
 .sh-hero-badge {
   display: inline-block; padding: 5px 14px; border-radius: 20px;
   font-size: 12px; font-weight: 600; letter-spacing: .04em;
@@ -308,15 +242,15 @@ const shareHomeStyles = `
   border: 1px solid rgba(56,189,248,.22); margin-bottom: 22px;
 }
 .sh-hero h1 {
-  font-size: 52px; font-weight: 800; line-height: 1.15; letter-spacing: -.03em;
+  font-size: 50px; font-weight: 800; line-height: 1.15; letter-spacing: -.03em;
   color: #f8fafc; margin: 0 0 18px;
 }
 .sh-hero-grad {
   background: linear-gradient(135deg, var(--sh-accent), var(--sh-accent2));
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
-.sh-hero-sub { font-size: 17px; color: var(--sh-dim); margin: 0 0 32px; line-height: 1.7; }
-.sh-hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
+.sh-hero-sub { font-size: 17px; color: var(--sh-dim); margin: 0 0 36px; line-height: 1.7; }
+.sh-hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 .sh-btn {
   padding: 12px 26px; border-radius: 10px; font-size: 15px; font-weight: 600;
   text-decoration: none; transition: all .2s; display: inline-block;
@@ -326,20 +260,6 @@ const shareHomeStyles = `
 .sh-btn-ghost { border: 1px solid var(--sh-border); color: var(--sh-text); background: transparent; }
 .sh-btn-ghost:hover { border-color: var(--sh-dim); background: rgba(255,255,255,.04); }
 
-/* ── Stats ── */
-.sh-stats {
-  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
-}
-.sh-stat {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 18px 28px; border-radius: 12px;
-  background: rgba(17,24,39,.6); border: 1px solid var(--sh-border);
-  backdrop-filter: blur(8px); min-width: 110px;
-}
-.sh-stat-num { font-size: 32px; font-weight: 800; color: #f1f5f9; letter-spacing: -.02em; }
-.sh-stat-ok { color: var(--sh-ok); }
-.sh-stat-label { font-size: 12px; color: var(--sh-dim); font-weight: 500; }
-
 /* ── Sections ── */
 .sh-section { padding: 64px 24px; }
 .sh-section-alt { background: #0d1220; border-top: 1px solid var(--sh-border); border-bottom: 1px solid var(--sh-border); }
@@ -348,51 +268,17 @@ const shareHomeStyles = `
 .sh-section-head h2 { font-size: 30px; font-weight: 800; color: #f1f5f9; margin: 0 0 8px; letter-spacing: -.02em; }
 .sh-section-head p { font-size: 15px; color: var(--sh-dim); margin: 0; }
 
-/* ── Features ── */
-.sh-features-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
-}
-.sh-feature-card {
-  display: flex; flex-direction: column; gap: 10px;
-  padding: 24px; border-radius: 14px; text-decoration: none; color: inherit;
+/* ── Topics ── */
+.sh-topics { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.sh-topic-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border-radius: 24px;
+  font-size: 14px; font-weight: 600; color: var(--sh-text);
   background: var(--sh-surface); border: 1px solid var(--sh-border);
-  transition: all .22s;
+  transition: all .2s; cursor: default;
 }
-.sh-feature-card:hover {
-  transform: translateY(-3px); border-color: rgba(56,189,248,.35);
-  box-shadow: 0 12px 32px rgba(0,0,0,.3);
-  background: var(--sh-surface2);
-}
-.sh-feature-icon { font-size: 28px; }
-.sh-feature-card h3 { font-size: 16px; font-weight: 700; color: #f1f5f9; margin: 0; }
-.sh-feature-card p { font-size: 13px; color: var(--sh-dim); line-height: 1.6; margin: 0; flex: 1; }
-.sh-feature-link { font-size: 13px; font-weight: 600; color: var(--sh-accent); opacity: 0; transition: opacity .2s; }
-.sh-feature-card:hover .sh-feature-link { opacity: 1; }
-
-/* ── System status ── */
-.sh-system-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
-}
-.sh-system-card {
-  display: flex; flex-direction: column; gap: 10px;
-  padding: 18px 20px; border-radius: 12px; text-decoration: none; color: inherit;
-  background: var(--sh-surface); border: 1px solid var(--sh-border);
-  transition: all .2s;
-}
-.sh-system-card:hover { border-color: rgba(56,189,248,.3); background: var(--sh-surface2); }
-.sh-system-top { display: flex; align-items: center; gap: 8px; }
-.sh-system-top strong { font-size: 14px; color: #f1f5f9; flex: 1; }
-.sh-system-env {
-  font-size: 11px; padding: 2px 8px; border-radius: 6px;
-  background: rgba(129,140,248,.12); color: var(--sh-accent2); font-weight: 600;
-}
-.sh-system-bottom { display: flex; justify-content: space-between; font-size: 12px; color: var(--sh-dim); }
-.sh-system-health { font-weight: 600; }
-.sh-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.sh-dot-healthy { background: var(--sh-ok); box-shadow: 0 0 8px rgba(52,211,153,.5); }
-.sh-dot-warning { background: var(--sh-warn); box-shadow: 0 0 8px rgba(251,191,36,.5); }
-.sh-dot-critical { background: var(--sh-danger); box-shadow: 0 0 8px rgba(248,113,113,.5); }
-.sh-dot-unknown { background: var(--sh-dim); }
+.sh-topic-chip:hover { border-color: rgba(56,189,248,.35); background: var(--sh-surface2); transform: translateY(-2px); }
+.sh-topic-icon { font-size: 18px; }
 
 /* ── Posts ── */
 .sh-posts-grid {
@@ -418,6 +304,12 @@ const shareHomeStyles = `
 }
 .sh-pagination button.active, .sh-pagination button:hover { background: var(--sh-accent); color: #0a0e1a; border-color: var(--sh-accent); }
 
+/* ── Empty state ── */
+.sh-empty { text-align: center; padding: 64px 24px; }
+.sh-empty-icon { font-size: 48px; display: block; margin-bottom: 16px; }
+.sh-empty h3 { font-size: 18px; font-weight: 700; color: #f1f5f9; margin: 0 0 8px; }
+.sh-empty p { font-size: 14px; color: var(--sh-dim); margin: 0; }
+
 /* ── Footer ── */
 .sh-footer { border-top: 1px solid var(--sh-border); padding: 32px 24px; }
 .sh-footer-inner { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -428,11 +320,8 @@ const shareHomeStyles = `
   .sh-hero { padding: 64px 16px 48px; }
   .sh-hero h1 { font-size: 34px; }
   .sh-hero-sub { font-size: 15px; }
-  .sh-stats { gap: 8px; }
-  .sh-stat { padding: 14px 18px; min-width: 80px; }
-  .sh-stat-num { font-size: 24px; }
-  .sh-features-grid { grid-template-columns: 1fr; }
-  .sh-system-grid { grid-template-columns: 1fr; }
+  .sh-topics { gap: 8px; }
+  .sh-topic-chip { padding: 8px 14px; font-size: 13px; }
   .sh-posts-grid { grid-template-columns: 1fr; }
   .sh-header-inner { padding: 12px 16px; }
   .sh-nav { gap: 14px; }
