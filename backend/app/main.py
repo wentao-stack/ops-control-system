@@ -2821,8 +2821,14 @@ def admin_publish_from_source(
         if not excerpt:
             excerpt = content[:200]
 
-    # Generate unique slug
-    base_slug = re.sub(r"[^\w\u4e00-\u9fff-]", "-", title.lower()).strip("-")[:80] or f"post-{body.source_id}"
+    # Generate unique slug — keep it short and clean
+    # Remove em dashes, extra spaces, and non-essential characters
+    clean_title = title.replace("—", " ").replace("–", " ").replace("—", " ")
+    base_slug = re.sub(r"[^\w\u4e00-\u9fff-]", "-", clean_title.lower()).strip("-")
+    # Collapse multiple dashes
+    base_slug = re.sub(r"-{2,}", "-", base_slug)
+    # Limit to 50 chars for cleaner URLs
+    base_slug = base_slug[:50].rstrip("-") or f"post-{body.source_id}"
     slug = base_slug
     counter = 1
     while session.scalar(select(SharePost).where(SharePost.slug == slug)):
