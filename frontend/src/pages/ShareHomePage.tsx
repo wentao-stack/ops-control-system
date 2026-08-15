@@ -28,6 +28,7 @@ export function ShareHomePage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [authed, setAuthed] = useState(false)
+  const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const PAGE_SIZE = 12
 
   const fetchPosts = useCallback(async (p: number) => {
@@ -49,6 +50,15 @@ export function ShareHomePage() {
   }, [page, fetchPosts])
 
   const pages = Math.ceil(total / PAGE_SIZE)
+
+  // Filter posts by topic (client-side for now)
+  const filteredPosts = activeTopic
+    ? posts.filter(p => {
+        const text = (p.title + " " + p.excerpt).toLowerCase()
+        const topicLower = activeTopic.toLowerCase()
+        return text.includes(topicLower)
+      })
+    : posts
 
   return (
     <div className="sh">
@@ -101,11 +111,22 @@ export function ShareHomePage() {
             <p>按領域瀏覽技術內容</p>
           </div>
           <div className="sh-topics">
+            <button
+              className={`sh-topic-chip ${!activeTopic ? "active" : ""}`}
+              onClick={() => setActiveTopic(null)}
+            >
+              <span className="sh-topic-icon">✨</span>
+              全部
+            </button>
             {TOPICS.map(t => (
-              <span key={t.label} className="sh-topic-chip">
+              <button
+                key={t.label}
+                className={`sh-topic-chip ${activeTopic === t.label ? "active" : ""}`}
+                onClick={() => setActiveTopic(activeTopic === t.label ? null : t.label)}
+              >
                 <span className="sh-topic-icon">{t.icon}</span>
                 {t.label}
-              </span>
+              </button>
             ))}
           </div>
         </div>
@@ -116,20 +137,22 @@ export function ShareHomePage() {
         <div className="sh-container">
           <div className="sh-section-head">
             <h2>技術分享</h2>
-            <p>AI · 雲端運算 · 系統管理 · 創作</p>
+            <p>
+              {activeTopic ? `篩選：${activeTopic}` : "AI · 雲端運算 · 系統管理 · 創作"}
+            </p>
           </div>
           {loading ? (
             <div className="sh-loading">載入中…</div>
-          ) : total === 0 ? (
+          ) : filteredPosts.length === 0 ? (
             <div className="sh-empty">
               <span className="sh-empty-icon">📝</span>
-              <h3>還沒有已發布的文章</h3>
-              <p>內容發布後會顯示在這裡</p>
+              <h3>{activeTopic ? `沒有「${activeTopic}」相關文章` : "還沒有已發布的文章"}</h3>
+              <p>{activeTopic ? "試試其他主題" : "內容發布後會顯示在這裡"}</p>
             </div>
           ) : (
             <>
               <div className="sh-posts-grid">
-                {posts.map(post => (
+                {filteredPosts.map(post => (
                   <Link key={post.id} to={`/${post.slug}`} className="sh-post-card">
                     {post.cover_image && (
                       <div className="sh-post-cover">
@@ -281,9 +304,14 @@ const shareHomeStyles = `
   padding: 10px 20px; border-radius: 24px;
   font-size: 14px; font-weight: 600; color: var(--sh-text);
   background: var(--sh-surface); border: 1px solid var(--sh-border);
-  transition: all .2s; cursor: default;
+  transition: all .2s; cursor: pointer;
+  font-family: inherit;
 }
 .sh-topic-chip:hover { border-color: rgba(56,189,248,.35); background: var(--sh-surface2); transform: translateY(-2px); }
+.sh-topic-chip.active {
+  background: rgba(56,189,248,.12); border-color: var(--sh-accent);
+  color: var(--sh-accent); box-shadow: 0 0 12px rgba(56,189,248,.15);
+}
 .sh-topic-icon { font-size: 18px; }
 
 /* ── Posts ── */
