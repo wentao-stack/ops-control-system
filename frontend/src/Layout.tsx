@@ -27,7 +27,8 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "1" } catch { return false }
   })
-  const title = t(`pageTitle${location.pathname}`) ?? t("app.name")
+  const rawTitle = t(`pageTitle${location.pathname}`)
+  const title = rawTitle === `pageTitle${location.pathname}` ? t("app.name") : rawTitle
   const toggle = () => {
     const next = !collapsed
     setCollapsed(next)
