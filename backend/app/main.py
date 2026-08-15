@@ -2557,6 +2557,15 @@ def share_get_post(slug: str, session: Session = Depends(get_session)) -> ShareP
     return SharePostResponse.model_validate(post)
 
 
+@app.get("/api/v1/share/posts/id/{post_id}", response_model=SharePostResponse)
+def share_get_post_by_id(post_id: int, session: Session = Depends(get_session)) -> SharePostResponse:
+    """Public: get a single published post by ID."""
+    post = session.scalar(select(SharePost).where(SharePost.id == post_id, SharePost.status == "published"))
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return SharePostResponse.model_validate(post)
+
+
 @app.get("/api/v1/share/posts/{slug}/video")
 def share_stream_video(slug: str, range_header: str | None = None):
     """Public: stream video file with Range support."""

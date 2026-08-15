@@ -649,7 +649,7 @@ const navigate = useNavigate()
       const posts = await apiFetch("/posts?source_type=note&source_id=" + noteId)
       if (posts && posts.items && posts.items.length > 0) {
         // Navigate to the public post page
-        navigate(`/${posts.items[0].slug}`)
+        navigate(`/p/${posts.items[0].id}`)
         return
       }
     } catch {

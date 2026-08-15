@@ -18,20 +18,20 @@ interface SharePost {
 }
 
 export function SharePostPage() {
-  const { slug } = useParams<{ slug: string }>()
+  const { postId } = useParams<{ postId: string }>()
   const [post, setPost] = useState<SharePost | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (!slug) return
+    if (!postId) return
     setLoading(true)
     setError("")
-    api<SharePost>(`/api/v1/share/posts/${slug}`)
+    api<SharePost>(`/api/v1/share/posts/id/${postId}`)
       .then(setPost)
       .catch(() => setError("文章不存在或已下架"))
       .finally(() => setLoading(false))
-  }, [slug])
+  }, [postId])
 
   if (loading) return <div className="share-post-loading">載入中…</div>
   if (error) return (

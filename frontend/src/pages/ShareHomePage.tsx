@@ -158,7 +158,7 @@ export function ShareHomePage() {
             <>
               <div className="sh-posts-grid">
                 {filteredPosts.map(post => (
-                  <Link key={post.id} to={`/${post.slug}`} className="sh-post-card">
+                  <Link key={post.id} to={`/p/${post.id}`} className="sh-post-card">
                     {post.cover_image && (
                       <div className="sh-post-cover">
                         <img src={post.cover_image.startsWith("http") ? post.cover_image : `/share-static/covers/${post.cover_image}`} alt={post.title} />

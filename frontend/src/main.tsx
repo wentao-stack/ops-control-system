@@ -43,7 +43,7 @@ function AppRoutes() {
     <Routes>
       {/* Public routes — no login required */}
       <Route path="/" element={<ShareHomePage />} />
-      <Route path="/:slug" element={<SharePostPage />} />
+      <Route path="/p/:postId" element={<SharePostPage />} />
       <Route path="/login" element={user ? <Navigate to="/admin/overview" replace /> : <LoginPage />} />
 
       {/* Admin routes — require login */}
