@@ -145,10 +145,9 @@ function ComfyOutputCard({
   const handlePublish = async () => {
     setPublishing(true)
     try {
-      const res = await fetch("/api/v1/posts/publish-from-source", {
+      await api("/api/v1/posts/publish-from-source", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           source_type: "comfyui",
           source_id: `${output.subfolder ?? ""}/${output.filename}`,
@@ -156,10 +155,6 @@ function ComfyOutputCard({
           cover_image: url ?? undefined,
         }),
       })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`API ${res.status}: ${text}`)
-      }
       setPublished(true)
     } catch (e: any) {
       alert(`發布失敗: ${e.message}`)

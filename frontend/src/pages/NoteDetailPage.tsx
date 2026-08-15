@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate, useParams } from "react-router-dom"
+import { api } from "../auth"
 
 /* ── Note Detail Page ────────────────────────────────────────────────────────
    Full article view with edit / delete / back navigation.
@@ -422,20 +423,15 @@ const { noteId } = useParams<{ noteId: string }>()
     if (!note) return
     setPublishing(true)
     try {
-      const res = await fetch("/api/v1/posts/publish-from-source", {
+      await api("/api/v1/posts/publish-from-source", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           source_type: "note",
           source_id: note.id,
           title: note.title,
         }),
       })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`API ${res.status}: ${text}`)
-      }
       setPublished(true)
     } catch (e: any) {
       alert(`發布失敗: ${e.message}`)
