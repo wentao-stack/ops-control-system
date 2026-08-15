@@ -371,6 +371,7 @@ export function SharePostPage() {
   const html = renderMarkdown(post.content)
   const headings = extractHeadings(post.content)
   const readTime = Math.max(1, Math.round(post.content.length / 500))
+  const isVideoPost = !!post.video_file
 
   return (
     <div className="sp-page">
@@ -420,8 +421,18 @@ export function SharePostPage() {
         </div>
       </div>
 
-      {/* Cover image */}
-      {post.cover_image && (
+      {/* Video hero — for video posts, the video IS the hero */}
+      {isVideoPost && (
+        <div className="sp-video-hero">
+          <video controls poster={coverUrl(post.cover_image)} preload="metadata">
+            <source src={videoUrl(post.video_file)} type="video/mp4" />
+            您的瀏覽器不支援影片播放
+          </video>
+        </div>
+      )}
+
+      {/* Cover image — only for non-video posts */}
+      {!isVideoPost && post.cover_image && (
         <div className="sp-cover">
           <img src={coverUrl(post.cover_image)} alt={post.title} />
         </div>
@@ -430,14 +441,6 @@ export function SharePostPage() {
       {/* Content + TOC */}
       <div className="sp-content-layout">
         <article className="sp-article">
-          {post.video_file && (
-            <div className="sp-video">
-              <video controls poster={coverUrl(post.cover_image)} preload="metadata">
-                <source src={videoUrl(post.video_file)} type="video/mp4" />
-                您的瀏覽器不支援影片播放
-              </video>
-            </div>
-          )}
           <div className="sp-article-body" dangerouslySetInnerHTML={{ __html: html }} />
         </article>
 
@@ -622,7 +625,22 @@ const styles = `
   border-color: rgba(255,255,255,0.2);
 }
 
-/* Cover */
+/* Video Hero — full-width video for video posts */
+.sp-video-hero {
+  max-width: 960px;
+  margin: 0 auto 32px;
+  padding: 0 24px;
+}
+.sp-video-hero video {
+  width: 100%;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: #000;
+  max-height: 540px;
+}
+
+/* Cover — for non-video posts */
 .sp-cover {
   max-width: 900px;
   margin: 0 auto 32px;
@@ -648,18 +666,6 @@ const styles = `
 /* Article */
 .sp-article {
   min-width: 0;
-}
-.sp-video {
-  margin-bottom: 32px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: #000;
-}
-.sp-video video {
-  width: 100%;
-  display: block;
-  max-height: 500px;
 }
 .sp-article-body {
   font-size: 16px;

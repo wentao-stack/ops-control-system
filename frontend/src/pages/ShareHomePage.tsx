@@ -72,6 +72,10 @@ export function ShareHomePage() {
       })
     : posts
 
+  // Split posts into articles and videos
+  const articlePosts = filteredPosts.filter(p => !p.video_file)
+  const videoPosts = filteredPosts.filter(p => !!p.video_file)
+
   return (
     <div className="sh">
       {/* Header */}
@@ -147,46 +151,88 @@ export function ShareHomePage() {
       {/* Posts */}
       <section className="sh-section sh-section-alt" id="posts">
         <div className="sh-container">
-          <div className="sh-section-head">
-            <h2>技術分享</h2>
-            <p>
-              {activeTopic ? `篩選：${activeTopic}` : "AI · 雲端運算 · 系統管理 · 創作"}
-            </p>
-          </div>
           {loading ? (
             <div className="sh-loading">載入中…</div>
-          ) : filteredPosts.length === 0 ? (
-            <div className="sh-empty">
-              <span className="sh-empty-icon">📝</span>
-              <h3>{activeTopic ? `沒有「${activeTopic}」相關文章` : "還沒有已發布的文章"}</h3>
-              <p>{activeTopic ? "試試其他主題" : "內容發布後會顯示在這裡"}</p>
-            </div>
           ) : (
             <>
-              <div className="sh-posts-grid">
-                {filteredPosts.map(post => (
-                  <Link key={post.id} to={`/p/${post.id}`} className="sh-post-card">
-                    {post.cover_image && (
-                      <div className="sh-post-cover">
-                        <img src={coverUrl(post.cover_image)} alt={post.title} />
-                        {post.video_file && <span className="sh-video-badge">▶ 影片</span>}
-                      </div>
-                    )}
-                    <div className="sh-post-body">
-                      {post.source_type && (
-                        <span className={`sh-source-badge sh-source-${post.source_type}`}>
-                          {post.source_type === "note" ? "📝 筆記" : "🎨 AI 創作"}
-                        </span>
-                      )}
-                      <h3>{post.title}</h3>
-                      <p>{post.excerpt}</p>
-                      <span className="sh-post-date">
-                        {post.published_at ? new Date(post.published_at).toLocaleDateString("zh-TW") : ""}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              {/* Articles section */}
+              {articlePosts.length > 0 && (
+                <>
+                  <div className="sh-section-head">
+                    <h2>📝 文章</h2>
+                    <p>技術筆記與學習分享</p>
+                  </div>
+                  <div className="sh-posts-grid">
+                    {articlePosts.map(post => (
+                      <Link key={post.id} to={`/p/${post.id}`} className="sh-post-card">
+                        {post.cover_image && (
+                          <div className="sh-post-cover">
+                            <img src={coverUrl(post.cover_image)} alt={post.title} />
+                          </div>
+                        )}
+                        <div className="sh-post-body">
+                          {post.source_type && (
+                            <span className={`sh-source-badge sh-source-${post.source_type}`}>
+                              {post.source_type === "note" ? "📝 筆記" : "🎨 AI 創作"}
+                            </span>
+                          )}
+                          <h3>{post.title}</h3>
+                          <p>{post.excerpt}</p>
+                          <span className="sh-post-date">
+                            {post.published_at ? new Date(post.published_at).toLocaleDateString("zh-TW") : ""}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Videos section */}
+              {videoPosts.length > 0 && (
+                <>
+                  <div className="sh-section-head sh-section-head-mt">
+                    <h2>🎬 影片</h2>
+                    <p>AI 生成作品與創作影片</p>
+                  </div>
+                  <div className="sh-posts-grid">
+                    {videoPosts.map(post => (
+                      <Link key={post.id} to={`/p/${post.id}`} className="sh-post-card">
+                        {post.cover_image && (
+                          <div className="sh-post-cover sh-post-cover-video">
+                            <img src={coverUrl(post.cover_image)} alt={post.title} />
+                            <div className="sh-play-overlay">
+                              <span className="sh-play-icon">▶</span>
+                            </div>
+                            <span className="sh-video-badge">▶ 影片</span>
+                          </div>
+                        )}
+                        <div className="sh-post-body">
+                          {post.source_type && (
+                            <span className={`sh-source-badge sh-source-${post.source_type}`}>
+                              {post.source_type === "note" ? "📝 筆記" : "🎨 AI 創作"}
+                            </span>
+                          )}
+                          <h3>{post.title}</h3>
+                          <p>{post.excerpt}</p>
+                          <span className="sh-post-date">
+                            {post.published_at ? new Date(post.published_at).toLocaleDateString("zh-TW") : ""}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {articlePosts.length === 0 && videoPosts.length === 0 && (
+                <div className="sh-empty">
+                  <span className="sh-empty-icon">📝</span>
+                  <h3>{activeTopic ? `沒有「${activeTopic}」相關文章` : "還沒有已發布的文章"}</h3>
+                  <p>{activeTopic ? "試試其他主題" : "內容發布後會顯示在這裡"}</p>
+                </div>
+              )}
+
               {pages > 1 && (
                 <div className="sh-pagination">
                   {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
@@ -339,6 +385,23 @@ const shareHomeStyles = `
 .sh-post-card:hover { transform: translateY(-3px); border-color: rgba(56,189,248,.3); box-shadow: 0 10px 28px rgba(0,0,0,.3); }
 .sh-post-cover { height: 190px; overflow: hidden; position: relative; }
 .sh-post-cover img { width: 100%; height: 100%; object-fit: cover; }
+.sh-post-cover-video { cursor: pointer; }
+.sh-post-cover-video img { transition: transform .3s; }
+.sh-post-card:hover .sh-post-cover-video img { transform: scale(1.05); }
+.sh-play-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.25);
+  opacity: 0; transition: opacity .25s;
+}
+.sh-post-card:hover .sh-play-overlay { opacity: 1; }
+.sh-play-icon {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(56,189,248,.9);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: #0a0e1a; font-weight: 700;
+  box-shadow: 0 4px 20px rgba(56,189,248,.4);
+}
 .sh-video-badge {
   position: absolute; bottom: 10px; right: 10px;
   padding: 3px 10px; border-radius: 6px;
@@ -346,6 +409,7 @@ const shareHomeStyles = `
   background: rgba(0,0,0,.7); color: #fff;
   backdrop-filter: blur(4px);
 }
+.sh-section-head-mt { margin-top: 48px; }
 .sh-post-body { padding: 20px; }
 .sh-source-badge {
   display: inline-block; padding: 3px 10px; border-radius: 10px;
