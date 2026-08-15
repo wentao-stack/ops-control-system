@@ -146,6 +146,17 @@ class TestToolLevels:
             assert handler.level == "read", f"{name} should be read level, got {handler.level}"
 
 
+def test_common_read_only_diagnostics_are_allowed():
+    from app.agent import _is_safe_read_only_diagnostic
+
+    assert _is_safe_read_only_diagnostic("ps aux")
+    assert _is_safe_read_only_diagnostic("ps -ef")
+    assert _is_safe_read_only_diagnostic("ps -eo pid,user,comm,%cpu,%mem --sort=-%mem")
+    assert _is_safe_read_only_diagnostic("systemctl status nginx --no-pager")
+    assert not _is_safe_read_only_diagnostic("systemctl restart nginx")
+    assert not _is_safe_read_only_diagnostic("docker rm production-db")
+
+
 # ── Command blacklist tests ─────────────────────────────────────────────────
 
 class TestCommandBlacklist:
@@ -155,7 +166,7 @@ class TestCommandBlacklist:
             {"asset_id": local_asset.id, "command": "rm -rf /"},
             session,
         )
-        assert "危險" in res or "黑名單" in res
+        assert "❌" in res and "只讀診斷" in res
 
     async def test_dangerous_mkfs_blocked(self, session, local_asset):
         from app.agent import tool_exec_ssh_command
@@ -163,7 +174,7 @@ class TestCommandBlacklist:
             {"asset_id": local_asset.id, "command": "mkfs.ext4 /dev/sda"},
             session,
         )
-        assert "危險" in res or "黑名單" in res
+        assert "❌" in res and "只讀診斷" in res
 
     async def test_dangerous_curl_pipe_bash_blocked(self, session, local_asset):
         from app.agent import tool_exec_ssh_command
@@ -187,7 +198,7 @@ class TestCommandBlacklist:
             {"asset_id": local_asset.id, "command": "dd if=/dev/zero of=/dev/sda"},
             session,
         )
-        assert "危險" in res or "黑名單" in res
+        assert "❌" in res and "只讀診斷" in res
 
 
 # ── Audit log tests ─────────────────────────────────────────────────────────
