@@ -51,12 +51,17 @@ export function ShareHomePage() {
 
   const pages = Math.ceil(total / PAGE_SIZE)
 
-  // Filter posts by topic (client-side for now)
+  // Filter posts by topic (client-side, flexible matching)
   const filteredPosts = activeTopic
     ? posts.filter(p => {
         const text = (p.title + " " + p.excerpt).toLowerCase()
+        // Try multiple matching strategies
         const topicLower = activeTopic.toLowerCase()
-        return text.includes(topicLower)
+        // Direct match
+        if (text.includes(topicLower)) return true
+        // Try individual words (e.g. "AI / LLM" → "ai", "llm")
+        const words = topicLower.split(/[\s/·]+/).filter(w => w.length > 1)
+        return words.some(w => text.includes(w))
       })
     : posts
 
