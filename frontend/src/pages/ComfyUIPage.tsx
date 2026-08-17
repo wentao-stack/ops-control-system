@@ -102,6 +102,11 @@ function ComfyOutputCard({
   const [loadPreview, setLoadPreview] = useState(output.kind === "image")
   const [publishing, setPublishing] = useState(false)
   const [published, setPublished] = useState(false)
+  const [showPublishForm, setShowPublishForm] = useState(false)
+  const [publishTitle, setPublishTitle] = useState("")
+  const [publishDescription, setPublishDescription] = useState("")
+  const [publishStatus, setPublishStatus] = useState<"published" | "draft">("published")
+  const [publishError, setPublishError] = useState("")
 
   useEffect(() => {
     if (!loadPreview) return
@@ -142,8 +147,27 @@ function ComfyOutputCard({
     }
   }
 
+  const defaultTitle = output.filename.replace(/\.[^.]+$/, "")
+
+  const openPublishForm = () => {
+    setPublishTitle(defaultTitle)
+    setPublishDescription("")
+    setPublishStatus("published")
+    setPublishError("")
+    setShowPublishForm(true)
+  }
+
   const handlePublish = async () => {
+    if (!publishTitle.trim()) {
+      setPublishError(t("comfyui.publish.titleRequired"))
+      return
+    }
+    if (!publishDescription.trim()) {
+      setPublishError(t("comfyui.publish.descriptionRequired"))
+      return
+    }
     setPublishing(true)
+    setPublishError("")
     try {
       await api("/api/v1/posts/publish-from-source", {
         method: "POST",
@@ -151,13 +175,16 @@ function ComfyOutputCard({
         body: JSON.stringify({
           source_type: "comfyui",
           source_id: `${output.subfolder ?? ""}/${output.filename}`,
-          title: output.filename.replace(/\.[^.]+$/, ""),
+          title: publishTitle.trim(),
+          excerpt: publishDescription.trim(),
           cover_image: url ?? undefined,
+          status: publishStatus,
         }),
       })
       setPublished(true)
+      setShowPublishForm(false)
     } catch (e: any) {
-      alert(`發布失敗: ${e.message}`)
+      setPublishError(`${t("comfyui.publish.failed")}: ${e.message}`)
     } finally {
       setPublishing(false)
     }
@@ -195,7 +222,7 @@ function ComfyOutputCard({
         <div className="comfy-output-actions">
           {url && <a className="comfy-icon-btn" href={url} download={output.filename} title={t("comfyui.download")}>↓</a>}
           {url && <a className="comfy-icon-btn" href={url} target="_blank" rel="noreferrer" title={t("comfyui.open")}>↗</a>}
-          <button className="comfy-icon-btn" onClick={handlePublish} disabled={publishing} title="發布到首頁" style={{ color: published ? "#22c55e" : "#3b82f6" }}>
+          <button className="comfy-icon-btn" onClick={openPublishForm} disabled={publishing} title={t("comfyui.publish.button")} style={{ color: published ? "#22c55e" : "#3b82f6" }}>
             {publishing ? "⏳" : published ? "✓" : "📤"}
           </button>
           <button className="comfy-delete-btn" onClick={remove} disabled={deleting || batchDeleting} title={t("comfyui.deleteArtifact")}>
@@ -203,6 +230,82 @@ function ComfyOutputCard({
           </button>
         </div>
       </div>
+      {showPublishForm && (
+        <div className="comfy-publish-overlay" onClick={() => !publishing && setShowPublishForm(false)}>
+          <div className="comfy-publish-modal" onClick={event => event.stopPropagation()}>
+            <div className="comfy-publish-head">
+              <div>
+                <span className="comfy-section-kicker">{t("comfyui.publish.kicker")}</span>
+                <h3>{published ? t("comfyui.publish.republishTitle") : t("comfyui.publish.title")}</h3>
+              </div>
+              <button className="comfy-icon-btn" onClick={() => setShowPublishForm(false)} disabled={publishing} title={t("comfyui.publish.close")}>×</button>
+            </div>
+            <div className="comfy-publish-body">
+              {url && (
+                <div className="comfy-publish-preview">
+                  {output.kind === "image" || output.kind === "gif" ? (
+                    <img src={url} alt={output.filename} />
+                  ) : (
+                    <video src={url} controls preload="metadata" />
+                  )}
+                  <span className="comfy-kind-badge">{output.kind}</span>
+                </div>
+              )}
+              <label className="comfy-publish-field">
+                <span>{t("comfyui.publish.titleLabel")}</span>
+                <input
+                  className="comfy-input"
+                  value={publishTitle}
+                  maxLength={200}
+                  disabled={publishing}
+                  onChange={event => setPublishTitle(event.target.value)}
+                />
+              </label>
+              <label className="comfy-publish-field">
+                <span>{t("comfyui.publish.descriptionLabel")}</span>
+                <textarea
+                  className="comfy-input comfy-textarea"
+                  rows={5}
+                  placeholder={t("comfyui.publish.descriptionPlaceholder")}
+                  disabled={publishing}
+                  value={publishDescription}
+                  onChange={event => setPublishDescription(event.target.value)}
+                />
+              </label>
+              <div className="comfy-publish-status-row">
+                <span>{t("comfyui.publish.statusLabel")}</span>
+                <div className="comfy-publish-status-options" role="group">
+                  <button
+                    type="button"
+                    className={publishStatus === "published" ? "active" : ""}
+                    disabled={publishing}
+                    onClick={() => setPublishStatus("published")}
+                  >
+                    {t("comfyui.publish.statusPublished")}
+                  </button>
+                  <button
+                    type="button"
+                    className={publishStatus === "draft" ? "active" : ""}
+                    disabled={publishing}
+                    onClick={() => setPublishStatus("draft")}
+                  >
+                    {t("comfyui.publish.statusDraft")}
+                  </button>
+                </div>
+              </div>
+              {publishError && <div className="comfy-publish-error">{publishError}</div>}
+            </div>
+            <div className="comfy-publish-foot">
+              <button className="comfy-secondary-btn" onClick={() => setShowPublishForm(false)} disabled={publishing}>
+                {t("comfyui.publish.cancel")}
+              </button>
+              <button className="comfy-primary-btn" onClick={handlePublish} disabled={publishing}>
+                {publishing ? t("comfyui.publish.submitting") : published ? t("comfyui.publish.resubmit") : t("comfyui.publish.submit")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   )
 }
