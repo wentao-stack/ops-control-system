@@ -270,7 +270,7 @@ class TestSupervisorAction:
 
         await invoke_tool(
             "supervisor_action",
-            {"asset_id": prod_asset.id, "process_name": "ocs-backend", "action": "restart"},
+            {"asset_id": prod_asset.id, "process_name": "ocs-backend", "action": "restart", "_actor": "wentao"},
             session,
         )
 
@@ -278,7 +278,7 @@ class TestSupervisorAction:
         assert len(changes) == 1
         assert "restart" in changes[0].title
         assert changes[0].change_type == "config"
-        assert changes[0].author == "agent"
+        assert changes[0].author == "wentao"
 
 
 # ── create_note ─────────────────────────────────────────────────────────────
@@ -306,6 +306,18 @@ class TestCreateNote:
         assert note is not None
         assert note.author == "agent"
         assert note.category == "測試"
+
+    async def test_create_uses_authenticated_actor(self, session):
+        """The note author must be the authenticated user, never a model-supplied value."""
+        res = await invoke_tool(
+            "create_note",
+            {"title": "actor note", "content": "body", "_actor": "wentao"},
+            session,
+        )
+        assert "已創建" in res
+        note = session.query(Note).filter_by(title="actor note").first()
+        assert note is not None
+        assert note.author == "wentao"
 
     async def test_create_with_tags(self, session):
         await invoke_tool(
@@ -335,13 +347,13 @@ class TestAcknowledgeAlert:
 
     async def test_acknowledge_success(self, session, sample_alert):
         aid = sample_alert.id
-        res = await invoke_tool("acknowledge_alert", {"alert_id": aid}, session)
+        res = await invoke_tool("acknowledge_alert", {"alert_id": aid, "_actor": "wentao"}, session)
         assert "已確認" in res
 
         session.expire_on_commit = False
         alert = session.get(Alert, aid)
         assert alert.acknowledged is True
-        assert alert.acknowledged_by == "agent"
+        assert alert.acknowledged_by == "wentao"
 
     async def test_double_acknowledge(self, session, sample_alert):
         aid = sample_alert.id
