@@ -17,8 +17,7 @@
     "comfyui": "生成",
     "sequence": "アニメーション",
     "code": "コード",
-    "settings": "設定",
-    "share-manage": "コンテンツ"
+    "settings": "設定"
   },
   "pageTitle": {
     "/": "ダッシュボード概要",

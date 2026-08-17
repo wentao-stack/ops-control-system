@@ -16,7 +16,6 @@ const NAV_KEYS = [
   { to: "/admin/comfyui", key: "nav.comfyui", icon: "🎨" },
   { to: "/admin/sequence-studio", key: "nav.sequence", icon: "🎞" },
   { to: "/admin/code", key: "nav.code", icon: "📂" },
-  { to: "/admin/share-manage", key: "nav.share-manage", icon: "📰" },
   { to: "/admin/settings", key: "nav.settings", icon: "⚙" },
 ]
 

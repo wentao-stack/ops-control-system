@@ -17,8 +17,7 @@
     "comfyui": "Generate",
     "sequence": "Animation",
     "code": "Code",
-    "settings": "Settings",
-    "share-manage": "Content"
+    "settings": "Settings"
   },
   "pageTitle": {
     "/": "Dashboard Overview",

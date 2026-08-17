@@ -20,8 +20,6 @@ import { CodeBrowsePage } from "./pages/CodeBrowsePage"
 import { ComfyUIPage } from "./pages/ComfyUIPage"
 import { SequenceStudioPage } from "./pages/SequenceStudioPage"
 import WorkflowPage from "./pages/WorkflowPage"
-import { ShareManagePage } from "./pages/ShareManagePage"
-import { ShareEditorPage } from "./pages/ShareEditorPage"
 import "./i18n"
 import "./styles.css"
 
@@ -64,9 +62,6 @@ function AppRoutes() {
           <Route path="/admin/code" element={<CodeBrowsePage />} />
           <Route path="/admin/comfyui" element={<ComfyUIPage />} />
           <Route path="/admin/sequence-studio" element={<SequenceStudioPage />} />
-          <Route path="/admin/share-manage" element={<ShareManagePage />} />
-          <Route path="/admin/share-manage/new" element={<ShareEditorPage />} />
-          <Route path="/admin/share-manage/:id" element={<ShareEditorPage />} />
           <Route path="*" element={<Navigate to="/admin/overview" replace />} />
         </Route>
       </Route>
