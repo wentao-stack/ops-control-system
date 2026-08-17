@@ -7488,7 +7488,7 @@ tbody tr:last-child td { border-bottom: none; }
 .comfy-gallery-empty p { margin-top: 2px; font-size: 10px; }
 
 /* ── Publish modal ─────────────────────────────────────────────────────── */
-.comfy-publish-overlay { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(17, 24, 43, .55); backdrop-filter: blur(3px); }
+.comfy-publish-overlay { position: fixed; inset: 0; z-index: 90; isolation: isolate; display: grid; place-items: center; padding: 20px; background: rgba(17, 24, 43, .62); overscroll-behavior: contain; }
 .comfy-publish-modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border: 1px solid var(--comfy-line); border-radius: 18px; background: #fff; box-shadow: 0 24px 60px rgba(17, 24, 43, .35); }
 .comfy-publish-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid #edf0f6; }
 .comfy-publish-head h3 { margin-top: 2px; color: var(--comfy-ink); font-size: 16px; letter-spacing: -.015em; }

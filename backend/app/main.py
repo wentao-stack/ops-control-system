@@ -2808,6 +2808,38 @@ class PublishFromSourceRequest(BaseModel):
     status: str = "published"  # "published" | "draft"
 
 
+def _copy_comfy_artifact_to_share(source_id: str, kind: str) -> tuple[str | None, str | None]:
+    """Copy a ComfyUI output artifact into the share static dirs.
+
+    Returns (cover_filename, video_filename). cover is None for audio and
+    videos without a usable thumbnail; video is None for non-video kinds.
+    """
+    subfolder, _, filename = source_id.partition("/")
+    try:
+        source = comfyui_service.resolve_view_file(filename, subfolder, "output")
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail="作品檔案不存在") from exc
+
+    ext = source.suffix.lower() or ".bin"
+    cover_name: str | None = None
+    video_name: str | None = None
+
+    if kind in ("video", "gif"):
+        video_name = f"{uuid4().hex[:10]}{ext}"
+        shutil.copy2(source, SHARE_VIDEOS_DIR / video_name)
+        try:
+            thumbnail = comfyui_service.get_video_thumbnail(filename, subfolder, "output")
+            cover_name = f"{uuid4().hex[:10]}.jpg"
+            shutil.copy2(thumbnail, SHARE_COVERS_DIR / cover_name)
+        except (ValueError, FileNotFoundError, RuntimeError):
+            cover_name = None  # video stays playable without a poster
+    elif kind in ("image", "audio"):
+        cover_name = f"{uuid4().hex[:10]}{ext}"
+        shutil.copy2(source, SHARE_COVERS_DIR / cover_name)
+
+    return cover_name, video_name
+
+
 @app.post("/api/v1/posts/publish-from-source", response_model=SharePostResponse)
 def admin_publish_from_source(
     body: PublishFromSourceRequest,
@@ -2831,8 +2863,6 @@ def admin_publish_from_source(
             existing.title = body.title
         if body.excerpt:
             existing.excerpt = body.excerpt
-        if body.cover_image:
-            existing.cover_image = body.cover_image
         old_status = existing.status
         existing.status = body.status
         existing.updated_at = datetime.now(UTC)
@@ -2848,6 +2878,8 @@ def admin_publish_from_source(
     title = body.title or ""
     content = ""
     excerpt = body.excerpt or ""
+    cover_image: str | None = None
+    video_file: str | None = None
 
     if body.source_type == "note":
         from .models import Note
@@ -2866,6 +2898,15 @@ def admin_publish_from_source(
         content = body.excerpt or "AI 生成作品"
         if not excerpt:
             excerpt = content[:200]
+        # Copy the artifact into share-static so the post stays playable after
+        # the ComfyUI output file is cleaned up.
+        subfolder, _, filename = body.source_id.partition("/")
+        try:
+            kind = comfyui_service._KIND_BY_EXT.get(Path(filename).suffix.lower())
+        except Exception:
+            kind = None
+        if kind in ("image", "gif", "video", "audio"):
+            cover_image, video_file = _copy_comfy_artifact_to_share(body.source_id, kind)
 
     # Generate unique slug — keep it short and clean
     # Remove em dashes, extra spaces, and non-essential characters
@@ -2885,8 +2926,8 @@ def admin_publish_from_source(
     post = SharePost(
         title=title,
         slug=slug,
-        cover_image=body.cover_image,
-        video_file=None,
+        cover_image=cover_image,
+        video_file=video_file,
         content=content,
         excerpt=excerpt,
         status=body.status,

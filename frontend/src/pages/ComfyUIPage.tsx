@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { api } from "../auth"
 import { useTranslation } from "react-i18next"
 import { prepareComfyWorkflowImage } from "../comfyImage"
@@ -84,12 +85,14 @@ async function fetchThumbnailUrl(output: ComfyOutputItem): Promise<string | null
 function ComfyOutputCard({
   output,
   onDelete,
+  onPublished,
   selected,
   onSelectedChange,
   batchDeleting,
 }: {
   output: ComfyOutputItem
   onDelete: () => Promise<void>
+  onPublished: (post: { id: number; slug: string; status: string }) => void
   selected: boolean
   onSelectedChange: (selected: boolean) => void
   batchDeleting: boolean
@@ -169,7 +172,7 @@ function ComfyOutputCard({
     setPublishing(true)
     setPublishError("")
     try {
-      await api("/api/v1/posts/publish-from-source", {
+      const post = await api<{ id: number; slug: string; status: string }>("/api/v1/posts/publish-from-source", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -177,12 +180,12 @@ function ComfyOutputCard({
           source_id: `${output.subfolder ?? ""}/${output.filename}`,
           title: publishTitle.trim(),
           excerpt: publishDescription.trim(),
-          cover_image: url ?? undefined,
           status: publishStatus,
         }),
       })
       setPublished(true)
       setShowPublishForm(false)
+      onPublished(post)
     } catch (e: any) {
       setPublishError(`${t("comfyui.publish.failed")}: ${e.message}`)
     } finally {
@@ -230,7 +233,7 @@ function ComfyOutputCard({
           </button>
         </div>
       </div>
-      {showPublishForm && (
+      {showPublishForm && createPortal(
         <div className="comfy-publish-overlay" onClick={() => !publishing && setShowPublishForm(false)}>
           <div className="comfy-publish-modal" onClick={event => event.stopPropagation()}>
             <div className="comfy-publish-head">
@@ -304,7 +307,8 @@ function ComfyOutputCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </article>
   )
@@ -694,6 +698,14 @@ export function ComfyUIPage() {
     }
   }
 
+  const handleArtifactPublished = (post: { id: number; slug: string; status: string }) => {
+    setNotice(
+      post.status === "published"
+        ? t("comfyui.publish.success", { url: `/p/${post.slug}` })
+        : t("comfyui.publish.draftSaved"),
+    )
+  }
+
   const handleDeleteArtifact = async (artifact: ComfyArtifact) => {
     const query = new URLSearchParams({ filename: artifact.filename, subfolder: artifact.subfolder ?? "" })
     try {
@@ -1050,7 +1062,8 @@ export function ComfyUIPage() {
           <div className="comfy-gallery">
             {artifacts.map(artifact => (
               <ComfyOutputCard key={`${artifact.subfolder ?? ""}/${artifact.filename}`} output={artifact}
-                onDelete={() => handleDeleteArtifact(artifact)} selected={selectedArtifactKeys.has(artifactKey(artifact))}
+                onDelete={() => handleDeleteArtifact(artifact)} onPublished={handleArtifactPublished}
+                selected={selectedArtifactKeys.has(artifactKey(artifact))}
                 onSelectedChange={selected => toggleArtifact(artifact, selected)} batchDeleting={batchDeleting} />
             ))}
           </div>
