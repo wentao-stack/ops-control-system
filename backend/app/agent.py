@@ -33,7 +33,7 @@ from .agent_schemas import (
 
 LLM_API_KEY = os.getenv("OPENAI_API_KEY", "")
 LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:9292/v1")
-DEFAULT_MODEL = os.getenv("AGENT_DEFAULT_MODEL", "qwen38-27b-no-think-v1")
+DEFAULT_MODEL = os.getenv("AGENT_DEFAULT_MODEL", "qwen38-27b-code-mtp-v1")
 logger = logging.getLogger(__name__)
 
 # ── Tool Registry ───────────────────────────────────────────────────────────
