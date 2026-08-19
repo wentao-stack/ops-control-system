@@ -53,15 +53,6 @@ const STATUS_COLORS: Record<string, string> = {
   BACKOFF: "#d97706",
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  RUNNING: "運行中",
-  STOPPED: "已停止",
-  STARTING: "啟動中",
-  STOPPING: "停止中",
-  FATAL: "致命錯誤",
-  BACKOFF: "重試中",
-}
-
 // ── Service detection badge (original) ──────────────────────────────────────
 
 function ServiceBadge({ svc }: { svc: ServiceItem }) {
@@ -290,8 +281,8 @@ function SupervisorProcessRow({
             wordBreak: "break-all",
           }}>
             {activeSource
-              ? (activeSource.lines.length === 0 ? "(no log output)" : activeSource.lines.join("\n"))
-              : "(no log sources available)"}
+              ? (activeSource.lines.length === 0 ? t("services.noLogOutput") : activeSource.lines.join("\n"))
+              : t("services.noLogSources")}
           </div>
           <div style={{ padding: "4px 12px 8px", display: "flex", justifyContent: "flex-end" }}>
             <button
@@ -537,12 +528,12 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
                       </span>
                     </div>
                   </div>
-                  <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">詳情</Link>
+                  <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">{t("services.details")}</Link>
                 </div>
                 <div className="card-body" style={{ padding: 0 }}>
                   {host.processes.length === 0 ? (
                     <p style={{ color: "var(--text-secondary)", fontSize: 13, padding: 12 }}>
-                      {host.reachable ? "該主機沒有 Supervisor 管理的進程" : "無法連接"}
+                      {host.reachable ? t("services.noSupProcesses") : t("services.unreachable")}
                     </p>
                   ) : (
                     host.processes.map((proc, i) => (
@@ -568,11 +559,11 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { void loadDetect(false) }} disabled={detectCollecting}>
-              {detectCollecting ? "⠋ 偵測中..." : "↻ 重新偵測"}
+              {detectCollecting ? `⠋ ${t("services.detecting")}` : `↻ ${t("services.redetect")}`}
             </button>
           </div>
 
-          {detectLoading && <div className="empty">載入中…</div>}
+          {detectLoading && <div className="empty">{t("common.loading")}</div>}
 
           {detectData.length === 0 && !detectLoading && (
             <div className="card"><div className="card-body"><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{t("services.noHosts")}</p></div></div>
@@ -592,15 +583,15 @@ const [tab, setTab] = useState<"detect" | "supervisor">("supervisor")
                     <div>
                       <h2 style={{ margin: 0 }}>{host.name}</h2>
                       <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                        {host.hostname} · {host.services.length} 個服務
+                        {host.hostname} · {host.services.length} {t("services.serviceUnit")}
                       </span>
                     </div>
                   </div>
-                  <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">詳情</Link>
+                  <Link to={`/assets/${host.asset_id}`} className="btn btn-sm">{t("services.details")}</Link>
                 </div>
                 <div className="card-body">
                   {host.services.length === 0 ? (
-                    <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>未偵測到已知服務</p>
+                    <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{t("services.noKnownServices")}</p>
                   ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
                       {host.services.map((svc, i) => (
