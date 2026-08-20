@@ -207,7 +207,7 @@ Services:
 - **ocs-backend** — FastAPI on `127.0.0.1:18080`
 - **ocs-frontend** — Vite dev server on `127.0.0.1:5173`
 - **ocs-comfyui** — ComfyUI on `0.0.0.0:8188`（按需啟動；詳見 `docs/COMFYUI.md`）
-- **ocs-deepseek-harness** — DeepSeek Harness (dsh) Web UI on `127.0.0.1:3080`（按需啟動；dsh 安全限制只綁 127.0.0.1，需 `DEEPSEEK_API_KEY` 才能調用 LLM）
+- **ocs-deepseek-harness** — DeepSeek Harness (dsh) Web UI on `127.0.0.1:3080`（按需啟動；dsh 安全限制只綁 127.0.0.1；LLM 走本地 llama-swap :9292，key 由 gitignore 的 `supervisor/env/ocs-deepseek-harness.env` 注入 `QWEN_API_KEY`）
 
 Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` and `/ws` to the backend.
 

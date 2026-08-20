@@ -14,6 +14,7 @@ frontend/vite.config.d.ts
 # Environment variables
 .env
 backend/.env
+supervisor/env/
 
 # Supervisor runtime files
 supervisor/supervisord.pid
