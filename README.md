@@ -143,6 +143,7 @@ supervisor/
 ├── supervisord.conf                # Supervisor 主配置（unix socket, RPC, 包含 conf.d/*.conf）
 ├── conf.d/
 │   ├── ocs-comfyui.conf            # ComfyUI 按需启动配置（:8188，不自动启动）
+│   ├── ocs-deepseek-harness.conf   # DeepSeek Harness Web UI 按需启动配置（:3080，不自动启动）
 │   ├── ocs-backend.conf            # 後端程序配置（uvicorn :18080, 自動重啟, 日誌輪轉）
 │   └── ocs-frontend.conf           # 前端程序配置（Vite dev server :5173, 自動重啟）
 ├── log/                            # 運行日誌（不進入 Git）
@@ -206,6 +207,7 @@ Services:
 - **ocs-backend** — FastAPI on `127.0.0.1:18080`
 - **ocs-frontend** — Vite dev server on `127.0.0.1:5173`
 - **ocs-comfyui** — ComfyUI on `0.0.0.0:8188`（按需啟動；詳見 `docs/COMFYUI.md`）
+- **ocs-deepseek-harness** — DeepSeek Harness (dsh) Web UI on `127.0.0.1:3080`（按需啟動；dsh 安全限制只綁 127.0.0.1，需 `DEEPSEEK_API_KEY` 才能調用 LLM）
 
 Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` and `/ws` to the backend.
 
