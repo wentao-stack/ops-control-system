@@ -53,6 +53,32 @@ export type RemoteHostsMetrics = {
   collected_at: string;
 }
 
+export type KLinePoint = { o: number; h: number; l: number; c: number; a: number } | null
+
+export type MetricSeriesData = {
+  asset_id: string;
+  hostname: string | null;
+  buckets: number;
+  times: number[];
+  klines: { cpu: KLinePoint[]; mem: KLinePoint[]; disk: KLinePoint[]; swap: KLinePoint[] };
+  lines: Record<string, (number | null)[]>;
+  gpus: {
+    idx: number; name: string;
+    util: (number | null)[]; temp: (number | null)[]; power: (number | null)[];
+    vram_used: (number | null)[]; vram_total: (number | null)[];
+  }[];
+  record_count: number;
+  earliest: string | null;
+  latest: string | null;
+}
+
+export type MetricsCollectResult = {
+  hosts: RemoteHostMetric[];
+  local: HostMetrics;
+  collected_at: string;
+  saved: number;
+}
+
 export type RemoteAsset = {
   id: string; name: string;
   ssh_host: string | null; ssh_port: number | null; ssh_user: string | null;

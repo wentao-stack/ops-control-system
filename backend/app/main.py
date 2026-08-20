@@ -27,6 +27,13 @@ from .comfyui_sequence_models import ComfySequence  # noqa: F401 — ensure tabl
 from .share_models import SharePost  # noqa: F401 — ensure tables are created
 from .remote import ssh_exec, ssh_ping
 from .remote_monitor import collect_remote_metrics
+from .metrics_store import (
+    LOCAL_ASSET_ID,
+    collect_all_hosts,
+    purge_old_history,
+    query_series,
+    save_local_to_history,
+)
 from .remote_service import detect_remote_services
 from .remote_supervisor import (
     SupervisorLogLines, SupervisorProcess,
@@ -125,6 +132,72 @@ def _cache_set(key: str, value: Any) -> None:
     _cache[key] = (value, _time.monotonic())
 
 
+async def _run_metrics_cycle() -> dict:
+    """One collection pass: all remote hosts + local, persist history, warm cache."""
+    with SessionLocal() as session:
+        hosts = await collect_all_hosts(session)
+    local_raw = await asyncio.to_thread(collect_host_metrics)
+    local_resp = HostMetricsResponse(
+        timestamp=local_raw.timestamp,
+        hostname=local_raw.hostname,
+        uptime_seconds=local_raw.uptime_seconds,
+        cpu_percent=local_raw.cpu_percent,
+        cpu_count=local_raw.cpu_count,
+        cpu_freq_mhz=local_raw.cpu_freq_mhz,
+        load_avg_1=local_raw.load_avg_1,
+        load_avg_5=local_raw.load_avg_5,
+        load_avg_15=local_raw.load_avg_15,
+        mem_total_mb=local_raw.mem_total_mb,
+        mem_used_mb=local_raw.mem_used_mb,
+        mem_available_mb=local_raw.mem_available_mb,
+        mem_percent=local_raw.mem_percent,
+        swap_total_mb=local_raw.swap_total_mb,
+        swap_used_mb=local_raw.swap_used_mb,
+        swap_percent=local_raw.swap_percent,
+        disk_total_mb=local_raw.disk_total_mb,
+        disk_used_mb=local_raw.disk_used_mb,
+        disk_free_mb=local_raw.disk_free_mb,
+        disk_percent=local_raw.disk_percent,
+        gpus=[GPUMetricsResponse(**g.__dict__) for g in local_raw.gpus],
+    )
+    collected_at = datetime.now(UTC).isoformat()
+    _cache_set("hosts_metrics", RemoteHostsMetricsResponse(hosts=hosts, collected_at=collected_at))
+    _cache_set("host_metrics", local_resp)
+    saved = 0
+    with SessionLocal() as session:
+        saved += await asyncio.to_thread(save_local_to_history, local_raw)
+        for h in hosts:
+            if h.reachable:
+                saved += 1
+    return {"hosts": hosts, "local": local_resp, "collected_at": collected_at, "saved": saved}
+
+
+async def _metrics_collector_loop(interval: int = 60) -> None:
+    """Background loop: collect + persist every ``interval`` seconds.
+
+    Keeps the response cache warm so page loads are instant, and feeds the
+    metrics history used by the monitoring charts. Also purges old history
+    once per hour.
+    """
+    last_purge = 0.0
+    while True:
+        t0 = _time.monotonic()
+        try:
+            await _run_metrics_cycle()
+        except Exception as e:
+            print(f"[metrics] 收集週期失敗: {e}")
+        try:
+            if _time.monotonic() - last_purge > 3600:
+                with SessionLocal() as session:
+                    deleted = purge_old_history(session)
+                if deleted:
+                    print(f"[metrics] 清理 {deleted} 條過期歷史記錄")
+                last_purge = _time.monotonic()
+        except Exception as e:
+            print(f"[metrics] 清理失敗: {e}")
+        await asyncio.sleep(max(5, interval - int(_time.monotonic() - t0)))
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Configure webssh logger to output to stdout
@@ -150,7 +223,17 @@ async def lifespan(_: FastAPI):
     except Exception as e:
         print(f"[RAG] 索引啟動失敗（不影響服務）: {e}")
 
+    # Background metrics collector (warm cache + history persistence)
+    metrics_task = asyncio.create_task(_metrics_collector_loop())
+    print("[metrics] 背景指標收集器已啟動 (60s)")
+
     yield
+
+    metrics_task.cancel()
+    try:
+        await metrics_task
+    except (asyncio.CancelledError, Exception):
+        pass
 
 
 app = FastAPI(title="Ops Control System API", version="0.1.0", lifespan=lifespan)
@@ -375,8 +458,12 @@ def remote_ping(session: Session = Depends(get_session)) -> list[RemotePingRespo
 # ── Host monitoring endpoints ────────────────────────────────────────────────
 
 @app.get("/api/v1/host/metrics", response_model=HostMetricsResponse)
-def host_metrics() -> HostMetricsResponse:
+def host_metrics(cache: bool = Query(False, description="Use cached results if available")) -> HostMetricsResponse:
     """Return a live snapshot of this host's resource usage."""
+    if cache:
+        cached = _cache_get("host_metrics")
+        if cached is not None:
+            return cached
     raw = collect_host_metrics()
     return HostMetricsResponse(
         timestamp=raw.timestamp,
@@ -415,45 +502,7 @@ async def hosts_metrics(
         if cached is not None:
             return cached
 
-    assets = session.scalars(select(Asset).where(Asset.ssh_host.isnot(None))).all()
-
-    async def _collect(asset: Asset) -> RemoteHostMetricsResponse:
-        port = asset.ssh_port or 22
-        raw = await asyncio.to_thread(
-            collect_remote_metrics,
-            host=asset.ssh_host,  # type: ignore[arg-type]
-            port=port,
-            user=asset.ssh_user,  # type: ignore[arg-type]
-            asset_id=asset.id,
-            name=asset.name,
-            timeout=60,
-        )
-        return RemoteHostMetricsResponse(
-            asset_id=raw.asset_id,
-            name=raw.name,
-            hostname=raw.hostname,
-            reachable=raw.reachable,
-            error=raw.error,
-            cpu_percent=raw.cpu_percent,
-            cpu_count=raw.cpu_count,
-            load_avg_1=raw.load_avg_1,
-            load_avg_5=raw.load_avg_5,
-            load_avg_15=raw.load_avg_15,
-            mem_total_mb=raw.mem_total_mb,
-            mem_used_mb=raw.mem_used_mb,
-            mem_available_mb=raw.mem_available_mb,
-            mem_percent=raw.mem_percent,
-            swap_total_mb=raw.swap_total_mb,
-            swap_used_mb=raw.swap_used_mb,
-            swap_percent=raw.swap_percent,
-            disk_total_mb=raw.disk_total_mb,
-            disk_used_mb=raw.disk_used_mb,
-            disk_free_mb=raw.disk_free_mb,
-            disk_percent=raw.disk_percent,
-            gpus=[RemoteGPUMetricsResponse(**g.__dict__) for g in raw.gpus],
-        )
-
-    hosts = await asyncio.gather(*[_collect(a) for a in assets])
+    hosts = await collect_all_hosts(session, timeout=60)
     result = RemoteHostsMetricsResponse(hosts=list(hosts), collected_at=datetime.now(UTC).isoformat())
     _cache_set(cache_key, result)
     return result
@@ -593,6 +642,29 @@ async def metrics_history_chart(
         })
 
     return {"asset_id": asset_id, "metric": metric, "hours": hours, "data": data}
+
+
+@app.get("/api/v1/metrics/history/series")
+def metrics_history_series(
+    asset_id: str = Query(..., description="Asset ID (or 'local' for the backend host)"),
+    hours: float = Query(24, ge=0.25, le=24 * 14, description="Hours to show"),
+    buckets: int = Query(96, ge=4, le=576, description="Number of time buckets"),
+    session: Session = Depends(get_session),
+):
+    """Chart-ready aggregation: K-lines (OHLC+avg) per bucket for cpu/mem/disk/swap,
+    line series for load/memory/disk, and per-GPU series. One request feeds
+    the whole history dashboard."""
+    return query_series(session, asset_id, hours, buckets)
+
+
+@app.post("/api/v1/metrics/collect")
+async def metrics_collect():
+    """Trigger a full collection pass on demand (page 'collect now' button).
+
+    Collects all remote hosts + local, persists reachable snapshots to
+    history, warms the response caches, and returns the fresh data.
+    """
+    return await _run_metrics_cycle()
 
 
 @app.get("/api/v1/hosts/services", response_model=RemoteAllServicesResponse)
